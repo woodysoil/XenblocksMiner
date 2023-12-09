@@ -11,7 +11,7 @@ public:
     Argon2idHasher(uint32_t t_cost, uint32_t m_cost, uint32_t parallelism, const std::string& salt_hex, size_t hash_len);
 
     std::string generateHash(const std::string& password);
-    bool verifyHash(const std::string& password, const std::string& hash);
+    static bool verifyHash(const std::string& password, const std::string& hash);
 
 private:
     uint32_t t_cost_;

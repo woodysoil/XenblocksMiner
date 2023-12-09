@@ -18,7 +18,7 @@ int main() {
     std::cout << "Generated Hash: " << hashed_password << std::endl;
 
     // Verify hash
-    if (hasher.verifyHash(password, hashed_password)) {
+    if (Argon2idHasher::verifyHash(password, hashed_password)) {
         std::cout << "Password verified!" << std::endl;
     } else {
         std::cout << "Invalid password!" << std::endl;
