@@ -3,13 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 
-#ifdef _WIN32
-#  define EXPORT_SYMBOL1 __declspec(dllexport)
-#else
-#  define EXPORT_SYMBOL1
-#endif
-
-class EXPORT_SYMBOL1 Blake2b
+class Blake2b
 {
 public:
     enum {

@@ -22,10 +22,6 @@
 
 void interruptSignalHandler(int signum) {
     running = false;
-    {
-        std::lock_guard<std::mutex> lock(mtx);
-        globalDifficulty = globalDifficulty - 1;
-    }
 }
 
 std::string getDifficulty() {
@@ -57,7 +53,7 @@ void updateDifficulty() {
             std::cout << "Updated difficulty to " << globalDifficulty << std::endl;
         }
     } catch (const std::exception& e) {
-        std::cerr << YELLOW << "Error updating difficulty: " << e.what() << RESET << std::endl;
+        // std::cerr << YELLOW << "Error updating difficulty: " << e.what() << RESET << std::endl;
     }
 }
 
@@ -151,8 +147,8 @@ void runMiningOnDevice(int deviceIndex,
     std::cout << "Starting mining on device #" << deviceIndex << ": "
               << device.getName() << std::endl;
 
-    MineUnit unit(deviceIndex, globalDifficulty, submitCallback, statCallback);
     while (running) {
+        MineUnit unit(deviceIndex, globalDifficulty, submitCallback, statCallback);
         if (unit.runMineLoop() < 0) {
             std::cerr << "Mining loop failed on device #" << deviceIndex << std::endl;
             break;

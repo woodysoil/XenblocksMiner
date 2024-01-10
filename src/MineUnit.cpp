@@ -5,6 +5,7 @@
 #include "RandomHexKeyGenerator.h"
 #include "Logger.h"
 #include "CudaDevice.h"
+#include "MiningCommon.h"
 using namespace std;
 
 bool is_within_five_minutes_of_hour() {
@@ -30,7 +31,7 @@ int MineUnit::runMineLoop()
 	start_time = std::chrono::system_clock::now();
 	RandomHexKeyGenerator keyGenerator("", HASH_LENGTH);
 	kernelRunner.init(batchSize);
-	while (true) {
+	while (running) {
 		
 		{
 			std::lock_guard<std::mutex> lock(mtx);

@@ -49,7 +49,7 @@ HttpResponse HttpClient::HttpGet(const std::string& url, long timeout) {
         res = curl_easy_perform(curl);
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
         if (res != CURLE_OK) {
-            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+            // std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         }
         curl_easy_cleanup(curl);
     }
@@ -79,7 +79,7 @@ HttpResponse HttpClient::HttpPost(const std::string& url, const nlohmann::json& 
 
         res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+            // std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         }
         curl_slist_free_all(headers);  // free the header list
         curl_easy_cleanup(curl);

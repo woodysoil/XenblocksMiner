@@ -34,6 +34,7 @@ void AppConfig::load()
        devfeePermillage = promptForDevfeePermillage();
         std::cout << std::endl;
         std::cout << GREEN << "All set! Your configurations are saved and the application is ready to use." << RESET << std::endl;
+        std::cout << std::endl;
     }
 
     configManager.setConfigValue("account_address", accountAddress);
