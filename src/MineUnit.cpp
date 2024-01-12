@@ -179,7 +179,8 @@ void MineUnit::mine()
 void MineUnit::stat()
 {
 	hashtotal += batchSize;
-
+	globalHashCount += batchSize;
+	
 	auto elapsed_time = chrono::system_clock::now() - start_time;
 	auto hours = chrono::duration_cast<chrono::hours>(elapsed_time).count();
 	auto minutes = chrono::duration_cast<chrono::minutes>(elapsed_time).count() % 60;

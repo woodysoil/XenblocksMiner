@@ -22,6 +22,13 @@ extern std::mutex mtx;
 extern std::atomic<bool> running;
 extern std::mutex coutmtx;
 
+extern std::atomic<int> globalNormalBlockCount;
+extern std::atomic<int> globalSuperBlockCount;
+extern std::atomic<int> globalXuniBlockCount;
+
+extern std::chrono::system_clock::time_point start_time;
+extern std::atomic<long> globalHashCount;
+
 struct gpuInfo
 {
 	int index;

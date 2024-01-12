@@ -63,7 +63,7 @@ HttpResponse HttpClient::HttpPost(const std::string& url, const nlohmann::json& 
     CURLcode res;
     std::string readBuffer;
     struct curl_slist *headers = nullptr;
-
+    long response_code = 0;
     curl = curl_easy_init();
     if(curl) {
         headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -81,8 +81,10 @@ HttpResponse HttpClient::HttpPost(const std::string& url, const nlohmann::json& 
         if (res != CURLE_OK) {
             // std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         }
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
         curl_slist_free_all(headers);  // free the header list
         curl_easy_cleanup(curl);
     }
-    return HttpResponse(0, readBuffer, responseHeaders);
+    return HttpResponse(response_code, readBuffer, responseHeaders);
 }
