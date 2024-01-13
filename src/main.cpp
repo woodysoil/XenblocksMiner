@@ -288,6 +288,11 @@ int main(int, const char *const *argv)
                         continue;
                     } else {
                         bool errorButFound = false;
+                        if(response.GetBody().find("outside of time window") != std::string::npos){
+                            std::cout << "Server Response: " << response.GetBody() << std::endl;
+                            logger.log(key + " response: " + response.GetBody());
+                            return;
+                        }
                         if(response.GetBody().find("already exists") != std::string::npos) {
                             errorButFound = true;
                         } else if(response.GetStatusCode() != 500) {
