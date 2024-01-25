@@ -28,7 +28,7 @@ using namespace std;
 
 std::string getDifficulty()
 {
-    HttpClient httpClient;
+    //HttpClient httpClient;
 
     try
     {
@@ -55,15 +55,21 @@ void updateDifficulty()
 {
     try
     {
-        std::string difficultyStr = getDifficulty();
-        int newDifficulty = std::stoi(difficultyStr);
-
+        std::ifstream file("difficulty.txt");
+if (file.is_open()) {
+    int new_difficulty;
+    if (file >> new_difficulty) { // read difficulty
         std::lock_guard<std::mutex> lock(mtx);
-        if (globalDifficulty != newDifficulty)
-        {
-            globalDifficulty = newDifficulty;
-            std::cout << "Updated difficulty to " << globalDifficulty << std::endl;
+        if (globalDifficulty != new_difficulty) {
+            globalDifficulty = new_difficulty; // update difficulty
+            std::cout << "Updated difficulty to " << new_difficulty << std::endl;
         }
+    }
+    file.close();
+}
+else {
+    std::cerr << "The local difficult.txt file was not recognized" << std::endl;
+}
     }
     catch (const std::exception &e)
     {
