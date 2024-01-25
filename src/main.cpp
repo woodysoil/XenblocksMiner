@@ -25,7 +25,7 @@
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
 using namespace std;
-
+/*
 std::string getDifficulty()
 {
     //HttpClient httpClient;
@@ -50,7 +50,7 @@ std::string getDifficulty()
         throw std::runtime_error("Error: " + std::string(e.what()));
     }
 }
-
+*/
 void updateDifficulty()
 {
     try
