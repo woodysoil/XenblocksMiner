@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(xenblocksMiner LANGUAGES CUDA CXX VERSION 1.0)
+project(VMLearner LANGUAGES CUDA CXX VERSION 1.0)
 
 set(CMAKE_BUILD_TYPE Release)
 
@@ -10,7 +10,7 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(CMAKE_CUDA_ARCHITECTURES 75)
-
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}) 
 find_package(unofficial-argon2 CONFIG REQUIRED)
 if(NOT unofficial-argon2_FOUND)
     message(FATAL_ERROR "Libargon2 not found. Please install Libargon2.")
