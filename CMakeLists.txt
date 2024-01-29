@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(VMLearner LANGUAGES CUDA CXX VERSION 1.0)
+project(Toriminer LANGUAGES CUDA CXX VERSION 1.0)
 
 set(CMAKE_BUILD_TYPE Release)
 
