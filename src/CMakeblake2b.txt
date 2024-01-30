@@ -9,5 +9,5 @@ target_include_directories(mylib PRIVATE src)
 include(GNUInstallDirs)
 
 install(TARGETS mylib
-    LIBRARY DESTINATION parent/build
+    LIBRARY DESTINATION build
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
