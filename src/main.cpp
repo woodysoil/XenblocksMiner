@@ -12,6 +12,8 @@
 #include <condition_variable>
 #include <sstream>
 #include <cuda_runtime.h>
+#include <boost/program_options.hpp>
+#include "EthereumAddressValidator.h"
 
 #include "MiningCommon.h"
 #include "CudaDevice.h"
@@ -25,6 +27,7 @@
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
 using namespace std;
+namespace po = boost::program_options;
 
 std::string getDifficulty()
 {
@@ -211,20 +214,112 @@ void workerThread() {
         task();
     }
 }
-int main(int, const char *const *argv)
+int main(int argc, const char *const *argv)
 {
-    signal(SIGINT, interruptSignalHandler);
+    try {
 
-    AppConfig appConfig(CONFIG_FILENAME);
-    appConfig.load();
-    globalUserAddress = appConfig.getAccountAddress();
-    globalDevfeePermillage = appConfig.getDevfeePermillage();
-    std::cout << GREEN << "Logged in as " << globalUserAddress << ". Devfee set at " << globalDevfeePermillage << "/1000." << RESET << std::endl;
+        po::options_description desc("XenblocksMiner options");
+        desc.add_options()
+            ("help,h", "display help information")
+            ("totalDevFee", po::value<int>(), "set total developer fee")
+            ("ecoDevAddr", po::value<std::string>(), "set ecosystem developer address (will receive half of the total dev fee)")
+            ("minerAddr", po::value<std::string>(), "set miner address")
+            ("saveConfig", "update configuration file with console inputs");
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);
+
+        if (vm.count("help")) {
+            std::cout << desc << "\n";
+            return 0; // If help information is requested, print help information and exit the program
+        }
+
+        // Preload configuration from local file
+        AppConfig appConfig(CONFIG_FILENAME);
+        if(!vm.count("minerAddr") || !vm.count("totalDevFee")){
+            appConfig.load();
+        } else {
+            appConfig.tryLoad();
+        }
+        globalUserAddress = appConfig.getAccountAddress();
+        globalEcoDevfeeAddress = appConfig.getEcoDevAddr();
+        globalDevfeePermillage = appConfig.getDevfeePermillage();
+
+        // Use parsed configuration information
+        if (vm.count("totalDevFee")) {
+            int totalDevFee = vm["totalDevFee"].as<int>();
+            if (totalDevFee < 0 || totalDevFee > 1000) {
+                std::cerr << "The argument (" << totalDevFee << ") for total developer fee (0-1000) is invalid." << std::endl;
+                return -1;
+            }
+            globalDevfeePermillage = totalDevFee;
+            std::cout << "Total developer fee set to: " << vm["totalDevFee"].as<int>() << "\n";
+        }
+        if (vm.count("ecoDevAddr")) {
+            std::string ecoDevAddr = vm["ecoDevAddr"].as<std::string>();
+            EthereumAddressValidator validator;
+            if (!validator.isValid(ecoDevAddr)){
+                std::cerr << "The argument (" << ecoDevAddr << ") for ecosystem developer fee address (EIP55) is invalid." << std::endl;
+                return -1;
+            }
+            globalEcoDevfeeAddress = ecoDevAddr;
+            std::cout << "Ecosystem developer fee address: " << ecoDevAddr << "\n";
+        }
+        if (vm.count("minerAddr")) {
+            std::string userAddr = vm["minerAddr"].as<std::string>();
+            EthereumAddressValidator validator;
+            if (!validator.isValid(userAddr)){
+                std::cerr << "The argument (" << userAddr << ") for miner address (EIP55) is invalid." << std::endl;
+                return -1;
+            }
+            globalUserAddress = userAddr;
+            std::cout << "Miner address: " << userAddr << "\n";
+        }
+        
+        EthereumAddressValidator validator;
+
+        if (!globalEcoDevfeeAddress.empty() && !validator.isValid(globalEcoDevfeeAddress)){
+            std::cerr << "The argument (" << globalEcoDevfeeAddress << ") for ecosystem developer fee address (EIP55) is invalid." << std::endl;
+            return -1;
+        }
+        if (!validator.isValid(globalUserAddress)){
+            std::cerr << "The argument (" << globalUserAddress << ") for miner address (EIP55) is invalid." << std::endl;
+            return -1;
+        }
+        if (globalDevfeePermillage < 0 || globalDevfeePermillage > 1000) {
+            std::cerr << "The argument (" << globalDevfeePermillage << ") for total developer fee (0-1000) is invalid." << std::endl;
+            return -1;
+        }
+
+        signal(SIGINT, interruptSignalHandler);
+
+        if (vm.count("saveConfig")) {
+            appConfig.setAccountAddress(globalUserAddress);
+            if(!globalEcoDevfeeAddress.empty()){
+                appConfig.setEcoDevAddr(globalEcoDevfeeAddress);
+            }
+            appConfig.setDevfeePermillage(globalDevfeePermillage);
+            appConfig.save();
+            std::cout << "Configuration file updated with console inputs." << std::endl;
+        }
+
+        std::cout << GREEN << "Logged in as " << globalUserAddress 
+        << ". Devfee set at " << globalDevfeePermillage << "/1000." 
+        << ((globalDevfeePermillage != 0 && !globalEcoDevfeeAddress.empty()) ? " Ecosystem devfee address: " + globalEcoDevfeeAddress : "") 
+        << RESET << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Parameter parsing error: " << e.what() << "\n";
+        return -1;
+    } catch (...) {
+        std::cerr << "Unknown error!\n";
+        return -1;
+    }
 
     machineId = getMachineId();
     std::cout << "Machine ID: " << machineId << std::endl;
 
-    globalDifficulty = 1000;
+    globalDifficulty = 42069;
     updateDifficulty();
     std::thread difficultyThread(updateDifficultyPeriodically);
     difficultyThread.detach();

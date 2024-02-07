@@ -36,7 +36,12 @@ if(NOT OPENSSL_FOUND)
     message(FATAL_ERROR "OpenSSL not found. Please install OpenSSL.")
 endif()
 
-list(APPEND LINK_LIBRARIES unofficial::argon2::libargon2 cryptopp::cryptopp CURL::libcurl nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto)
+find_package(Boost REQUIRED COMPONENTS program_options)
+if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Boost.Program_options not found. Please install Boost.Program_options.")
+endif()
+
+list(APPEND LINK_LIBRARIES unofficial::argon2::libargon2 cryptopp::cryptopp CURL::libcurl nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto Boost::program_options)
 
 set(SOURCE_FILES src/main.cpp src/AppConfig.cpp src/argon2params.cpp src/blake2b.cpp src/ConfigManager.cpp src/CudaDevice.cpp src/kernelrunner.cu src/MineUnit.cpp src/MiningCommon.cpp src/Logger.cpp src/MerkleTree.cpp src/SHA256Hasher.cpp src/EthereumAddressValidator.cpp src/Argon2idHasher.cpp src/HttpClient.cpp src/HttpResponse.cpp src/PowSubmitter.cpp)
 if(WIN32)

@@ -11,9 +11,11 @@ constexpr std::size_t MAX_SUBMIT_RETRIES = 5;
 
 const std::string CONFIG_FILENAME = "config.txt";
 const std::string DEVFEE_PREFIX = "FFFFFFFF";
+const std::string ECODEVFEE_PREFIX = "EEEEEEEE";
 
 extern std::string globalUserAddress;
 extern std::string globalDevfeeAddress;
+extern std::string globalEcoDevfeeAddress;
 extern std::atomic<int> globalDevfeePermillage; // per 1000
 extern std::string machineId;
 

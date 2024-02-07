@@ -14,7 +14,10 @@ void AppConfig::load()
             std::cout << "Please enter a valid EIP-55 account address (Ethereum address) again." << std::endl;
             accountAddress = promptForEIP55Address();
         }
-
+        ecoDevAddr = configManager.getConfigValue("ecodev_address");
+        if (!ecoDevAddr.empty() && !isValidEIP55Address(ecoDevAddr)) {
+            ecoDevAddr = "";
+        }
         try {
             devfeePermillage = std::stoi(configManager.getConfigValue("devfee_permillage"));
             if (!isValidDevfee(devfeePermillage)) {
@@ -31,13 +34,38 @@ void AppConfig::load()
     else {
         std::cout << YELLOW << "Welcome! It looks like this is your first time running the application. Let's set up the necessary configurations." << RESET << std::endl << std::endl;
         accountAddress = promptForEIP55Address();
-       devfeePermillage = promptForDevfeePermillage();
+        devfeePermillage = promptForDevfeePermillage();
         std::cout << std::endl;
         std::cout << GREEN << "All set! Your configurations are saved and the application is ready to use." << RESET << std::endl;
         std::cout << std::endl;
     }
 
     configManager.setConfigValue("account_address", accountAddress);
+    configManager.setConfigValue("devfee_permillage", std::to_string(devfeePermillage));
+    configManager.saveConfig();
+}
+void AppConfig::tryLoad()
+{
+    std::ifstream configFile(configFileName);
+    ConfigManager configManager(configFileName);
+    if (configFile.good()) {
+        configManager.loadConfig();
+        accountAddress = configManager.getConfigValue("account_address");
+        ecoDevAddr = configManager.getConfigValue("ecodev_address");
+        try {
+            devfeePermillage = std::stoi(configManager.getConfigValue("devfee_permillage"));
+        }
+        catch (const std::invalid_argument& e) {
+
+        }
+    }
+}
+
+void AppConfig::save()
+{
+    ConfigManager configManager(configFileName);
+    configManager.setConfigValue("account_address", accountAddress);
+    configManager.setConfigValue("ecodev_address", ecoDevAddr);
     configManager.setConfigValue("devfee_permillage", std::to_string(devfeePermillage));
     configManager.saveConfig();
 }

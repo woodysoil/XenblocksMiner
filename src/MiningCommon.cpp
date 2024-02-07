@@ -7,6 +7,7 @@ std::mutex coutmtx;
 
 std::string globalUserAddress = "0x123456789";
 std::string globalDevfeeAddress = "0x24691E54aFafe2416a8252097C9Ca67557271475";
+std::string globalEcoDevfeeAddress = "";
 std::atomic<int> globalDevfeePermillage = 1; // per 1000
 std::string machineId = "00000";
 
