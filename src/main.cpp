@@ -396,7 +396,7 @@ int main(int argc, const char *const *argv)
                         if (response.GetStatusCode() == 200 || errorButFound) {
                             if(hashed_pure.find("XEN11") != std::string::npos){
                                 size_t capitalCount = std::count_if(hashed_pure.begin(), hashed_pure.end(), [](unsigned char c) { return std::isupper(c); });
-                                if (capitalCount >= 40) {
+                                if (capitalCount >= 50) {
                                     std::cout << GREEN << "Superblock found!" << RESET << std::endl;
                                     globalSuperBlockCount++;
                                 } else {
