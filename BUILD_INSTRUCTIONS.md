@@ -18,6 +18,7 @@ Execute the following commands in your terminal:
 ./vcpkg install nlohmann-json
 ./vcpkg install openssl
 ./vcpkg install boost-program-options
+./vcpkg install secp256k1
 
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
@@ -34,6 +35,7 @@ Execute the following commands in Command Prompt or PowerShell:
 .\vcpkg.exe install nlohmann-json:x64-windows-static
 .\vcpkg.exe install openssl:x64-windows-static
 .\vcpkg.exe install boost-program-options:x64-windows-static
+.\vcpkg.exe install secp256k1:x64-windows-static
 
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -DCMAKE_PREFIX_PATH=path/to/vcpkg/installed/x64-windows-static -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 cmake --build build --config Release
