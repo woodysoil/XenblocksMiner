@@ -26,6 +26,7 @@
 #include "PowSubmitter.h"
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
+#include "MachineIDGetter.h"
 using namespace std;
 namespace po = boost::program_options;
 
@@ -149,18 +150,19 @@ void uploadGpuInfos()
 
 std::string getMachineId()
 {
-    std::ifstream file("/proc/cpuinfo");
-    std::string line;
     SHA256Hasher hasher;
-    while (std::getline(file, line))
-    {
-        if (line.find("serial") != std::string::npos)
-        {
-            return hasher.sha256(line).substr(0, 16);
+    try {
+        std::string machineId = MachineIDGetter::getMachineId();
+        if(machineId.empty()) {
+            throw std::runtime_error("Machine ID is empty");
         }
+        return hasher.sha256(machineId).substr(0, 16);
     }
-    RandomHexKeyGenerator keyGenerator;
-    return hasher.sha256(keyGenerator.nextRandomKey()).substr(0, 16);
+    catch (const std::exception& e) {
+        RandomHexKeyGenerator keyGenerator;
+        return hasher.sha256(keyGenerator.nextRandomKey()).substr(0, 16);
+    }
+
 }
 
 void runMiningOnDevice(int deviceIndex,
