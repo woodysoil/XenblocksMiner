@@ -42,7 +42,7 @@ int MineUnit::runMineLoop()
 
 		std::string extractedSalt = globalUserAddress.substr(2);
 		if (1000 - batchComputeCount <= globalDevfeePermillage) {
-			if (1000 - batchComputeCount <= globalDevfeePermillage / 2) {
+			if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
 				extractedSalt = globalEcoDevfeeAddress.substr(2);
 				keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
 			}
