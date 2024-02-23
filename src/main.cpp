@@ -179,15 +179,11 @@ std::string getGpuStatsJson() {
 
     for (const auto& gpuInfoPair : globalGpuInfos) {
         const auto& gpuInfo = gpuInfoPair.second.first;
-        for (size_t i = 0; i < 8; i++)
-        {
-            nlohmann::json gpuJson;
-            gpuJson["index"] = gpuInfo.index + i;
-            gpuJson["hashrate"] = gpuInfo.hashrate + i;
-            totalHashrate += gpuInfo.hashrate;
-            gpuArray.push_back(gpuJson);
-
-        }
+        nlohmann::json gpuJson;
+        gpuJson["index"] = gpuInfo.index;
+        gpuJson["hashrate"] = gpuInfo.hashrate;
+        totalHashrate += gpuInfo.hashrate;
+        gpuArray.push_back(gpuJson);
 
     }
 
