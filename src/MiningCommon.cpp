@@ -17,5 +17,7 @@ std::mutex globalGpuInfosMutex;
 std::atomic<int> globalNormalBlockCount = 0;
 std::atomic<int> globalSuperBlockCount = 0;
 std::atomic<int> globalXuniBlockCount = 0;
+std::atomic<int> globalFailedBlockCount = 0;
+
 std::atomic<long> globalHashCount = 0;
 std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();

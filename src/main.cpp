@@ -428,6 +428,9 @@ int main(int argc, const char *const *argv)
                 // std::cout << YELLOW << "Retrying... (" << retries << "/" << MAX_SUBMIT_RETRIES << ")" << RESET << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(2));
                 if (retries >= MAX_SUBMIT_RETRIES) {
+                    if(hashed_pure.find("XEN11") != std::string::npos){
+                        globalFailedBlockCount++;
+                    }
                     std::cout << RED << "Failed to submit block after " << retries << " retries" << RESET << std::endl;
                     logger.log("Failed to submit block: " + payload.dump(-1));
                     return;
