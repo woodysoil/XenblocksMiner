@@ -27,6 +27,8 @@
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
 #include "MachineIDGetter.h"
+#include <crow.h>
+
 using namespace std;
 namespace po = boost::program_options;
 
@@ -165,6 +167,44 @@ std::string getMachineId()
 
 }
 
+std::string getGpuStatsJson() {
+    nlohmann::json result;
+    nlohmann::json gpuArray = nlohmann::json::array();
+    float totalHashrate = 0.0;
+
+    std::lock_guard<std::mutex> guard(globalGpuInfosMutex);
+
+    auto now = std::chrono::system_clock::now();
+    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+
+    for (const auto& gpuInfoPair : globalGpuInfos) {
+        const auto& gpuInfo = gpuInfoPair.second.first;
+        for (size_t i = 0; i < 8; i++)
+        {
+            nlohmann::json gpuJson;
+            gpuJson["index"] = gpuInfo.index + i;
+            gpuJson["hashrate"] = gpuInfo.hashrate + i;
+            totalHashrate += gpuInfo.hashrate;
+            gpuArray.push_back(gpuJson);
+
+        }
+
+    }
+
+    result["totalHashrate"] = totalHashrate;
+    result["gpus"] = gpuArray;
+    result["uptime"] = uptime;
+    result["acceptedBlocks"] = globalNormalBlockCount.load() + globalSuperBlockCount.load();
+    result["rejectedBlocks"] = globalFailedBlockCount.load();
+
+    return result.dump();
+}
+
+crow::SimpleApp app;
+void startServer() {
+    app.port(42069).multithreaded().run();
+}
+
 void runMiningOnDevice(int deviceIndex,
                        SubmitCallback submitCallback,
                        StatCallback statCallback)
@@ -197,6 +237,7 @@ void interruptSignalHandler(int signum)
 {
     running = false;
     cv.notify_all();
+    app.stop();
 }
 void workerThread() {
     while (running) {
@@ -535,6 +576,16 @@ int main(int argc, const char *const *argv)
         t.detach();
     }
 
+    app.loglevel(crow::LogLevel::Warning);
+    app.signal_clear();
+    CROW_ROUTE(app, "/stats")
+    ([](){
+        auto stats = getGpuStatsJson();
+        return stats;
+    });
+    std::thread serverThread(startServer);
+    serverThread.detach();
+    
     while (running)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
