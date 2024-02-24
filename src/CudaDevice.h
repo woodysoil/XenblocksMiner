@@ -6,10 +6,11 @@
 class CudaDevice {
 private:
     int deviceIndex;
-
+    int picBusId;
 public:
-    CudaDevice(int index) : deviceIndex(index) {}
+    CudaDevice(int index);
     int getDeviceIndex() { return deviceIndex; }
+    int getPicBusId() { return picBusId; }
 
     std::string getName();
     std::string getFullName();

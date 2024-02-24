@@ -32,6 +32,7 @@ private:
 	std::string gpuName;
 	std::size_t gpuMemory = 0;
 	std::size_t usedMemory = 0;
+	int busId;
 
 	std::vector<std::string> passwordStorage;
 	KernelRunner kernelRunner;

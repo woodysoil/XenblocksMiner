@@ -182,6 +182,7 @@ std::string getGpuStatsJson() {
         nlohmann::json gpuJson;
         gpuJson["index"] = gpuInfo.index;
         gpuJson["hashrate"] = gpuInfo.hashrate;
+        gpuJson["busId"] = gpuInfo.busId;
         totalHashrate += gpuInfo.hashrate;
         gpuArray.push_back(gpuJson);
 

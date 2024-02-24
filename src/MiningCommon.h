@@ -35,6 +35,7 @@ extern std::atomic<long> globalHashCount;
 struct gpuInfo
 {
 	int index;
+	int busId;
 	std::string name;
 	int memory;
 	float usingMemory;
