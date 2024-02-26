@@ -27,6 +27,8 @@
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
 #include "MachineIDGetter.h"
+#include <crow.h>
+
 using namespace std;
 namespace po = boost::program_options;
 
@@ -165,6 +167,41 @@ std::string getMachineId()
 
 }
 
+std::string getGpuStatsJson() {
+    nlohmann::json result;
+    nlohmann::json gpuArray = nlohmann::json::array();
+    float totalHashrate = 0.0;
+
+    std::lock_guard<std::mutex> guard(globalGpuInfosMutex);
+
+    auto now = std::chrono::system_clock::now();
+    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+
+    for (const auto& gpuInfoPair : globalGpuInfos) {
+        const auto& gpuInfo = gpuInfoPair.second.first;
+        nlohmann::json gpuJson;
+        gpuJson["index"] = gpuInfo.index;
+        gpuJson["hashrate"] = gpuInfo.hashrate;
+        gpuJson["busId"] = gpuInfo.busId;
+        totalHashrate += gpuInfo.hashrate;
+        gpuArray.push_back(gpuJson);
+
+    }
+
+    result["totalHashrate"] = totalHashrate;
+    result["gpus"] = gpuArray;
+    result["uptime"] = uptime;
+    result["acceptedBlocks"] = globalNormalBlockCount.load() + globalSuperBlockCount.load();
+    result["rejectedBlocks"] = globalFailedBlockCount.load();
+
+    return result.dump();
+}
+
+crow::SimpleApp app;
+void startServer() {
+    app.port(42069).multithreaded().run();
+}
+
 void runMiningOnDevice(int deviceIndex,
                        SubmitCallback submitCallback,
                        StatCallback statCallback)
@@ -197,6 +234,7 @@ void interruptSignalHandler(int signum)
 {
     running = false;
     cv.notify_all();
+    app.stop();
 }
 void workerThread() {
     while (running) {
@@ -428,6 +466,9 @@ int main(int argc, const char *const *argv)
                 // std::cout << YELLOW << "Retrying... (" << retries << "/" << MAX_SUBMIT_RETRIES << ")" << RESET << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(2));
                 if (retries >= MAX_SUBMIT_RETRIES) {
+                    if(hashed_pure.find("XEN11") != std::string::npos){
+                        globalFailedBlockCount++;
+                    }
                     std::cout << RED << "Failed to submit block after " << retries << " retries" << RESET << std::endl;
                     logger.log("Failed to submit block: " + payload.dump(-1));
                     return;
@@ -532,6 +573,16 @@ int main(int argc, const char *const *argv)
         t.detach();
     }
 
+    app.loglevel(crow::LogLevel::Warning);
+    app.signal_clear();
+    CROW_ROUTE(app, "/stats")
+    ([](){
+        auto stats = getGpuStatsJson();
+        return stats;
+    });
+    std::thread serverThread(startServer);
+    serverThread.detach();
+    
     while (running)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));

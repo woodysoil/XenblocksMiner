@@ -27,6 +27,7 @@ extern std::mutex coutmtx;
 extern std::atomic<int> globalNormalBlockCount;
 extern std::atomic<int> globalSuperBlockCount;
 extern std::atomic<int> globalXuniBlockCount;
+extern std::atomic<int> globalFailedBlockCount;
 
 extern std::chrono::system_clock::time_point start_time;
 extern std::atomic<long> globalHashCount;
@@ -34,6 +35,7 @@ extern std::atomic<long> globalHashCount;
 struct gpuInfo
 {
 	int index;
+	int busId;
 	std::string name;
 	int memory;
 	float usingMemory;

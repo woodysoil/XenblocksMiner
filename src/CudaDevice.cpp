@@ -6,6 +6,13 @@
 
 #include "CudaException.h"
 
+CudaDevice::CudaDevice(int index) {
+    deviceIndex = index;
+    cudaDeviceProp prop;
+    CudaException::check(cudaGetDeviceProperties(&prop, deviceIndex));
+    picBusId = prop.pciBusID;
+}
+
 std::string CudaDevice::getName() {
     cudaDeviceProp prop;
     CudaException::check(cudaGetDeviceProperties(&prop, deviceIndex));

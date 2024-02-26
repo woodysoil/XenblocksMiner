@@ -8,4 +8,4 @@ For your convenience, precompiled binaries are available for download. These bin
 
 ## Build Instructions
 
-For detailed instructions on how to build this project, please refer to the [Build Instructions](./BUILD_INSTRUCTIONS.md) document.
+For detailed instructions on how to build this project, please refer to the [Build Instructions](./doc/BUILD_INSTRUCTIONS.md) document.

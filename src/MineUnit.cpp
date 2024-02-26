@@ -21,7 +21,7 @@ int MineUnit::runMineLoop()
 	int batchComputeCount = 0;
 	cudaSetDevice(deviceIndex);
 	gpuName = CudaDevice(deviceIndex).getName();
-
+	busId = CudaDevice(deviceIndex).getPicBusId();
 	size_t freeMemory, totalMemory;
 	cudaMemGetInfo(&freeMemory, &totalMemory);
 	batchSize = freeMemory / 1.001 / difficulty / 1024;
@@ -42,7 +42,7 @@ int MineUnit::runMineLoop()
 
 		std::string extractedSalt = globalUserAddress.substr(2);
 		if (1000 - batchComputeCount <= globalDevfeePermillage) {
-			if (1000 - batchComputeCount <= globalDevfeePermillage / 2) {
+			if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
 				extractedSalt = globalEcoDevfeeAddress.substr(2);
 				keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
 			}
@@ -196,5 +196,5 @@ void MineUnit::stat()
 	hashrate = rate;
 
 	int memoryInGB = static_cast<int>(std::round(static_cast<float>(gpuMemory) / (1024 * 1024 * 1024)));
-	statCallback({ (int)deviceIndex, gpuName, memoryInGB, usedMemory/(float)gpuMemory, 0, (float)rate, "", hashtotal });
+	statCallback({ (int)deviceIndex, busId, gpuName, memoryInGB, usedMemory/(float)gpuMemory, 0, (float)rate, "", hashtotal });
 }
