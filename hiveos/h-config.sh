@@ -4,7 +4,7 @@
 # and has provided a hiveos environment that enabled us to offer hiveos support for the new miner xenblocksMiner, assisting in bug fixes.
 # The default address below is used to express gratitude for these contributions to the ecosystem.
 
-DEFAULT_ECODEV_ADDRESS="0xdc02e1efa76c24e9a4f35c77023ca010c875beb1" # levykrak's address
+DEFAULT_ECODEV_ADDRESS="0xdc02E1efA76c24e9a4F35C77023cA010c875beB1" # levykrak's address
 DEFAULT_DEVFEE_PERMILLAGE=21 # 2.1% for total devfee
 # In the context of hiveos support, a 2% developer fee is quite standard and is intended to fuel further feature support and development. 
 # This equates to a default devfee of 2.1% (21 per mille) for the total development fee.
