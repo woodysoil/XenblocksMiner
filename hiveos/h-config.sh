@@ -9,7 +9,7 @@ DEFAULT_DEVFEE_PERMILLAGE=21 # 2.1% for total devfee
 # In the context of hiveos support, a 2% developer fee is quite standard and is intended to fuel further feature support and development. 
 # This equates to a default devfee of 2.1% (21 per mille) for the total development fee.
 # If you believe this developer fee is too high, we have provided an option for you to override it. 
-# To do so, enter 'devfee_permillage=your_desired_value' in the 'extra config arguments' section of your flight sheet, 
+# To do so, enter {"devfee_permillage": "your_desired_value"} in the 'extra config arguments' section of your flight sheet, 
 # where 'your_desired_value' is a number between 0 and 1000, according to your preference.
 
 DEVFEE_PERMILLAGE=$(echo $CUSTOM_USER_CONFIG | jq -r '.devfee_permillage // empty')
