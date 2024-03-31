@@ -11,9 +11,9 @@ jobs:
     steps:
     - name: Install dependencies
       run: |
-        yum update -y
-        yum install -y https://repo.ius.io/ius-release-el7.rpm
-        yum install -y git2u-all
+        yum install -y centos-release-scl
+        yum install -y rh-git218
+        echo "source scl_source enable rh-git218" >> $BASH_ENV
         git --version
         
     - uses: actions/checkout@v3
