@@ -21,7 +21,7 @@ jobs:
       with:
         submodules: true
 
-    - uses: lukka/get-cmake@latest
+    - uses: lukka/get-cmake@10.6
 
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11
@@ -29,7 +29,7 @@ jobs:
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-      uses: lukka/run-cmake@v10
+      uses: lukka/run-cmake@v10.6
       with:
         configurePresetAdditionalArgs: "['-S . -B build -DCMAKE_TOOLCHAIN_FILE=${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake']"
         buildPresetAdditionalArgs: "['--build build --config Release']"
