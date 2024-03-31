@@ -9,6 +9,13 @@ jobs:
     container: 
       image: nvidia/cuda:11.8.0-devel-centos7
     steps:
+    - name: Install dependencies
+      run: |
+        yum update -y
+        yum install -y https://repo.ius.io/ius-release-el7.rpm
+        yum install -y git2u-all
+        git --version
+        
     - uses: actions/checkout@v3
       with:
         submodules: true
