@@ -16,7 +16,13 @@ jobs:
       run: |
         yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
         yum -y install git curl zip unzip tar
-        git config --global --add safe.directory "*" 
+        yum -y install centos-release-scl devtoolset-8-gcc devtoolset-8-gcc-c++
+        git config --global --add safe.directory "*"
+        
+    - name: Setup GCC 8
+      run: |
+        echo "CC=/opt/rh/devtoolset-8/root/usr/bin/gcc" >> $GITHUB_ENV
+        echo "CXX=/opt/rh/devtoolset-8/root/usr/bin/g++" >> $GITHUB_ENV
         
     - uses: actions/checkout@v3
       with:
