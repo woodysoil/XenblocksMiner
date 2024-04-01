@@ -19,6 +19,7 @@ jobs:
         yum install kernel-devel -y 
         yum install perl-IPC-Cmd -y
         git config --global --add safe.directory "*"
+        source scl_source enable devtoolset-11
         
     - uses: actions/checkout@v3
       with:
@@ -37,7 +38,6 @@ jobs:
 
     - name: Build
       run: |
-          scl enable devtoolset-8 bash
           ./vcpkg/vcpkg install argon2
           ./vcpkg/vcpkg install cryptopp
           ./vcpkg/vcpkg install curl
