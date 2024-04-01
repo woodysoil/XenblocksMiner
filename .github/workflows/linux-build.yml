@@ -2,10 +2,7 @@ name: Linux-build
 
 on:
   workflow_dispatch:
-  
-env:
-  VCPKG_VERBOSE: "ON"
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,7 +13,8 @@ jobs:
       run: |
         yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
         yum -y install git curl zip unzip tar
-        yum -y install centos-release-scl devtoolset-8-gcc devtoolset-8-gcc-c++
+        yum install -y centos-release-scl
+        yum install -y devtoolset-8-gcc devtoolset-8-gcc-c++
         git config --global --add safe.directory "*"
         
     - uses: actions/checkout@v3
@@ -44,4 +42,4 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: xenblocksMiner-linux
-        path: builds/
+        path: build/
