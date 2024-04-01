@@ -28,7 +28,11 @@ jobs:
       with:
         submodules: recursive
 
-    - uses: lukka/get-cmake@v3.24.3
+    - name: Get CMake 3.29.0
+      run: |
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.29.0/cmake-3.29.0-linux-x86_64.sh -o cmake-install.sh
+          chmod +x cmake-install.sh
+          ./cmake-install.sh --skip-license --prefix=/usr/local
 
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
