@@ -36,7 +36,7 @@ jobs:
     - name: Build
       run: |
           scl enable devtoolset-8 bash
-          cmake -S . -B build --preset ninja-multi-vcpkg -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCMAKE_CXX_COMPILER=g++
+          cmake -S . -B build --preset ninja-multi-vcpkg -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_MAKE_PROGRAM=/usr/bin/ninja -G "Ninja"
           cmake --build build --preset ninja-vcpkg-release
 
     - name: Upload artifacts
