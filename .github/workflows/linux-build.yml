@@ -27,9 +27,6 @@ jobs:
 
     - uses: lukka/get-cmake@v3.24.3
 
-    - name: Manually bootstrap vcpkg
-      run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
@@ -38,11 +35,11 @@ jobs:
     - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
       uses: lukka/run-cmake@v10.6
       with:
-        configurePresetAdditionalArgs: "['-S . -B build -DCMAKE_TOOLCHAIN_FILE=${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake']"
-        buildPresetAdditionalArgs: "['--build build --config Release']"
+        configurePreset: 'ninja-multi-vcpkg'
+        buildPreset: 'ninja-vcpkg-release'
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
         name: xenblocksMiner-linux
-        path: build/bin
+        path: builds/
