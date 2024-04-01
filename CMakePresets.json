@@ -3,10 +3,25 @@
     "version": 8,
     "configurePresets": [
         {
-            "name": "configure-vcpkg",
+            "name": "ninja-multi-vcpkg",
             "description": "Configure with vcpkg toolchain",
             "generator": "Ninja",
-            "toolchainFile": "path/to/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            "binaryDir": "${sourceDir}/builds/${presetName}",
+            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "ninja-vcpkg-debug",
+            "displayName": "Build (Debug)",
+            "description": "Build with Ninja/vcpkg (Debug)",
+            "configuration": "Debug"
+        },
+        {
+            "name": "ninja-vcpkg-release",
+            "displayName": "Build (Release)",
+            "description": "Build with Ninja/vcpkg (Release)",
+            "configuration": "Release"
         }
     ]
 }
