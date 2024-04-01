@@ -15,7 +15,9 @@ jobs:
         yum -y install git curl zip unzip tar
         yum -y groupinstall "Development tools"
         yum install -y centos-release-scl
-        yum install -y devtoolset-8-gcc devtoolset-8-gcc-c++
+        yum install -y devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils
+        yum install kernel-devel -y 
+        yum install perl-IPC-Cmd -y
         git config --global --add safe.directory "*"
         
     - uses: actions/checkout@v3
@@ -44,11 +46,11 @@ jobs:
           ./vcpkg/vcpkg install boost-program-options
           ./vcpkg/vcpkg install secp256k1
           ./vcpkg/vcpkg install crow
-          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCMAKE_CXX_COMPILER=g++
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
           cmake --build build --config Release
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
         name: xenblocksMiner-linux
-        path: build/
+        path: build/bin
