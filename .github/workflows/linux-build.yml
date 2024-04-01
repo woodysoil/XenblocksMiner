@@ -27,6 +27,9 @@ jobs:
 
     - uses: lukka/get-cmake@v3.24.3
 
+    - name: Manually bootstrap vcpkg
+      run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
