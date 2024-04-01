@@ -30,13 +30,14 @@ jobs:
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
+        runVcpkgInstall: true
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Build
       run: |
           scl enable devtoolset-8 bash
-          cmake -S . -B build --preset ninja-multi-vcpkg
-          cmake --build build --preset ninja-vcpkg-release
+          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake
+          cmake --build build --config Release
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
