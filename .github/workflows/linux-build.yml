@@ -15,6 +15,7 @@ jobs:
         yum -y install git curl zip unzip tar
         yum install -y centos-release-scl
         yum install -y devtoolset-8-gcc devtoolset-8-gcc-c++
+        yum install -y epel-release && yum install -y ninja-build
         git config --global --add safe.directory "*"
         
     - uses: actions/checkout@v3
@@ -35,8 +36,8 @@ jobs:
     - name: Build
       run: |
           scl enable devtoolset-8 bash
-          cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake
-          cmake --build build --config Release
+          cmake -S . -B build --preset ninja-multi-vcpkg
+          cmake --build build --preset ninja-vcpkg-release
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
