@@ -1,0 +1,12 @@
+{
+    "$schema": "https://cmake.org/cmake/help/latest/_downloads/3e2d73bff478d88a7de0de736ba5e361/schema.json",
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "configure-vcpkg",
+            "description": "Configure with vcpkg toolchain",
+            "generator": "Ninja",
+            "toolchainFile": "path/to/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        }
+    ]
+}
