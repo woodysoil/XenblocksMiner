@@ -36,6 +36,14 @@ jobs:
     - name: Build
       run: |
           scl enable devtoolset-8 bash
+          ./vcpkg/vcpkg install argon2
+          ./vcpkg/vcpkg install cryptopp
+          ./vcpkg/vcpkg install curl
+          ./vcpkg/vcpkg install nlohmann-json
+          ./vcpkg/vcpkg install openssl
+          ./vcpkg/vcpkg install boost-program-options
+          ./vcpkg/vcpkg install secp256k1
+          ./vcpkg/vcpkg install crow
           cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc -DCMAKE_CXX_COMPILER=g++
           cmake --build build --config Release
 
