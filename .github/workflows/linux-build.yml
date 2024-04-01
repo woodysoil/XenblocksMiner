@@ -39,11 +39,11 @@ jobs:
       with:
         vcpkgJsonGlob: 'vcpkg.json'
 
-    - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-      uses: lukka/run-cmake@v10.6
-      with:
-        configurePreset: 'ninja-multi-vcpkg'
-        buildPreset: 'ninja-vcpkg-release'
+    - name: Build
+      run: |
+          scl enable devtoolset-8 bash
+          cmake -S . -B build --preset ninja-multi-vcpkg
+          cmake --build build --preset ninja-vcpkg-release
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
