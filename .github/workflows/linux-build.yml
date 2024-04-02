@@ -12,8 +12,14 @@ jobs:
       CC: /opt/rh/devtoolset-11/root/usr/bin/gcc
       CXX: /opt/rh/devtoolset-11/root/usr/bin/c++
       CUDAHOSTCXX: /opt/rh/devtoolset-11/root/usr/bin/c++
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
-
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v6
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
     - name: Install dependencies
       run: |
         yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
@@ -45,12 +51,11 @@ jobs:
         doNotCache: false
         vcpkgJsonGlob: 'vcpkg.json'
 
-    - name: Run CMake consuming CMakePreset.json and run vcpkg to build packages
-      uses: lukka/run-cmake@v10.6
-      with:
-        configurePreset: 'ninja-multi-vcpkg'
-        buildPreset: 'ninja-multi-vcpkg'
-
+    - name: Build
+      run: |
+          cmake -B build -S . --preset ninja-multi-vcpkg
+          cmake --build build --preset ninja-vcpkg-release
+          
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
