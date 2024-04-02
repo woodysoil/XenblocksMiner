@@ -41,7 +41,8 @@ jobs:
         
     - name: Build
       run: |
-          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
+          echo "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake -DCMAKE_C_COMPILER=/opt/rh/devtoolset-11/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/devtoolset-11/root/usr/bin/g++
           cmake --build build --config Release
 
     - name: Upload artifacts
