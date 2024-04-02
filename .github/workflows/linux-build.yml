@@ -36,17 +36,12 @@ jobs:
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
-        runVcpkgInstall: true
         vcpkgJsonGlob: 'vcpkg.json'
         
     - name: Build
       run: |
           export CC=/opt/rh/devtoolset-11/root/usr/bin/gcc
-          export CXX=/opt/rh/devtoolset-11/root/usr/bin/g++
-          c++ -v
-          gcc -v
-          g++ -v
-          ./vcpkg/vcpkg integrate install
+          export CXX=/opt/rh/devtoolset-11/root/usr/bin/c++
           cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
           cmake --build build --config Release
 
