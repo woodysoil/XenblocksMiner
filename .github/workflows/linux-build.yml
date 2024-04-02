@@ -8,7 +8,10 @@ jobs:
     runs-on: ubuntu-latest
     container: 
       image: nvidia/cuda:11.8.0-devel-centos7
-      
+    env:
+      CC: /opt/rh/devtoolset-11/root/usr/bin/gcc
+      CXX: /opt/rh/devtoolset-11/root/usr/bin/c++
+      CUDAHOSTCXX: /opt/rh/devtoolset-11/root/usr/bin/c++
     steps:
 
     - name: Install dependencies
@@ -16,6 +19,8 @@ jobs:
         yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
         yum -y install git curl zip unzip tar
         yum -y groupinstall "Development tools"
+        yum -y install epel-release 
+        yum -y install ninja-build
         yum install -y centos-release-scl
         yum install -y devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils
         yum install kernel-devel -y 
@@ -35,14 +40,16 @@ jobs:
           
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
-        
-    - name: Build
-      run: |
-          export CC=/opt/rh/devtoolset-11/root/usr/bin/gcc
-          export CXX=/opt/rh/devtoolset-11/root/usr/bin/c++
-          export CUDAHOSTCXX=/opt/rh/devtoolset-11/root/usr/bin/c++
-          cmake -B build -S . -D CMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
-          cmake --build build --config Release
+      with:
+        runVcpkgInstall: true
+        doNotCache: false
+        vcpkgJsonGlob: 'vcpkg.json'
+
+    - name: Run CMake consuming CMakePreset.json and run vcpkg to build packages
+      uses: lukka/run-cmake@v10.6
+      with:
+        configurePreset: 'ninja-multi-vcpkg'
+        buildPreset: 'ninja-multi-vcpkg'
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
