@@ -23,7 +23,10 @@ jobs:
     - name: Setup devtoolset-11
       run: |
         echo "PATH=/opt/rh/devtoolset-11/root/usr/bin:$PATH" >> $GITHUB_ENV
-        echo "LD_LIBRARY_PATH=/opt/rh/devtoolset-11/root/usr/lib64:/opt/rh/devtoolset-11/root/usr/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+    - name: Test GCC
+      run: |
+        gcc -v
+        
         
     - uses: actions/checkout@v3
       with:
@@ -38,18 +41,11 @@ jobs:
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
+        runVcpkgInstall: true
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Build
       run: |
-          ./vcpkg/vcpkg install argon2
-          ./vcpkg/vcpkg install cryptopp
-          ./vcpkg/vcpkg install curl
-          ./vcpkg/vcpkg install nlohmann-json
-          ./vcpkg/vcpkg install openssl
-          ./vcpkg/vcpkg install boost-program-options
-          ./vcpkg/vcpkg install secp256k1
-          ./vcpkg/vcpkg install crow
           cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
           cmake --build build --config Release
 
