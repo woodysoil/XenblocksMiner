@@ -5,7 +5,7 @@
             "name": "ninja-multi-vcpkg",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/builds/",
-            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            "toolchainFile": "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
         }
     ],
     "buildPresets": [
