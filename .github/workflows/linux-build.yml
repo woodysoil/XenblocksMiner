@@ -12,6 +12,8 @@ jobs:
       CC: /opt/rh/devtoolset-11/root/usr/bin/gcc
       CXX: /opt/rh/devtoolset-11/root/usr/bin/c++
       CUDAHOSTCXX: /opt/rh/devtoolset-11/root/usr/bin/c++
+      _VCPKG_: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
     - name: Export GitHub Actions cache environment variables
@@ -47,8 +49,6 @@ jobs:
     - name: Restore from cache and setup vcpkg executable and data files.
       uses: lukka/run-vcpkg@v11.1
       with:
-        runVcpkgInstall: true
-        doNotCache: false
         vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Build
