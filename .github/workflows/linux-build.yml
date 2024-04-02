@@ -49,11 +49,7 @@ jobs:
           curl -L https://github.com/Kitware/CMake/releases/download/v3.29.0/cmake-3.29.0-linux-x86_64.sh -o cmake-install.sh
           chmod +x cmake-install.sh
           ./cmake-install.sh --skip-license --prefix=/usr/local
-          
-    - name: Restore from cache and setup vcpkg executable and data files.
-      uses: lukka/run-vcpkg@v11.1
-      with:
-        vcpkgJsonGlob: 'vcpkg.json'
+
 
     # Restore vcpkg from the GitHub Action cache service. Note that packages are restored by vcpkg's binary caching
     # when it is being run afterwards by CMake.
@@ -73,11 +69,16 @@ jobs:
         key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
         restore-keys: |
           ${{ runner.os }}-vcpkg-
+          
+    - name: Restore from cache and setup vcpkg executable and data files.
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Build
       run: |
       
-          cmake -B build -S . --preset ninja-multi-vcpkg
+          cmake -B build -S . --preset ninja-multi-vcpkg -DVCPKG_INSTALL_OPTIONS="--binarysource=clear;--binarysource=files,$VCPKG_DEFAULT_BINARY_CACHE,read"
           cmake --build build --preset ninja-vcpkg-release
           
     - name: Upload artifacts
