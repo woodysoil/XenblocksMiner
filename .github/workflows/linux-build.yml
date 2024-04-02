@@ -19,7 +19,11 @@ jobs:
         yum install kernel-devel -y 
         yum install perl-IPC-Cmd -y
         git config --global --add safe.directory "*"
-        source scl_source enable devtoolset-11
+        
+    - name: Setup devtoolset-11
+      run: |
+        echo "PATH=/opt/rh/devtoolset-11/root/usr/bin:$PATH" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=/opt/rh/devtoolset-11/root/usr/lib64:/opt/rh/devtoolset-11/root/usr/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
         
     - uses: actions/checkout@v3
       with:
