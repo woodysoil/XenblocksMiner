@@ -61,6 +61,7 @@ jobs:
         # The other paths starting with '!' are exclusions: they contain termporary files generated during the build of the installed packages.
         path: |
           ${{ env._VCPKG_ }}
+          ${{ github.workspace }}/../b/vcpkg_cache
           !${{ env._VCPKG_ }}/buildtrees
           !${{ env._VCPKG_ }}/packages
           !${{ env._VCPKG_ }}/downloads
