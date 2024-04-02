@@ -74,6 +74,7 @@ jobs:
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgJsonGlob: 'vcpkg.json'
+        binaryCachePath: $VCPKG_DEFAULT_BINARY_CACHE
 
     - name: Build
       run: |
