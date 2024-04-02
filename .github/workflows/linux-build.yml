@@ -42,6 +42,7 @@ jobs:
       run: |
           export CC=/opt/rh/devtoolset-11/root/usr/bin/gcc
           export CXX=/opt/rh/devtoolset-11/root/usr/bin/c++
+          export CUDAHOSTCXX=/opt/rh/devtoolset-11/root/usr/bin/c++
           cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake
           cmake --build build --config Release
 
