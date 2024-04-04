@@ -14,9 +14,6 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES 35 37 50 52 61 70 75 80 86 89 90)
 
 find_package(unofficial-argon2 CONFIG REQUIRED)
-if(NOT unofficial-argon2_FOUND)
-    message(FATAL_ERROR "Libargon2 not found. Please install Libargon2.")
-endif()
 
 find_package(CURL CONFIG REQUIRED)
 if(NOT CURL_FOUND)
@@ -59,6 +56,7 @@ set(SOURCE_FILES src/main.cpp src/AppConfig.cpp src/argon2params.cpp src/blake2b
 if(WIN32)
     add_executable(${PROJECT_NAME} ${SOURCE_FILES} res/version.rc)
 else()
+    include_directories(/usr/local/cuda/include)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
     add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 endif()

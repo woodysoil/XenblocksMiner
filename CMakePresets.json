@@ -1,0 +1,22 @@
+{
+    "version": 5,
+    "configurePresets": [
+        {
+            "name": "ninja-multi-vcpkg",
+            "generator": "Ninja",
+            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "ninja-vcpkg-debug",
+            "configurePreset": "ninja-multi-vcpkg",
+            "configuration": "Debug"
+        },
+        {
+            "name": "ninja-vcpkg-release",
+            "configurePreset": "ninja-multi-vcpkg",
+            "configuration": "Release"
+        }
+    ]
+}

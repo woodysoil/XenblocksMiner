@@ -8,26 +8,81 @@ jobs:
     runs-on: ubuntu-latest
     container: 
       image: nvidia/cuda:11.8.0-devel-centos7
+    env:
+      CC: /opt/rh/devtoolset-11/root/usr/bin/gcc
+      CXX: /opt/rh/devtoolset-11/root/usr/bin/c++
+      CUDAHOSTCXX: /opt/rh/devtoolset-11/root/usr/bin/c++
+      _VCPKG_: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
-    - uses: actions/checkout@v4
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v6
       with:
-        submodules: true
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+    - name: Install dependencies
+      run: |
+        yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+        yum -y install git curl zip unzip tar
+        yum -y groupinstall "Development tools"
+        yum -y install epel-release 
+        yum -y install ninja-build
+        yum install -y centos-release-scl
+        yum install -y devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils
+        yum install kernel-devel -y 
+        yum install perl-IPC-Cmd -y
+        git config --global --add safe.directory "*"
+        echo "PATH=/opt/rh/devtoolset-11/root/usr/bin:$PATH" >> $GITHUB_ENV
+        
+    - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
+      run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
+      shell: bash
+      
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
 
-    - uses: lukka/get-cmake@latest
+    - name: Get CMake 3.29.0
+      run: |
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.29.0/cmake-3.29.0-linux-x86_64.sh -o cmake-install.sh
+          chmod +x cmake-install.sh
+          ./cmake-install.sh --skip-license --prefix=/usr/local
 
+
+    # Restore vcpkg from the GitHub Action cache service. Note that packages are restored by vcpkg's binary caching
+    # when it is being run afterwards by CMake.
+    - name: Restore vcpkg
+      uses: actions/cache@v3
+      with:
+        # The first path is the location of vcpkg: it contains the vcpkg executable and data files, as long as the
+        # built package archives (aka binary cache) which are located by VCPKG_DEFAULT_BINARY_CACHE env var.
+        # The other paths starting with '!' are exclusions: they contain termporary files generated during the build of the installed packages.
+        path: |
+          ${{ env._VCPKG_ }}
+          !${{ env._VCPKG_ }}/buildtrees
+          !${{ env._VCPKG_ }}/packages
+          !${{ env._VCPKG_ }}/downloads
+          !${{ env._VCPKG_ }}/installed
+        # The key is composed in a way that it gets properly invalidated whenever a different version of vcpkg is being used.
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+          
     - name: Restore from cache and setup vcpkg executable and data files.
-      uses: lukka/run-vcpkg@v11
+      uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgJsonGlob: 'vcpkg.json'
 
-    - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-      uses: lukka/run-cmake@v10
-      with:
-        configurePresetAdditionalArgs: "['-S . -B build -DCMAKE_TOOLCHAIN_FILE=${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake']"
-        buildPresetAdditionalArgs: "['--build build --config Release']"
+    - name: Build
+      run: |
+      
+          cmake -B build -S . --preset ninja-multi-vcpkg -DVCPKG_INSTALL_OPTIONS="--binarysource=clear;--binarysource=files,$VCPKG_DEFAULT_BINARY_CACHE,read"
+          cmake --build build --preset ninja-vcpkg-release
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: xenblocksMiner-linux
         path: build/bin
