@@ -344,6 +344,69 @@ void workerThread() {
         task();
     }
 }
+
+nlohmann::json inline getStatData() {
+    nlohmann::json result;
+    nlohmann::json gpuArray = nlohmann::json::array();
+    float totalHashrate = 0.0;
+
+    std::lock_guard<std::mutex> guard(globalGpuInfosMutex);
+
+    auto now = std::chrono::system_clock::now();
+    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+
+    for (const auto& gpuInfoPair : globalGpuInfos) {
+        const auto& gpuInfo = gpuInfoPair.second.first;
+        nlohmann::json gpuJson;
+        gpuJson["index"] = gpuInfo.index;
+        gpuJson["name"] = gpuInfo.name;
+        gpuJson["hashrate"] = gpuInfo.hashrate;
+        totalHashrate += gpuInfo.hashrate;
+        gpuArray.push_back(gpuJson);
+
+    }
+
+    result["machineId"] = machineId;
+    result["minerAddr"] = globalUserAddress;
+    result["totalHashrate"] = totalHashrate;
+    result["gpus"] = gpuArray;
+    result["uptime"] = uptime;
+    result["acceptedBlocks"] = globalNormalBlockCount.load() + globalSuperBlockCount.load();
+    result["rejectedBlocks"] = globalFailedBlockCount.load();
+
+    return result;
+}
+
+void UploadDataPeriodically(int uploadPeriod) {
+    HttpClient client;
+    std::string url = "https://woodyminer.com/api/stat/upload";
+    long timeout = 3000;
+    int failureCount = 0; 
+    int originalUploadPeriod = uploadPeriod;
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+    while (running) {
+        auto data = getStatData();
+        auto response = client.HttpPost(url, data, timeout);
+        // std::cout << "Server Response: " << response.GetBody() << std::endl;
+        // std::cout << "Status Code: " << response.GetStatusCode() << std::endl;
+        if (response.GetStatusCode() == 200) {
+            failureCount = 0;
+            uploadPeriod = originalUploadPeriod;
+        } else {
+            failureCount++;
+            // std::cout << "Upload failed. Consecutive failures: " << failureCount << std::endl;
+        }
+        if (failureCount >= 10) {
+            uploadPeriod *= 2;
+            if(uploadPeriod > 600) {
+                uploadPeriod = 600;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(uploadPeriod));
+    }
+}
+
 int main(int argc, const char *const *argv)
 {
     bool executeTask = false;
@@ -354,7 +417,7 @@ int main(int argc, const char *const *argv)
         }
     }
     if(!executeTask){
-        std::cout << "Starting the monitor server..." << std::endl;
+        // std::cout << "Starting the monitor server..." << std::endl;
         int i = 0;
         while(i++ < 42069){
             if (monitorProcess(argc, const_cast<char**>(argv)) >= 0) {
@@ -363,7 +426,7 @@ int main(int argc, const char *const *argv)
         }
         return 0;
     }
-    std::cout << "Executing the miner..." << std::endl;
+    // std::cout << "Executing the miner..." << std::endl;
     try {
 
         po::options_description desc("XenblocksMiner options");
@@ -691,7 +754,8 @@ int main(int argc, const char *const *argv)
     });
     std::thread serverThread(startServer);
     serverThread.detach();
-    
+    std::thread uploadStatThread(UploadDataPeriodically, 60);
+    uploadStatThread.detach();
     while (running)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
