@@ -410,6 +410,7 @@ void UploadDataPeriodically(int uploadPeriod) {
 int main(int argc, const char *const *argv)
 {
     bool executeTask = false;
+    bool donotupload = false;
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--execute") {
             executeTask = true;
@@ -436,6 +437,7 @@ int main(int argc, const char *const *argv)
             ("ecoDevAddr", po::value<std::string>(), "set ecosystem developer address (will receive half of the total dev fee)")
             ("minerAddr", po::value<std::string>(), "set miner address")
             ("execute", "execute the miner otherwise it will run as a mointor server")
+            ("donotupload", "do not upload the data to the server")
             ("saveConfig", "update configuration file with console inputs");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -513,6 +515,10 @@ int main(int argc, const char *const *argv)
             appConfig.setDevfeePermillage(globalDevfeePermillage);
             appConfig.save();
             std::cout << "Configuration file updated with console inputs." << std::endl;
+        }
+
+        if (vm.count("donotupload")) {
+            donotupload = true;
         }
 
         std::cout << GREEN << "Logged in as " << globalUserAddress 
@@ -754,8 +760,11 @@ int main(int argc, const char *const *argv)
     });
     std::thread serverThread(startServer);
     serverThread.detach();
-    std::thread uploadStatThread(UploadDataPeriodically, 60);
-    uploadStatThread.detach();
+    if(!donotupload){
+        std::thread uploadStatThread(UploadDataPeriodically, 60);
+        uploadStatThread.detach();
+    }
+
     while (running)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
