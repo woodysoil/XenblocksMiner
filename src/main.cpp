@@ -29,8 +29,98 @@
 #include "MachineIDGetter.h"
 #include <crow.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/wait.h>
+#endif
+
 using namespace std;
 namespace po = boost::program_options;
+
+#ifdef _WIN32
+BOOL ctrlHandler(DWORD fdwCtrlType) {
+    switch (fdwCtrlType) {
+    case CTRL_C_EVENT:
+        std::cout << "Ctrl-C event\n";
+        ExitProcess(0);
+    default:
+        return FALSE;
+    }
+}
+std::string buildCommandLine(int argc, char* argv[]) {
+    std::stringstream ss;
+    ss << argv[0];
+    ss << " --execute";
+    for (int i = 1; i < argc; ++i) {
+        ss << " " << argv[i];
+    }
+    return ss.str();
+}
+int monitorProcess(int argc, char* argv[]) {
+    std::string cmdLine = buildCommandLine(argc, argv);
+
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    if (!CreateProcess(NULL, const_cast<char *>(cmdLine.c_str()), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        std::cerr << "CreateProcess failed (" << GetLastError() << ").\n";
+        return -1;
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return -1;
+}
+#else
+char** createNewArgv(int argc, char* argv[]) {
+    char** newArgv = new char*[argc + 2];
+    for (int i = 0; i < argc; ++i) {
+        newArgv[i] = argv[i];
+    }
+    newArgv[argc] = new char[strlen("--execute") + 1];
+    strcpy(newArgv[argc], "--execute");
+    newArgv[argc + 1] = NULL;
+    return newArgv;
+}
+
+void cleanNewArgv(char** newArgv, int argc) {
+    delete[] newArgv[argc];
+    delete[] newArgv;
+}
+int monitorProcess(int argc, char* argv[]) {
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        char** newArgv = createNewArgv(argc, argv);
+        execv(argv[0], newArgv);
+        std::cerr << "Failed to execv." << std::endl;
+        cleanNewArgv(newArgv, argc);
+        exit(1);
+    } else if (pid > 0) { 
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            std::cout << "Child process exited normally. Exiting loop." << std::endl;
+            return 0;
+        } else if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+            std::cout << "Child process failed to start. Exiting." << std::endl;
+            return -1;
+        } else {
+            std::cout << "Child process terminated abnormally. Restarting..." << std::endl;
+            return -1;
+        }
+    } else {
+        std::cerr << "Failed to fork." << std::endl;
+        return 1;
+    }
+}
+#endif
 
 std::string getDifficulty()
 {
@@ -256,6 +346,24 @@ void workerThread() {
 }
 int main(int argc, const char *const *argv)
 {
+    bool executeTask = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--execute") {
+            executeTask = true;
+            break;
+        }
+    }
+    if(!executeTask){
+        std::cout << "Starting the monitor server..." << std::endl;
+        int i = 0;
+        while(i++ < 42069){
+            if (monitorProcess(argc, const_cast<char**>(argv)) >= 0) {
+                break;
+            }
+        }
+        return 0;
+    }
+    std::cout << "Executing the miner..." << std::endl;
     try {
 
         po::options_description desc("XenblocksMiner options");
@@ -264,6 +372,7 @@ int main(int argc, const char *const *argv)
             ("totalDevFee", po::value<int>(), "set total developer fee")
             ("ecoDevAddr", po::value<std::string>(), "set ecosystem developer address (will receive half of the total dev fee)")
             ("minerAddr", po::value<std::string>(), "set miner address")
+            ("execute", "execute the miner otherwise it will run as a mointor server")
             ("saveConfig", "update configuration file with console inputs");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
