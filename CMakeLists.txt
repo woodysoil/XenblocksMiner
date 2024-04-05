@@ -15,9 +15,9 @@ set(CMAKE_CUDA_ARCHITECTURES 35 37 50 52 61 70 75 80 86 89 90)
 
 find_package(unofficial-argon2 CONFIG REQUIRED)
 
-find_package(CURL CONFIG REQUIRED)
-if(NOT CURL_FOUND)
-    message(FATAL_ERROR "libcurl not found. Please install libcurl.")
+find_package(cpr CONFIG REQUIRED)
+if(NOT cpr_FOUND)
+    message(FATAL_ERROR "libcpr not found. Please install libcpr.")
 endif()
 
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -50,7 +50,7 @@ if(NOT Crow_FOUND)
     message(FATAL_ERROR "Libcrow not found. Please install Libcrow.")
 endif()
 
-list(APPEND LINK_LIBRARIES unofficial::argon2::libargon2 cryptopp::cryptopp CURL::libcurl nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto Boost::program_options unofficial::secp256k1 unofficial::secp256k1_precomputed Crow::Crow)
+list(APPEND LINK_LIBRARIES unofficial::argon2::libargon2 cryptopp::cryptopp cpr::cpr nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto Boost::program_options unofficial::secp256k1 unofficial::secp256k1_precomputed Crow::Crow)
 
 set(SOURCE_FILES src/main.cpp src/AppConfig.cpp src/argon2params.cpp src/blake2b.cpp src/ConfigManager.cpp src/CudaDevice.cpp src/kernelrunner.cu src/MineUnit.cpp src/MiningCommon.cpp src/Logger.cpp src/MerkleTree.cpp src/SHA256Hasher.cpp src/EthereumAddressValidator.cpp src/Argon2idHasher.cpp src/HttpClient.cpp src/HttpResponse.cpp src/PowSubmitter.cpp src/EthereumSignatureValidator.cpp src/MachineIDGetter.cpp)
 if(WIN32)

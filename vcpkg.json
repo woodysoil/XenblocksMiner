@@ -5,7 +5,7 @@
     "boost-program-options",
     "argon2",
     "cryptopp",
-    "curl",
+    "cpr",
     "nlohmann-json",
     "openssl",
     "secp256k1",

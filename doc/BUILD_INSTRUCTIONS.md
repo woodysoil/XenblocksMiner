@@ -14,7 +14,7 @@ Execute the following commands in your terminal:
 ```bash
 ./vcpkg install argon2
 ./vcpkg install cryptopp
-./vcpkg install curl
+./vcpkg install cpr
 ./vcpkg install nlohmann-json
 ./vcpkg install openssl
 ./vcpkg install boost-program-options
@@ -32,7 +32,7 @@ Execute the following commands in Command Prompt or PowerShell:
 ```bash
 .\vcpkg.exe install argon2:x64-windows-static
 .\vcpkg.exe install cryptopp:x64-windows-static
-.\vcpkg.exe install curl:x64-windows-static
+.\vcpkg.exe install cpr:x64-windows-static
 .\vcpkg.exe install nlohmann-json:x64-windows-static
 .\vcpkg.exe install openssl:x64-windows-static
 .\vcpkg.exe install boost-program-options:x64-windows-static
