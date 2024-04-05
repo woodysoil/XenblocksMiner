@@ -28,6 +28,7 @@
 #include "RandomHexKeyGenerator.h"
 #include "MachineIDGetter.h"
 #include <crow.h>
+#include <set>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -408,10 +409,36 @@ void UploadDataPeriodically(int uploadPeriod) {
     }
 }
 
+std::set<int> parseDeviceList(const std::string& deviceListText, int deviceCount) {
+    std::set<int> devices;
+    std::stringstream ss(deviceListText);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        try {
+            int deviceId = std::stoi(item);
+            if (deviceId < 0 || deviceId >= deviceCount) {
+                continue;
+            }
+            devices.insert(deviceId);
+        } catch (const std::invalid_argument& e) {
+            continue;
+        } catch (const std::out_of_range& e) {
+            continue;
+        }
+    }
+    if (devices.empty()) {
+        for (int i = 0; i < deviceCount; ++i) {
+            devices.insert(i);
+        }
+    }
+    return devices;
+}
+
 int main(int argc, const char *const *argv)
 {
     bool executeTask = false;
     bool donotupload = false;
+     std::string deviceList = "";
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--execute") {
             executeTask = true;
@@ -439,6 +466,7 @@ int main(int argc, const char *const *argv)
             ("minerAddr", po::value<std::string>(), "set miner address")
             ("execute", "execute the miner otherwise it will run as a mointor server")
             ("donotupload", "do not upload the data to the server")
+            ("device", po::value<std::string>(), "device index list[--device=1,2,7] to run the miner on")
             ("saveConfig", "update configuration file with console inputs");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -520,6 +548,10 @@ int main(int argc, const char *const *argv)
 
         if (vm.count("donotupload")) {
             donotupload = true;
+        }
+
+        if(vm.count("device")){
+            deviceList = vm["device"].as<std::string>();
         }
 
         std::cout << GREEN << "Logged in as " << globalUserAddress 
@@ -737,18 +769,21 @@ int main(int argc, const char *const *argv)
     }
 
     auto devices = CudaDevice::getAllDevices();
+    std::set<int> usedDevices = parseDeviceList(deviceList, CudaDevice::getAllDevices().size());
 
     std::size_t i = 0;
     for (auto &device : devices)
     {
-        std::cout << "Device #" << i << ": "
-                  << device.getName() << std::endl;
+        if(usedDevices.find(i) != usedDevices.end()){
+            std::cout << "Device #" << i << ": "
+                    << device.getName() << std::endl;
+        }
         i++;
     }
     start_time = std::chrono::system_clock::now();
-    for (std::size_t i = 0; i < devices.size(); ++i)
-    {
-        std::thread t(runMiningOnDevice, i, submitCallback, statCallback);
+
+    for (auto deviceIndex : usedDevices) {
+        std::thread t(runMiningOnDevice, deviceIndex, submitCallback, statCallback);
         t.detach();
     }
 
