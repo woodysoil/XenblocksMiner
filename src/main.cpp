@@ -128,7 +128,7 @@ std::string getDifficulty()
 
     try
     {
-        HttpResponse response = httpClient.HttpGet("http://xenblocks.io/difficulty", 10); // 10 seconds timeout
+        HttpResponse response = httpClient.HttpGet("http://xenblocks.io/difficulty", 5000);
         if (response.GetStatusCode() != 200)
         {
             throw std::runtime_error("Failed to get the difficulty: HTTP status code " + std::to_string(response.GetStatusCode()));
@@ -172,7 +172,8 @@ void updateDifficultyPeriodically()
     while (running)
     {
         updateDifficulty();
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(10));// Consider a mechanism for proactive notification
+        // If this query period increases, we may lose some of the network's computing power when the difficulty changes frequently.
     }
 }
 
@@ -593,7 +594,7 @@ int main(int argc, const char *const *argv)
                 try {
                     // std::cout << "Submitting block " << key << std::endl;
                     HttpClient httpClient;
-                    HttpResponse response = httpClient.HttpPost("http://xenblocks.io/verify", payload, 10); // 10 seconds timeout
+                    HttpResponse response = httpClient.HttpPost("http://xenblocks.io/verify", payload, 10000); // 10 seconds timeout
                     // std::cout << "Server Response: " << response.GetBody() << std::endl;
                     // std::cout << "Status Code: " << response.GetStatusCode() << std::endl;
                     if(response.GetBody() == "") {

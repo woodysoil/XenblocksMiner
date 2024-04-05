@@ -10,7 +10,7 @@
 void PowSubmitter::submitPow(const std::string& account_address, const std::string& key, const std::string& hash_to_verify) {
     HttpClient httpClient;
 
-    HttpResponse lastBlockResponse = httpClient.HttpGet("http://xenminer.mooo.com:4445/getblocks/lastblock", 10);
+    HttpResponse lastBlockResponse = httpClient.HttpGet("http://xenminer.mooo.com:4445/getblocks/lastblock", 5000);
     if (lastBlockResponse.GetStatusCode() != 200) {
         std::cerr << "Failed to get data from the server." << std::endl;
         return;
@@ -54,7 +54,7 @@ void PowSubmitter::submitPow(const std::string& account_address, const std::stri
 
             std::cout << "Payload: " << payload.dump(4) << std::endl;
 
-            HttpResponse powResponse = httpClient.HttpPost("http://xenblocks.io:4446/send_pow", payload, 10);
+            HttpResponse powResponse = httpClient.HttpPost("http://xenblocks.io:4446/send_pow", payload, 10000);
             std::cout << "Server Response: " << powResponse.GetBody() << std::endl;
         }
     } catch (const std::exception& e) {
