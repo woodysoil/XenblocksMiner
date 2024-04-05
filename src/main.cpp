@@ -390,7 +390,7 @@ void UploadDataPeriodically(int uploadPeriod) {
         auto response = client.HttpPost(url, data, timeout);
         // std::cout << "Server Response: " << response.GetBody() << std::endl;
         // std::cout << "Status Code: " << response.GetStatusCode() << std::endl;
-        if (response.GetStatusCode() == 200) {
+        if (response.GetStatusCode() == 201) {
             failureCount = 0;
             uploadPeriod = originalUploadPeriod;
         } else {
