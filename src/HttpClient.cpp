@@ -47,6 +47,10 @@ HttpResponse HttpClient::HttpPost(const std::string &url,
     // std::cout << "HTTP POST Request to URL: " << url << std::endl;
     // std::cout << "Payload: " << payload.dump() << std::endl;
     // std::cout << "Status Code: " << response.status_code << std::endl;
+    // if (response.error) {
+    //     std::cout << "cpr::Error message: " << response.error.message
+    //               << std::endl;
+    // }
 
     // std::cout << "Response Headers:" << std::endl;
     // for (const auto &header : headers) {
