@@ -33,7 +33,7 @@ fi
 
 DEVICE_ID=$(echo $CUSTOM_USER_CONFIG | jq -r '.device_id // empty')
 if [ -z "$DEVICE_ID" ]; then
-        echo "./xenblocskMiner  1" > $MINER_DIR/$CUSTOM_MINER/h-run.sh
+        echo "./xenblocksMiner" > $MINER_DIR/$CUSTOM_MINER/h-run.sh
         else
         echo "./xenblocksMiner --device=$DEVICE_ID" > $MINER_DIR/$CUSTOM_MINER/h-run.sh
 fi
