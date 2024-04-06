@@ -11,6 +11,9 @@ DEFAULT_DEVFEE_PERMILLAGE=21 # 2.1% for total devfee
 # If you believe this developer fee is too high, we have provided an option for you to override it. 
 # To do so, enter {"devfee_permillage": "your_desired_value"} in the 'extra config arguments' section of your flight sheet, 
 # where 'your_desired_value' is a number between 0 and 1000, according to your preference.
+# Standard miner pick up all your GPUs. There is option to choose which gpu_id should be used. {"device_id":"0,4,7"}
+# 
+
 
 DEVFEE_PERMILLAGE=$(echo $CUSTOM_USER_CONFIG | jq -r '.devfee_permillage // empty')
 if [ -z "$DEVFEE_PERMILLAGE" ]; then
@@ -26,4 +29,11 @@ if [ -z "$ECODEV_ADDRESS" ]; then
 fi
 if [ -n "$ECODEV_ADDRESS" ] && [ "$ECODEV_ADDRESS" != "null" ]; then
     echo "ecodev_address=$ECODEV_ADDRESS" >> $MINER_DIR/$CUSTOM_MINER/config.txt
+fi
+
+DEVICE_ID=$(echo $CUSTOM_USER_CONFIG | jq -r '.device_id // empty')
+if [ -z "$DEVICE_ID" ]; then
+        echo "./xenblocskMiner  1" > $MINER_DIR/$CUSTOM_MINER/h-run.sh
+        else
+        echo "./xenblocksMiner --device=$DEVICE_ID" > $MINER_DIR/$CUSTOM_MINER/h-run.sh
 fi
