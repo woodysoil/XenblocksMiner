@@ -3,8 +3,8 @@
 #include <stdexcept>
 
 #if defined(_WIN32) || defined(_WIN64)
-#include <iphlpapi.h>
 #include <windows.h>
+#include <iphlpapi.h>
 
 #elif defined(__linux__) || defined(__linux)
 #include <cstring>
