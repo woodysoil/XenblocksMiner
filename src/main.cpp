@@ -351,6 +351,7 @@ nlohmann::json inline getStatData() {
     nlohmann::json result;
     nlohmann::json gpuArray = nlohmann::json::array();
     float totalHashrate = 0.0;
+    size_t totalHashCount = 0;
 
     std::lock_guard<std::mutex> guard(globalGpuInfosMutex);
 
@@ -362,18 +363,37 @@ nlohmann::json inline getStatData() {
         nlohmann::json gpuJson;
         gpuJson["index"] = gpuInfo.index;
         gpuJson["name"] = gpuInfo.name;
-        gpuJson["hashrate"] = gpuInfo.hashrate;
+        std::ostringstream stream_hashRate;
+        stream_hashRate << std::fixed << std::setprecision(2) << gpuInfo.hashrate;
+        gpuJson["hashrate"] = stream_hashRate.str();
+        gpuJson["memory"] = gpuInfo.memory;
+        std::ostringstream stream_usingMemory;
+        stream_usingMemory << std::fixed << std::setprecision(1) << gpuInfo.usingMemory * 100;
+        gpuJson["usingMemory"] = stream_usingMemory.str();
+        gpuJson["hashCount"] = gpuInfo.hashCount;
         totalHashrate += gpuInfo.hashrate;
+        totalHashCount += gpuInfo.hashCount;
         gpuArray.push_back(gpuJson);
 
     }
 
     result["machineId"] = machineId;
     result["minerAddr"] = globalUserAddress;
-    result["totalHashrate"] = totalHashrate;
+    std::ostringstream stream_totalHashrate;
+    stream_totalHashrate << std::fixed << std::setprecision(2) << totalHashrate;
+    result["totalHashrate"] = stream_totalHashrate.str();
+    result["totalHashCount"] = totalHashCount;
+    int difficulty = 40404;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        difficulty = globalDifficulty;
+    }
+    result["difficulty"] = difficulty;
     result["gpus"] = gpuArray;
     result["uptime"] = uptime;
     result["acceptedBlocks"] = globalNormalBlockCount.load() + globalSuperBlockCount.load();
+    result["normalBlocks"] = globalNormalBlockCount.load();
+    result["superBlocks"] = globalSuperBlockCount.load();
     result["rejectedBlocks"] = globalFailedBlockCount.load();
 
     return result;
