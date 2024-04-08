@@ -242,7 +242,7 @@ void uploadGpuInfos()
     }
 }
 
-std::string getMachineId()
+std::string getMachineId(string userInputDeviceInfo)
 {
     SHA256Hasher hasher;
     try {
@@ -250,7 +250,7 @@ std::string getMachineId()
         if(machineId.empty()) {
             throw std::runtime_error("Machine ID is empty");
         }
-        return hasher.sha256(machineId).substr(0, 16);
+        return hasher.sha256(machineId + userInputDeviceInfo).substr(0, 16);
     }
     catch (const std::exception& e) {
         RandomHexKeyGenerator keyGenerator;
@@ -586,8 +586,21 @@ int main(int argc, const char *const *argv)
         std::cerr << "Unknown error!\n";
         return -1;
     }
+    int deviceCount;
+    cudaError_t cudaStatus = cudaGetDeviceCount(&deviceCount);
+    if (cudaStatus != cudaSuccess)
+    {
+        std::cerr << "cudaGetDeviceCount failed! Do you have a CUDA-capable GPU installed?" << std::endl;
+        return -1;
+    }
 
-    machineId = getMachineId();
+    auto devices = CudaDevice::getAllDevices();
+    std::set<int> usedDevices = parseDeviceList(deviceList, CudaDevice::getAllDevices().size());
+    std::ostringstream oss_usedDevices;
+    for(auto iter = usedDevices.begin(); iter != usedDevices.end(); ++iter) {
+        oss_usedDevices << *iter << ",";
+    }
+    machineId = getMachineId(oss_usedDevices.str());
     std::cout << "Machine ID: " << machineId << std::endl;
 
     globalDifficulty = 42069;
@@ -780,16 +793,6 @@ int main(int argc, const char *const *argv)
         // std::cout << "Power: " << gpuinfo.power << "W" << std::endl;
         // std::cout << "Hash Count: " << gpuinfo.hashCount << std::endl;
     };
-    int deviceCount;
-    cudaError_t cudaStatus = cudaGetDeviceCount(&deviceCount);
-    if (cudaStatus != cudaSuccess)
-    {
-        std::cerr << "cudaGetDeviceCount failed! Do you have a CUDA-capable GPU installed?" << std::endl;
-        return -1;
-    }
-
-    auto devices = CudaDevice::getAllDevices();
-    std::set<int> usedDevices = parseDeviceList(deviceList, CudaDevice::getAllDevices().size());
 
     std::size_t i = 0;
     for (auto &device : devices)
