@@ -661,7 +661,7 @@ int main(int argc, const char *const *argv)
                 {"account", address},
                 {"attempts", std::to_string(attempts)},
                 {"hashes_per_second", hashrateStream.str()},
-                {"worker", "1"}
+                {"worker", machineId}
             };
             std::cout << std::endl;
             std::cout << "Payload: " << payload.dump(4) << std::endl;
