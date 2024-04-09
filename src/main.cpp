@@ -14,7 +14,7 @@
 #include <cuda_runtime.h>
 #include <boost/program_options.hpp>
 #include "EthereumAddressValidator.h"
-
+#include <nvml.h>
 #include "MiningCommon.h"
 #include "CudaDevice.h"
 #include "MineUnit.h"
@@ -357,7 +357,12 @@ nlohmann::json inline getStatData() {
 
     auto now = std::chrono::system_clock::now();
     auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
-
+    nvmlReturn_t nvmlResult;
+    nvmlDevice_t nvmlDevice;
+    nvmlUtilization_t nvmlUtilization;
+    nvmlMemory_t nvmlMemory;
+    unsigned int totalPower;
+    nvmlResult = nvmlInit();
     for (const auto& gpuInfoPair : globalGpuInfos) {
         const auto& gpuInfo = gpuInfoPair.second.first;
         nlohmann::json gpuJson;
@@ -367,6 +372,17 @@ nlohmann::json inline getStatData() {
         stream_hashRate << std::fixed << std::setprecision(2) << gpuInfo.hashrate;
         gpuJson["hashrate"] = stream_hashRate.str();
         gpuJson["memory"] = gpuInfo.memory;
+        unsigned int power = -1;
+        if(nvmlResult == NVML_SUCCESS) {
+            nvmlReturn_t nvmlResult_ = nvmlDeviceGetHandleByIndex(gpuInfo.index, &nvmlDevice);
+            if (nvmlResult_ == NVML_SUCCESS) {
+                nvmlResult_ = nvmlDeviceGetPowerUsage(nvmlDevice, &power);
+                nvmlResult_ = nvmlDeviceGetUtilizationRates(nvmlDevice, &nvmlUtilization);
+            } 
+        } 
+        gpuJson["power"] = power;
+        totalPower += power == -1 ? 0 : power;
+        gpuJson["utiliz"] = nvmlUtilization.gpu;
         std::ostringstream stream_usingMemory;
         stream_usingMemory << std::fixed << std::setprecision(1) << gpuInfo.usingMemory * 100;
         gpuJson["usingMemory"] = stream_usingMemory.str();
@@ -376,6 +392,9 @@ nlohmann::json inline getStatData() {
         gpuArray.push_back(gpuJson);
 
     }
+    if(nvmlResult == NVML_SUCCESS) {
+        nvmlShutdown();
+    }
 
     result["machineId"] = machineId;
     result["minerAddr"] = globalUserAddress;
@@ -383,6 +402,7 @@ nlohmann::json inline getStatData() {
     stream_totalHashrate << std::fixed << std::setprecision(2) << totalHashrate;
     result["totalHashrate"] = stream_totalHashrate.str();
     result["totalHashCount"] = totalHashCount;
+    result["totalPower"] = totalPower;
     int difficulty = 40404;
     {
         std::lock_guard<std::mutex> lock(mtx);
