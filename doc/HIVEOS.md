@@ -18,7 +18,7 @@ Create new flightsheet, pick coin xenblock, your wallet and choose miner as cust
 <br>
 Next, put link 
 ```bash
-https://github.com/woodysoil/XenblocksMiner/releases/download/v1.2.1/xenblocksMiner-1.2.1_hiveos.tar.gz
+https://github.com/woodysoil/XenblocksMiner/releases/download/v1.3.1/xenblocksMiner-1.3.1_hiveos.tar.gz
 ```
 into installation URL, change hash algorithm to "argon2id", fill up "Wallet and worker template" and "Pool URL", apply changes 
 <br><br>
