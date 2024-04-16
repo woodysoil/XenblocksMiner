@@ -4,25 +4,30 @@ This document provides instructions for building the project on both Linux and W
 
 ## Prerequisites
 
-- vcpkg installed on your system.
 - CMake installed on your system.
+- CUDA Toolkit installed on your system
 
 ## Building on Linux
 
 Execute the following commands in your terminal:
 
 ```bash
-./vcpkg install argon2
-./vcpkg install cryptopp
-./vcpkg install cpr
-./vcpkg install nlohmann-json
-./vcpkg install openssl
-./vcpkg install boost-program-options
-./vcpkg install secp256k1
-./vcpkg install crow
+sudo apt install build-essential tar curl zip unzip git cmake ninja-build
+git clone https://github.com/woodysoil/XenblocksMiner.git
+cd XenblocksMiner
+git submodule init
+git submodule update
+./vcpkg/bootstrap-vcpkg.sh
+./vcpkg/vcpkg install
+cmake -S . -B build --preset ninja-multi-vcpkg
+cmake --build build --preset ninja-vcpkg-release
+```
 
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build --config Release
+If you want to build only for a specific CUDA Architecture use:
+
+```bash
+cmake -S . -B build --preset ninja-multi-vcpkg -DCMAKE_CUDA_ARCHITECTURES=86
+cmake --build build --preset ninja-vcpkg-release
 ```
 
 ## Building on Windows
@@ -43,3 +48,14 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=path/to/vcpkg/scripts/buildsystems/vc
 cmake --build build --config Release
 ```
 
+## Clean
+
+```bash
+cmake --build build --target clean
+```
+
+## Clean build system
+
+```bash
+rm -rf build
+```
