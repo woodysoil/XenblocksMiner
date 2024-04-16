@@ -7,7 +7,7 @@
 #include <iostream>
 
 HttpResponse HttpClient::HttpGet(const std::string &url, long timeout) {
-    auto response = cpr::Get(cpr::Url{url}, cpr::Timeout{timeout});
+    auto response = cpr::Get(cpr::Url{url}, cpr::Timeout{(int32_t)timeout});
 
     std::map<std::string, std::string> headers;
     for (const auto &header : response.header) {
@@ -37,7 +37,7 @@ HttpResponse HttpClient::HttpPost(const std::string &url,
                                   const nlohmann::json &payload, long timeout) {
     auto response = cpr::Post(cpr::Url{url}, cpr::Body{payload.dump()},
                               cpr::Header{{"Content-Type", "application/json"}},
-                              cpr::Timeout{timeout});
+                              cpr::Timeout{(int32_t)timeout});
 
     std::map<std::string, std::string> headers;
     for (const auto &header : response.header) {

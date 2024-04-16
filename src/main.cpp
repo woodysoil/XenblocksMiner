@@ -478,7 +478,9 @@ int main(int argc, const char *const *argv)
 {
     bool executeTask = false;
     bool donotupload = false;
-     std::string deviceList = "";
+    static bool isTestFixedDiff = false;
+    std::string deviceList = "";
+
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--execute") {
             executeTask = true;
@@ -507,7 +509,8 @@ int main(int argc, const char *const *argv)
             ("execute", "execute the miner otherwise it will run as a mointor server")
             ("donotupload", "do not upload the data to the server")
             ("device", po::value<std::string>(), "device index list[--device=1,2,7] to run the miner on")
-            ("saveConfig", "update configuration file with console inputs");
+            ("saveConfig", "update configuration file with console inputs")
+            ("testFixedDiff", po::value<int>(), "run in test mode with a fixed difficulty");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -517,16 +520,27 @@ int main(int argc, const char *const *argv)
             return 0; // If help information is requested, print help information and exit the program
         }
 
+        if(vm.count("testFixedDiff")){
+            isTestFixedDiff = true;
+            globalDifficulty = vm["testFixedDiff"].as<int>();
+        }
+
         // Preload configuration from local file
         AppConfig appConfig(CONFIG_FILENAME);
-        if(!vm.count("minerAddr") || !vm.count("totalDevFee")){
-            appConfig.load();
+        if (!isTestFixedDiff) {
+            if(!vm.count("minerAddr") || !vm.count("totalDevFee")){
+                appConfig.load();
+            } else {
+                appConfig.tryLoad();
+            }
+            globalUserAddress = appConfig.getAccountAddress();
+            globalEcoDevfeeAddress = appConfig.getEcoDevAddr();
+            globalDevfeePermillage = appConfig.getDevfeePermillage();
         } else {
-            appConfig.tryLoad();
+            globalUserAddress = "0x0000000000000000000000000000000000000000";
+            globalEcoDevfeeAddress = "0x0000000000000000000000000000000000000000";
+            globalDevfeePermillage = 0;
         }
-        globalUserAddress = appConfig.getAccountAddress();
-        globalEcoDevfeeAddress = appConfig.getEcoDevAddr();
-        globalDevfeePermillage = appConfig.getDevfeePermillage();
 
         // Use parsed configuration information
         if (vm.count("totalDevFee")) {
@@ -623,10 +637,14 @@ int main(int argc, const char *const *argv)
     machineId = getMachineId(oss_usedDevices.str());
     std::cout << "Machine ID: " << machineId << std::endl;
 
-    globalDifficulty = 42069;
-    updateDifficulty();
-    std::thread difficultyThread(updateDifficultyPeriodically);
-    difficultyThread.detach();
+    if (!isTestFixedDiff) {
+        globalDifficulty = 42069;
+        updateDifficulty();
+        std::thread difficultyThread(updateDifficultyPeriodically);
+        difficultyThread.detach();
+    } else {
+        std::cout << "Running in TEST MODE with fixed difficulty " << globalDifficulty << std::endl;
+    }
 
     std::thread uploadThread(uploadGpuInfos);
     uploadThread.detach();
@@ -637,8 +655,7 @@ int main(int argc, const char *const *argv)
     Logger logger("log", 1024 * 1024);
     SubmitCallback submitCallback = [&logger](const std::string &hexsalt, const std::string &key, const std::string &hashed_pure, const size_t attempts, const float hashrate) {
 
-        std::function<void()> task = [&logger, hexsalt, key, hashed_pure, attempts, hashrate]()
-                                 {
+        std::function<void()> task = [&logger, hexsalt, key, hashed_pure, attempts, hashrate]() {
             int difficulty = 40404;
             {
                 std::lock_guard<std::mutex> lock(mtx);
@@ -740,9 +757,11 @@ int main(int argc, const char *const *argv)
             }
         };
 
-        {
+        if (!isTestFixedDiff) {
             std::lock_guard<std::mutex> lock(mtx_submit);
             taskQueue.push(std::move(task));
+        } else {
+            std::cout << "Block was found but skipped due to running in test mode." << std::endl;
         }
         cv.notify_one();
     };
