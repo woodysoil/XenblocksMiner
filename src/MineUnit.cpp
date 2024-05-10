@@ -24,6 +24,11 @@ int MineUnit::runMineLoop()
 	busId = CudaDevice(deviceIndex).getPicBusId();
 	size_t freeMemory, totalMemory;
 	cudaMemGetInfo(&freeMemory, &totalMemory);
+	freeMemory -= 100*1024*1024; // reserve 100MB for other usage
+	if(freeMemory < 0) {
+		std::cout << "Not enough memory" << std::endl;
+		return 1;
+	}
 	batchSize = freeMemory / 1.001 / difficulty / 1024;
 	usedMemory = batchSize * difficulty * 1024;
 	gpuMemory = totalMemory;
