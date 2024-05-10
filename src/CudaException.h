@@ -19,6 +19,7 @@ public:
     static void check(cudaError_t res)
     {
         if (res != cudaSuccess) {
+            printf("CUDA error %d: %s\n", res, cudaGetErrorString(res));
             throw CudaException(res);
         }
     }
