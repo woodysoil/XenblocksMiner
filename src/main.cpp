@@ -129,7 +129,7 @@ std::string getDifficulty()
 
     try
     {
-        HttpResponse response = httpClient.HttpGet("http://xenblocks.io/difficulty", 5000);
+        HttpResponse response = httpClient.HttpGet(globalRpcLink+"/difficulty", 5000);
         if (response.GetStatusCode() != 200)
         {
             throw std::runtime_error("Failed to get the difficulty: HTTP status code " + std::to_string(response.GetStatusCode()));
@@ -510,7 +510,8 @@ int main(int argc, const char *const *argv)
             ("donotupload", "do not upload the data to the server")
             ("device", po::value<std::string>(), "device index list[--device=1,2,7] to run the miner on")
             ("saveConfig", "update configuration file with console inputs")
-            ("testFixedDiff", po::value<int>(), "run in test mode with a fixed difficulty");
+            ("testFixedDiff", po::value<int>(), "run in test mode with a fixed difficulty")
+            ("rpcLink", po::value<std::string>(), "set rpc link");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -608,6 +609,12 @@ int main(int argc, const char *const *argv)
             deviceList = vm["device"].as<std::string>();
         }
 
+        if (vm.count("rpcLink")) {
+            globalRpcLink = vm["rpcLink"].as<std::string>();
+        }
+
+        std::cout << "RPC Link: " << globalRpcLink << std::endl;
+
         std::cout << GREEN << "Logged in as " << globalUserAddress 
         << ". Devfee set at " << globalDevfeePermillage << "/1000." 
         << ((globalDevfeePermillage != 0 && !globalEcoDevfeeAddress.empty()) ? " Ecosystem devfee address: " + globalEcoDevfeeAddress : "") 
@@ -696,7 +703,7 @@ int main(int argc, const char *const *argv)
                 try {
                     // std::cout << "Submitting block " << key << std::endl;
                     HttpClient httpClient;
-                    HttpResponse response = httpClient.HttpPost("http://xenblocks.io/verify", payload, 10000); // 10 seconds timeout
+                    HttpResponse response = httpClient.HttpPost(globalRpcLink+"/verify", payload, 10000); // 10 seconds timeout
                     // std::cout << "Server Response: " << response.GetBody() << std::endl;
                     // std::cout << "Status Code: " << response.GetStatusCode() << std::endl;
                     if(response.GetBody() == "") {
@@ -724,7 +731,7 @@ int main(int argc, const char *const *argv)
                                     std::cout << GREEN << "Normalblock found!" << RESET << std::endl;
                                     globalNormalBlockCount++;
                                 }
-                                PowSubmitter::submitPow(address, key, hashed_data);
+                                // PowSubmitter::submitPow(address, key, hashed_data);
                                 break;
                             } else if (std::regex_search(hashed_pure, pattern)){
                                 std::cout << GREEN << "Xuni found!" << RESET << std::endl;

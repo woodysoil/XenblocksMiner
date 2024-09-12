@@ -32,6 +32,8 @@ extern std::atomic<int> globalFailedBlockCount;
 extern std::chrono::system_clock::time_point start_time;
 extern std::atomic<long> globalHashCount;
 
+extern std::string globalRpcLink;
+
 struct gpuInfo
 {
 	int index;
