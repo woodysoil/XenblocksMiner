@@ -39,6 +39,7 @@
 
 using namespace std;
 namespace po = boost::program_options;
+std::string globalCustomName = "";
 
 #ifdef _WIN32
 BOOL ctrlHandler(DWORD fdwCtrlType) {
@@ -416,6 +417,9 @@ nlohmann::json inline getStatData() {
     result["superBlocks"] = globalSuperBlockCount.load();
     result["rejectedBlocks"] = globalFailedBlockCount.load();
     result["version"] = "1.4.0";
+    if (!globalCustomName.empty()) {
+        result["customName"] = globalCustomName;
+    }
     return result;
 }
 
@@ -511,7 +515,8 @@ int main(int argc, const char *const *argv)
             ("device", po::value<std::string>(), "device index list[--device=1,2,7] to run the miner on")
             ("saveConfig", "update configuration file with console inputs")
             ("testFixedDiff", po::value<int>(), "run in test mode with a fixed difficulty")
-            ("rpcLink", po::value<std::string>(), "set rpc link");
+            ("rpcLink", po::value<std::string>(), "set rpc link")
+            ("customName", po::value<std::string>(), "set custom name");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -611,6 +616,10 @@ int main(int argc, const char *const *argv)
 
         if (vm.count("rpcLink")) {
             globalRpcLink = vm["rpcLink"].as<std::string>();
+        }
+        
+        if (vm.count("customName")) {
+            globalCustomName = vm["customName"].as<std::string>();
         }
 
         std::cout << "RPC Link: " << globalRpcLink << std::endl;
