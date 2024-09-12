@@ -1,9 +1,9 @@
 #include <winres.h>
 
-#define FILE_VERSION 1,2,1
-#define FILE_VERSION_STR "1.2.1\0"
-#define PRODUCT_VERSION 1,2,1
-#define PRODUCT_VERSION_STR "1.2.1\0"
+#define FILE_VERSION 1,4,0
+#define FILE_VERSION_STR "1.4.0\0"
+#define PRODUCT_VERSION 1,4,0
+#define PRODUCT_VERSION_STR "1.4.0\0"
 
 #define FILE_NAME_STR "xenminer.exe\0"
 #define PRODUCT_NAME_STR "XenblocksMiner\0"
