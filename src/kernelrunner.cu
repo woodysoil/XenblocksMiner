@@ -25,50 +25,45 @@
 
 using namespace std;
 
-__device__ uint64_t u64_build(uint32_t hi, uint32_t lo)
+__device__ __forceinline__ uint64_t u64_build(uint32_t hi, uint32_t lo)
 {
     return ((uint64_t)hi << 32) | (uint64_t)lo;
 }
 
-__device__ uint32_t u64_lo(uint64_t x)
+__device__ __forceinline__ uint32_t u64_lo(uint64_t x)
 {
     return (uint32_t)x;
 }
 
-__device__ uint32_t u64_hi(uint64_t x)
+__device__ __forceinline__ uint32_t u64_hi(uint64_t x)
 {
     return (uint32_t)(x >> 32);
 }
 
-
-__device__ uint64_t u64_shuffle(uint64_t v, uint32_t thread_src)
+__device__ __forceinline__ uint64_t u64_shuffle(uint64_t v, uint32_t thread_src)
 {
-    uint32_t lo = u64_lo(v);
-    uint32_t hi = u64_hi(v);
-
-    lo = __shfl_sync(0xFFFFFFFF, lo, thread_src);
-    hi = __shfl_sync(0xFFFFFFFF, hi, thread_src);
-
-    return u64_build(hi, lo);
+    uint32_t lo = __shfl_sync(0xFFFFFFFF, (uint32_t)v, thread_src);
+    uint32_t hi = __shfl_sync(0xFFFFFFFF, (uint32_t)(v >> 32), thread_src);
+    return ((uint64_t)hi << 32) | lo;
 }
 
-struct block_g {
+struct __align__(16) block_g {
     uint64_t data[ARGON2_QWORDS_IN_BLOCK];
 };
 
-struct block_l {
+struct __align__(16) block_l {
     uint32_t lo[ARGON2_QWORDS_IN_BLOCK];
     uint32_t hi[ARGON2_QWORDS_IN_BLOCK];
 };
 
-struct block_th {
+struct __align__(32) block_th {
     uint64_t a, b, c, d;
 };
 
-__device__ uint64_t cmpeq_mask(uint32_t test, uint32_t ref)
+__device__ __forceinline__ uint64_t cmpeq_mask(uint32_t test, uint32_t ref)
 {
-    uint32_t x = -(uint32_t)(test == ref);
-    return u64_build(x, x);
+    uint32_t x = -(test == ref);
+    return ((uint64_t)x << 32) | x;
 }
 
 __device__ uint64_t block_th_get(const struct block_th *b, uint32_t idx)
@@ -178,7 +173,7 @@ __device__ uint64_t f(uint64_t x, uint64_t y)
     return x + y + 2 * u64_build(__umulhi(xlo, ylo), xlo * ylo);
 }
 
-__device__ void g(struct block_th *block)
+__device__ void g1(struct block_th *block)
 {
     uint64_t a, b, c, d;
     a = block->a;
@@ -200,20 +195,73 @@ __device__ void g(struct block_th *block)
     block->c = c;
     block->d = d;
 }
-
-template<class shuffle>
-__device__ void apply_shuffle(struct block_th *block, uint32_t thread)
+__device__
+void g(block_th* block)
 {
-    for (uint32_t i = 0; i < QWORDS_PER_THREAD; i++) {
-        uint32_t src_thr = shuffle::apply(thread, i);
-
-        uint64_t v = block_th_get(block, i);
-        v = u64_shuffle(v, src_thr);
-        block_th_set(block, i, v);
-    }
+    asm("{"
+        ".reg .u64 s, x;"
+        ".reg .u32 l1, l2, h1, h2;"
+        // a = f(a, b);
+        "add.u64 s, %0, %1;"            // s = a + b
+        "cvt.u32.u64 l1, %0;"           // xlo = u64_lo(a)
+        "cvt.u32.u64 l2, %1;"           // ylo = u64_lo(b)
+        "mul.hi.u32 h1, l1, l2;"        // umulhi(xlo, ylo)
+        "mul.lo.u32 l1, l1, l2;"        // xlo * ylo
+        "mov.b64 x, {l1, h1};"          // x = u64_build(umulhi(xlo, ylo), xlo * ylo)
+        "shl.b64 x, x, 1;"              // x = 2 * x
+        "add.u64 %0, s, x;"             // a = s + x
+        // d = rotr64(d ^ a, 32);
+        "xor.b64 x, %3, %0;"
+        "mov.b64 {h2, l2}, x;"
+        "mov.b64 %3, {l2, h2};"         // swap hi and lo = rotr64(x, 32)
+        // c = f(c, d);
+        "add.u64 s, %2, %3;"
+        "cvt.u32.u64 l1, %2;"
+        "mul.hi.u32 h1, l1, l2;"
+        "mul.lo.u32 l1, l1, l2;"
+        "mov.b64 x, {l1, h1};"
+        "shl.b64 x, x, 1;"
+        "add.u64 %2, s, x;"
+        // b = rotr64(b ^ c, 24);
+        "xor.b64 x, %1, %2;"
+        "mov.b64 {l1, h1}, x;"
+        "prmt.b32 l2, l1, h1, 0x6543;"  // permute bytes 76543210 => 21076543
+        "prmt.b32 h2, l1, h1, 0x2107;"  // rotr64(x, 24)
+        "mov.b64 %1, {l2, h2};"
+        // a = f(a, b);
+        "add.u64 s, %0, %1;"
+        "cvt.u32.u64 l1, %0;"
+        "mul.hi.u32 h1, l1, l2;"
+        "mul.lo.u32 l1, l1, l2;"
+        "mov.b64 x, {l1, h1};"
+        "shl.b64 x, x, 1;"
+        "add.u64 %0, s, x;"
+        // d = rotr64(d ^ a, 16);
+        "xor.b64 x, %3, %0;"
+        "mov.b64 {l1, h1}, x;"
+        "prmt.b32 l2, l1, h1, 0x5432;"  // permute bytes 76543210 => 10765432
+        "prmt.b32 h2, l1, h1, 0x1076;"  // rotr64(x, 16)
+        "mov.b64 %3, {l2, h2};"
+        // c = f(c, d);
+        "add.u64 s, %2, %3;"
+        "cvt.u32.u64 l1, %2;"
+        "mul.hi.u32 h1, l1, l2;"
+        "mul.lo.u32 l1, l1, l2;"
+        "mov.b64 x, {l1, h1};"
+        "shl.b64 x, x, 1;"
+        "add.u64 %2, s, x;"
+        // b = rotr64(b ^ c, 63);
+        "xor.b64 x, %1, %2;"
+        "shl.b64 s, x, 1;"              // x << 1
+        "shr.b64 x, x, 63;"             // x >> 63
+        "add.u64 %1, s, x;"             // emits less instructions than "or"
+        "}"
+        : "+l"(block->a), "+l"(block->b), "+l"(block->c), "+l"(block->d)
+    );
 }
 
-__device__ void transpose(struct block_th *block, uint32_t thread)
+
+__device__ void transpose1(struct block_th *block, uint32_t thread)
 {
     uint32_t thread_group = (thread & 0x0C) >> 2;
     for (uint32_t i = 1; i < QWORDS_PER_THREAD; i++) {
@@ -226,71 +274,136 @@ __device__ void transpose(struct block_th *block, uint32_t thread)
     }
 }
 
-struct identity_shuffle {
-    __device__ static uint32_t apply(uint32_t thread, uint32_t idx)
-    {
-        return thread;
-    }
-};
+__device__ void transpose(
+    block_th* block,
+    const uint32_t thread)
+{
+    // thread groups, previously: thread_group = (thread & 0x0C) >> 2
+    const uint32_t g1 = (thread & 0x4);
+    const uint32_t g2 = (thread & 0x8);
 
-struct shift1_shuffle {
-    __device__ static uint32_t apply(uint32_t thread, uint32_t idx)
-    {
-        return (thread & 0x1c) | ((thread + idx) & 0x3);
-    }
-};
+    uint64_t x1 = (g2 ? (g1 ? block->c : block->d) : (g1 ? block->a : block->b));
+    uint64_t x2 = (g2 ? (g1 ? block->b : block->a) : (g1 ? block->d : block->c));
+    uint64_t x3 = (g2 ? (g1 ? block->a : block->b) : (g1 ? block->c : block->d));
 
-struct unshift1_shuffle {
-    __device__ static uint32_t apply(uint32_t thread, uint32_t idx)
-    {
-        idx = (QWORDS_PER_THREAD - idx) % QWORDS_PER_THREAD;
+#if CUDART_VERSION < 9000
+    x1 = __shfl_xor(x1, 0x4);
+    x2 = __shfl_xor(x2, 0x8);
+    x3 = __shfl_xor(x3, 0xC);
+#else
+    x1 = __shfl_xor_sync(0xFFFFFFFF, x1, 0x4);
+    x2 = __shfl_xor_sync(0xFFFFFFFF, x2, 0x8);
+    x3 = __shfl_xor_sync(0xFFFFFFFF, x3, 0xC);
+#endif
 
-        return (thread & 0x1c) | ((thread + idx) & 0x3);
-    }
-};
+    block->a = (g2 ? (g1 ? x3 : x2) : (g1 ? x1 : block->a));
+    block->b = (g2 ? (g1 ? x2 : x3) : (g1 ? block->b : x1));
+    block->c = (g2 ? (g1 ? x1 : block->c) : (g1 ? x3 : x2));
+    block->d = (g2 ? (g1 ? block->d : x1) : (g1 ? x2 : x3));
+}
 
-struct shift2_shuffle {
-    __device__ static uint32_t apply(uint32_t thread, uint32_t idx)
-    {
-        uint32_t lo = (thread & 0x1) | ((thread & 0x10) >> 3);
-        lo = (lo + idx) & 0x3;
-        return ((lo & 0x2) << 3) | (thread & 0xe) | (lo & 0x1);
-    }
-};
 
-struct unshift2_shuffle {
-    __device__ static uint32_t apply(uint32_t thread, uint32_t idx)
-    {
-        idx = (QWORDS_PER_THREAD - idx) % QWORDS_PER_THREAD;
+__device__
+void shift1_shuffle(
+    block_th* block,
+    const uint32_t thread)
+{
+    const uint32_t src_thr_b = (thread & 0x1c) | ((thread + 1) & 0x3);
+    const uint32_t src_thr_d = (thread & 0x1c) | ((thread + 3) & 0x3);
 
-        uint32_t lo = (thread & 0x1) | ((thread & 0x10) >> 3);
-        lo = (lo + idx) & 0x3;
-        return ((lo & 0x2) << 3) | (thread & 0xe) | (lo & 0x1);
-    }
-};
+#if CUDART_VERSION < 9000
+    block->b = __shfl(block->b, src_thr_b);
+    block->c = __shfl_xor(block->c, 0x2);
+    block->d = __shfl(block->d, src_thr_d);
+#else
+    block->b = __shfl_sync(0xFFFFFFFF, block->b, src_thr_b);
+    block->c = __shfl_xor_sync(0xFFFFFFFF, block->c, 0x2);
+    block->d = __shfl_sync(0xFFFFFFFF, block->d, src_thr_d);
+#endif
+}
 
-__device__ void shuffle_block(struct block_th *block, uint32_t thread)
+__device__
+void unshift1_shuffle(
+    block_th* block,
+    const uint32_t thread)
+{
+    const uint32_t src_thr_b = (thread & 0x1c) | ((thread + 3) & 0x3);
+    const uint32_t src_thr_d = (thread & 0x1c) | ((thread + 1) & 0x3);
+
+#if CUDART_VERSION < 9000
+    block->b = __shfl(block->b, src_thr_b);
+    block->c = __shfl_xor(block->c, 0x2);
+    block->d = __shfl(block->d, src_thr_d);
+#else
+    block->b = __shfl_sync(0xFFFFFFFF, block->b, src_thr_b);
+    block->c = __shfl_xor_sync(0xFFFFFFFF, block->c, 0x2);
+    block->d = __shfl_sync(0xFFFFFFFF, block->d, src_thr_d);
+#endif
+}
+
+__device__
+void shift2_shuffle(
+    block_th* block,
+    const uint32_t thread)
+{
+    const uint32_t lo = (thread & 0x1) | ((thread & 0x10) >> 3);
+    const uint32_t src_thr_b = (((lo + 1) & 0x2) << 3) | (thread & 0xe) | ((lo + 1) & 0x1);
+    const uint32_t src_thr_d = (((lo + 3) & 0x2) << 3) | (thread & 0xe) | ((lo + 3) & 0x1);
+
+#if CUDART_VERSION < 9000
+    block->b = __shfl(block->b, src_thr_b);
+    block->c = __shfl_xor(block->c, 0x10);
+    block->d = __shfl(block->d, src_thr_d);
+#else
+    block->b = __shfl_sync(0xFFFFFFFF, block->b, src_thr_b);
+    block->c = __shfl_xor_sync(0xFFFFFFFF, block->c, 0x10);
+    block->d = __shfl_sync(0xFFFFFFFF, block->d, src_thr_d);
+#endif
+}
+
+__device__
+void unshift2_shuffle(
+    block_th* block,
+    const uint32_t thread)
+{
+    const uint32_t lo = (thread & 0x1) | ((thread & 0x10) >> 3);
+    const uint32_t src_thr_b = (((lo + 3) & 0x2) << 3) | (thread & 0xe) | ((lo + 3) & 0x1);
+    const uint32_t src_thr_d = (((lo + 1) & 0x2) << 3) | (thread & 0xe) | ((lo + 1) & 0x1);
+
+#if CUDART_VERSION < 9000
+    block->b = __shfl(block->b, src_thr_b);
+    block->c = __shfl_xor(block->c, 0x10);
+    block->d = __shfl(block->d, src_thr_d);
+#else
+    block->b = __shfl_sync(0xFFFFFFFF, block->b, src_thr_b);
+    block->c = __shfl_xor_sync(0xFFFFFFFF, block->c, 0x10);
+    block->d = __shfl_sync(0xFFFFFFFF, block->d, src_thr_d);
+#endif
+}
+
+__device__ void shuffle_block(
+    block_th* block,
+    const uint32_t thread)
 {
     transpose(block, thread);
 
     g(block);
 
-    apply_shuffle<shift1_shuffle>(block, thread);
+    shift1_shuffle(block, thread);
 
     g(block);
 
-    apply_shuffle<unshift1_shuffle>(block, thread);
+    unshift1_shuffle(block, thread);
     transpose(block, thread);
 
     g(block);
 
-    apply_shuffle<shift2_shuffle>(block, thread);
+    shift2_shuffle(block, thread);
 
     g(block);
 
-    apply_shuffle<unshift2_shuffle>(block, thread);
+    unshift2_shuffle(block, thread);
 }
-
 __device__ void next_addresses(struct block_th *addr, struct block_th*tmp,
                                uint32_t thread_input, uint32_t thread)
 {
@@ -327,79 +440,26 @@ __device__ void next_addresses1(struct block_th* addr, struct block_l* tmp,
     block_l_load_xor(addr, tmp, thread);
 }
 
-__device__ void compute_ref_pos(
-        uint32_t lanes, uint32_t segment_blocks,
-        uint32_t pass, uint32_t lane, uint32_t slice, uint32_t offset,
-        uint32_t *ref_lane, uint32_t *ref_index)
+__device__ __forceinline__ void compute_ref_pos(
+        uint32_t segment_blocks,
+        uint32_t slice, uint32_t offset,
+        uint32_t *ref_index)
 {
-    uint32_t lane_blocks = ARGON2_SYNC_POINTS * segment_blocks;
+    uint32_t ref_area_size = slice * segment_blocks + offset - 1;
 
-    *ref_lane = *ref_lane % lanes;
-
-    uint32_t base;
-    if (pass != 0) {
-        base = lane_blocks - segment_blocks;
-    } else {
-        if (slice == 0) {
-            *ref_lane = lane;
-        }
-        base = slice * segment_blocks;
-    }
-
-    uint32_t ref_area_size = base + offset - 1;
-    if (*ref_lane != lane) {
-        ref_area_size = min(ref_area_size, base);
-    }
-
-    *ref_index = __umulhi(*ref_index, *ref_index);
-    *ref_index = ref_area_size - 1 - __umulhi(ref_area_size, *ref_index);
-
-    if (pass != 0 && slice != ARGON2_SYNC_POINTS - 1) {
-        *ref_index += (slice + 1) * segment_blocks;
-        if (*ref_index >= lane_blocks) {
-            *ref_index -= lane_blocks;
-        }
-    }
+    uint32_t index = *ref_index;
+    index = __umulhi(index, index);
+    *ref_index = ref_area_size - 1 - __umulhi(ref_area_size, index);
 }
 
-struct ref {
-    uint32_t ref_lane;
-    uint32_t ref_index;
-};
 
-
-template<uint32_t version>
-__device__ void argon2_core(
-        struct block_g *memory, struct block_g *mem_curr,
-        struct block_th *prev, struct block_th *tmp, uint32_t lanes,
-        uint32_t thread, uint32_t pass, uint32_t ref_index, uint32_t ref_lane)
-{
-    struct block_g *mem_ref = memory + ref_index * lanes + ref_lane;
-
-    if (version != ARGON2_VERSION_10 && pass != 0) {
-        load_block(tmp, mem_curr, thread);
-        load_block_xor(prev, mem_ref, thread);
-        xor_block(tmp, prev);
-    } else {
-        load_block_xor(prev, mem_ref, thread);
-        move_block(tmp, prev);
-    }
-
-    shuffle_block(prev, thread);
-
-    xor_block(prev, tmp);
-
-    store_block(mem_curr, prev, thread);
-}
-
-template<uint32_t version>
 __device__ void argon2_core(
     struct block_g* memory, struct block_g* mem_curr,
     struct block_th* prev, struct block_l* tmp,
-    uint32_t lanes, uint32_t thread, uint32_t pass,
-    uint32_t ref_index, uint32_t ref_lane)
+    uint32_t thread, 
+    uint32_t ref_index)
 {
-    struct block_g* mem_ref = memory + ref_index * lanes + ref_lane;
+    struct block_g* mem_ref = memory + ref_index;
 
     load_block_xor(prev, mem_ref, thread);
     block_l_store(tmp, prev, thread);
@@ -408,62 +468,19 @@ __device__ void argon2_core(
 
     block_l_load_xor(prev, tmp, thread);
 
-    if (version != ARGON2_VERSION_10 && pass != 0) {
-        load_block_xor(prev, mem_curr, thread);
-    }
     store_block(mem_curr, prev, thread);
 }
 
-template<uint32_t type, uint32_t version>
-__device__ void argon2_step(
-        struct block_g *memory, struct block_g *mem_curr,
-        struct block_th *prev, struct block_th *tmp, struct block_th *addr, uint32_t lanes,
-        uint32_t segment_blocks, uint32_t thread, uint32_t *thread_input,
-        uint32_t lane, uint32_t pass, uint32_t slice, uint32_t offset)
-{
-    uint32_t ref_index, ref_lane;
-
-    if (type == ARGON2_I || (type == ARGON2_ID && pass == 0 &&
-            slice < ARGON2_SYNC_POINTS / 2)) {
-        uint32_t addr_index = offset % ARGON2_QWORDS_IN_BLOCK;
-        if (addr_index == 0) {
-            if (thread == 6) {
-                ++*thread_input;
-            }
-            next_addresses(addr, tmp, *thread_input, thread);
-        }
-
-        uint32_t thr = addr_index % THREADS_PER_LANE;
-        uint32_t idx = addr_index / THREADS_PER_LANE;
-
-        uint64_t v = block_th_get(addr, idx);
-        v = u64_shuffle(v, thr);
-        ref_index = u64_lo(v);
-        ref_lane  = u64_hi(v);
-    } else {
-        uint64_t v = u64_shuffle(prev->a, 0);
-        ref_index = u64_lo(v);
-        ref_lane  = u64_hi(v);
-    }
-
-    compute_ref_pos(lanes, segment_blocks, pass, lane, slice, offset,
-                    &ref_lane, &ref_index);
-
-    argon2_core<version>(memory, mem_curr, prev, tmp, lanes,
-                         thread, pass, ref_index, ref_lane);
-}
-template<uint32_t type, uint32_t version>
 __device__ void argon2_step1(
     struct block_g* memory, struct block_g* mem_curr,
     struct block_th* prev, struct block_l* tmp, struct block_th* addr,
-    uint32_t lanes, uint32_t segment_blocks, uint32_t thread,
-    uint32_t* thread_input, uint32_t lane, uint32_t pass, uint32_t slice,
+    uint32_t segment_blocks, uint32_t thread,
+    uint32_t* thread_input, uint32_t slice,
     uint32_t offset)
 {
-    uint32_t ref_index, ref_lane;
+    uint32_t ref_index;
 
-    if (type == ARGON2_I || (type == ARGON2_ID && pass == 0 &&
-        slice < ARGON2_SYNC_POINTS / 2)) {
+    if (slice < ARGON2_SYNC_POINTS / 2) {
         uint32_t addr_index = offset % ARGON2_QWORDS_IN_BLOCK;
         if (addr_index == 0) {
             if (thread == 6) {
@@ -478,65 +495,37 @@ __device__ void argon2_step1(
         uint64_t v = block_th_get(addr, idx);
         v = u64_shuffle(v, thr);
         ref_index = u64_lo(v);
-        ref_lane = u64_hi(v);
     }
     else {
         uint64_t v = u64_shuffle(prev->a, 0);
         ref_index = u64_lo(v);
-        ref_lane = u64_hi(v);
     }
 
-    compute_ref_pos(lanes, segment_blocks, pass, lane, slice, offset,
-        &ref_lane, &ref_index);
+    compute_ref_pos(segment_blocks, slice, offset, &ref_index);
 
-    argon2_core<version>(memory, mem_curr, prev, tmp, lanes, thread, pass,
-        ref_index, ref_lane);
+    argon2_core(memory, mem_curr, prev, tmp, thread, ref_index);
 }
 
-template<uint32_t type, uint32_t version>
 __global__ void argon2_kernel_oneshot(
-        struct block_g *memory, uint32_t passes, uint32_t lanes,
+        struct block_g * __restrict__ memory,
         uint32_t segment_blocks)
 {
-    extern __shared__ struct block_l shared[];
+    extern __shared__ struct block_l shared;
 
     uint32_t job_id = blockIdx.x;
     uint32_t thread = threadIdx.x;
-    uint32_t warp = threadIdx.z * lanes + threadIdx.y;
 
     uint32_t lane_blocks = ARGON2_SYNC_POINTS * segment_blocks;
 
-    /* select job's memory region: */
-    memory += (size_t)job_id * 1 * lane_blocks;
+    memory += (size_t)job_id * lane_blocks;
 
     struct block_th prev, addr;
-    struct block_l* tmp = &shared[warp];
+    struct block_l* tmp = &shared;
     uint32_t thread_input;
 
-    switch (thread) {
-    case 1:
-        thread_input = 0;
-        break;
-    case 3:
-        thread_input = lane_blocks;
-        break;
-    case 4:
-        thread_input = 1;
-        break;
-    case 5:
-        thread_input = type;
-        break;
-    default:
-        thread_input = 0;
-        break;
-    }
+    thread_input = (thread == 3) * lane_blocks + (thread == 4) + (thread == 5) * 2 + (thread == 6);
 
-    if (segment_blocks > 2) {
-        if (thread == 6) {
-            ++thread_input;
-        }
-        next_addresses1(&addr, tmp, thread_input, thread);
-    }
+    next_addresses1(&addr, tmp, thread_input, thread);
 
     struct block_g *mem_lane = memory;
     struct block_g *mem_prev = mem_lane + 1;
@@ -545,6 +534,7 @@ __global__ void argon2_kernel_oneshot(
     load_block(&prev, mem_prev, thread);
 
     uint32_t skip = 2;
+    //#pragma unroll 4
     for (uint32_t slice = 0; slice < ARGON2_SYNC_POINTS; ++slice) {
         for (uint32_t offset = 0; offset < segment_blocks; ++offset) {
             if (skip > 0) {
@@ -552,15 +542,13 @@ __global__ void argon2_kernel_oneshot(
                 continue;
             }
 
-            argon2_step1<type, version>(
+            argon2_step1(
                         memory, mem_curr, &prev, tmp, &addr,
-                        1, segment_blocks, thread, &thread_input,
-                        0, 0, slice, offset);
+                        segment_blocks, thread, &thread_input,
+                        slice, offset);
 
             mem_curr ++;
         }
-
-        __syncthreads();
 
         if (thread == 2) {
             ++thread_input;
@@ -660,11 +648,10 @@ void KernelRunner::copyOutputBlocks()
 void KernelRunner::runKernelOneshot()
 {
     struct block_g *memory_blocks = (struct block_g *)memory;
-    dim3 blocks = dim3(1, 1, (unsigned int)batchSize);
     uint32_t sharedSize = sizeof(struct block_l);
-    argon2_kernel_oneshot<ARGON2_ID, ARGON2_VERSION_13>
-            <<<(unsigned int)batchSize, THREADS_PER_LANE, sharedSize, stream>>>(
-                memory_blocks, 1, 1, segmentBlocks);
+    argon2_kernel_oneshot
+            <<<dim3(batchSize), dim3(THREADS_PER_LANE), sharedSize, stream>>>(
+                memory_blocks, segmentBlocks);
 }
 
 void KernelRunner::run()
