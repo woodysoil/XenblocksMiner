@@ -415,7 +415,7 @@ nlohmann::json inline getStatData() {
     result["normalBlocks"] = globalNormalBlockCount.load();
     result["superBlocks"] = globalSuperBlockCount.load();
     result["rejectedBlocks"] = globalFailedBlockCount.load();
-
+    result["version"] = "1.4.0";
     return result;
 }
 
