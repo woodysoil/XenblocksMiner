@@ -28,6 +28,7 @@ jobs:
         run: |
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
+          echo "CUDAFLAGS=--use-local-env" >> $env:GITHUB_ENV
 
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
