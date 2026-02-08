@@ -23,6 +23,12 @@ jobs:
         with:
           arch: x64
 
+      - name: Set CUDA host compiler
+        shell: pwsh
+        run: |
+          $cl = (Get-Command cl.exe).Source
+          echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
+
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
         with:
