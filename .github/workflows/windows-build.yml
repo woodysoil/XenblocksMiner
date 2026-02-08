@@ -4,7 +4,7 @@ on:
 
 jobs:
   job:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
     steps:
@@ -12,12 +12,16 @@ jobs:
         id: cuda-toolkit
         with:
           cuda: '11.8.0'
-        
+
       - uses: actions/checkout@v4
         with:
           submodules: true
 
       - uses: lukka/get-cmake@latest
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
@@ -29,3 +33,9 @@ jobs:
         with:
           configurePreset: 'ninja-multi-vcpkg'
           buildPreset: 'ninja-vcpkg-release'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xenblocksMiner-windows
+          path: build/bin
