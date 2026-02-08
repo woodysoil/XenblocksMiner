@@ -17,7 +17,7 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
     - name: Export GitHub Actions cache environment variables
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -40,7 +40,7 @@ jobs:
       run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
       shell: bash
       
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -54,7 +54,7 @@ jobs:
     # Restore vcpkg from the GitHub Action cache service. Note that packages are restored by vcpkg's binary caching
     # when it is being run afterwards by CMake.
     - name: Restore vcpkg
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         # The first path is the location of vcpkg: it contains the vcpkg executable and data files, as long as the
         # built package archives (aka binary cache) which are located by VCPKG_DEFAULT_BINARY_CACHE env var.
@@ -82,7 +82,7 @@ jobs:
           cmake --build build --preset ninja-vcpkg-release
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: xenblocksMiner-linux
         path: build/bin
