@@ -32,9 +32,13 @@ jobs:
         run: |
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
+          echo "CMAKE_CUDA_HOST_COMPILER=$cl" >> $env:GITHUB_ENV
           Write-Host "CUDAHOSTCXX=$cl"
           Write-Host "cl.exe version:"
           & $cl 2>&1 | Select-Object -First 3
+          Write-Host "CUDA_PATH=$env:CUDA_PATH"
+          Write-Host "nvcc version:"
+          nvcc --version
           # Trim PATH to under 8191 chars to avoid "input line too long" from nvcc's vcvarsall.
           # Keep essential dirs: CUDA, MSVC, Windows SDK, CMake, Ninja, vcpkg, Git, system.
           $keep = @()
@@ -46,63 +50,47 @@ jobs:
           }
           $newPath = ($keep | Select-Object -Unique) -join ';'
           Write-Host "Trimmed PATH from $($env:PATH.Length) to $($newPath.Length) chars"
-          Write-Host "PATH entries kept:"
-          foreach ($p in ($newPath -split ';')) { Write-Host "  $p" }
           echo "PATH=$newPath" >> $env:GITHUB_ENV
-
-      - name: Verify CUDA and compiler setup
-        shell: pwsh
-        run: |
-          Write-Host "=== nvcc version ==="
-          nvcc --version
-          Write-Host "=== cl.exe location ==="
-          Get-Command cl.exe | Format-List
-          Write-Host "=== CUDA_PATH ==="
-          Write-Host $env:CUDA_PATH
-          Write-Host "=== Testing nvcc compilation ==="
-          $testCu = "$env:TEMP\test.cu"
-          Set-Content $testCu '__global__ void k(){} int main(){return 0;}'
-          nvcc -ccbin "$env:CUDAHOSTCXX" --allow-unsupported-compiler -c $testCu -o "$env:TEMP\test.obj" 2>&1
-          Write-Host "nvcc test exit code: $LASTEXITCODE"
 
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
-      - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: 'ninja-multi-vcpkg'
-          buildPreset: 'ninja-vcpkg-release'
-
-      - name: Print CMake error logs on failure
-        if: failure()
+      - name: CMake configure
         shell: pwsh
         run: |
-          Write-Host "=== CMakeError.log ==="
-          $errorLogs = Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue
-          foreach ($f in $errorLogs) {
-            Write-Host "--- $($f.FullName) ---"
-            Get-Content $f.FullName -ErrorAction SilentlyContinue | Select-Object -Last 200
+          $cl = $env:CUDAHOSTCXX
+          Write-Host "Running cmake configure..."
+          Write-Host "CMAKE_CUDA_HOST_COMPILER=$cl"
+          cmake --preset ninja-multi-vcpkg `
+            -DCMAKE_CUDA_HOST_COMPILER="$cl" `
+            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler" `
+            --log-level=VERBOSE 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "CMake configure FAILED with exit code $LASTEXITCODE"
+            Write-Host ""
+            Write-Host "=== CMakeError.log ==="
+            Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
+              Get-Content $_.FullName -ErrorAction SilentlyContinue
+            }
+            Write-Host ""
+            Write-Host "=== CMakeOutput.log ==="
+            Get-ChildItem -Recurse -Filter "CMakeOutput.log" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
+              Get-Content $_.FullName -ErrorAction SilentlyContinue | Select-Object -Last 100
+            }
+            exit 1
           }
-          Write-Host "`n=== CMakeOutput.log ==="
-          $outputLogs = Get-ChildItem -Recurse -Filter "CMakeOutput.log" -ErrorAction SilentlyContinue
-          foreach ($f in $outputLogs) {
-            Write-Host "--- $($f.FullName) ---"
-            Get-Content $f.FullName -ErrorAction SilentlyContinue | Select-Object -Last 100
-          }
-          Write-Host "`n=== vcpkg install logs ==="
-          $vcpkgLogs = Get-ChildItem -Path "vcpkg/buildtrees" -Recurse -Filter "*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 10
-          foreach ($f in $vcpkgLogs) {
-            Write-Host "--- $($f.FullName) ---"
-            Get-Content $f.FullName -ErrorAction SilentlyContinue | Select-Object -Last 50
-          }
-          Write-Host "`n=== Last 50 lines of ninja build log ==="
-          $ninjaLog = Get-ChildItem -Recurse -Filter ".ninja_log" -ErrorAction SilentlyContinue
-          foreach ($f in $ninjaLog) {
-            Write-Host "--- $($f.FullName) ---"
-            Get-Content $f.FullName -ErrorAction SilentlyContinue | Select-Object -Last 50
+
+      - name: CMake build
+        shell: pwsh
+        run: |
+          cmake --build --preset ninja-vcpkg-release 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "CMake build FAILED with exit code $LASTEXITCODE"
+            exit 1
           }
 
       - name: Upload artifacts
@@ -110,7 +98,4 @@ jobs:
         if: always()
         with:
           name: xenblocksMiner-windows
-          path: |
-            build/bin
-            build/**/CMakeError.log
-            build/**/CMakeOutput.log
+          path: build/bin
