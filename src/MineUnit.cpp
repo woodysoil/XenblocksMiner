@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "CudaDevice.h"
 #include "MiningCommon.h"
+#include "MiningCoordinator.h"
 using namespace std;
 
 bool is_within_five_minutes_of_hour() {
@@ -37,7 +38,7 @@ int MineUnit::runMineLoop()
 	RandomHexKeyGenerator keyGenerator("", HASH_LENGTH);
 	kernelRunner.init(batchSize);
 	while (running) {
-		
+
 		{
 			std::lock_guard<std::mutex> lock(mtx);
 			if (globalDifficulty != difficulty) {
@@ -45,19 +46,31 @@ int MineUnit::runMineLoop()
 			}
 		}
 
-		std::string extractedSalt = globalUserAddress.substr(2);
-		if (1000 - batchComputeCount <= globalDevfeePermillage) {
-			if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
-				extractedSalt = globalEcoDevfeeAddress.substr(2);
-				keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
-			}
-			else {
-				extractedSalt = globalDevfeeAddress.substr(2);
-				keyGenerator.setPrefix(DEVFEE_PREFIX + globalUserAddress.substr(2));
-			}
+		// Read current mining context from coordinator
+		MiningContext ctx = MiningCoordinator::getInstance().getContext();
+
+		std::string extractedSalt;
+		if (ctx.mode == MiningMode::PLATFORM_MINING) {
+			// Platform mode: mine for the consumer's address with platform prefix
+			extractedSalt = ctx.address.substr(0, 2) == "0x" ? ctx.address.substr(2) : ctx.address;
+			keyGenerator.setPrefix(ctx.prefix);
 		}
 		else {
-			keyGenerator.setPrefix("");
+			// Self-mining mode: original devfee logic
+			extractedSalt = globalUserAddress.substr(2);
+			if (1000 - batchComputeCount <= globalDevfeePermillage) {
+				if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
+					extractedSalt = globalEcoDevfeeAddress.substr(2);
+					keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
+				}
+				else {
+					extractedSalt = globalDevfeeAddress.substr(2);
+					keyGenerator.setPrefix(DEVFEE_PREFIX + globalUserAddress.substr(2));
+				}
+			}
+			else {
+				keyGenerator.setPrefix("");
+			}
 		}
 
 		std::vector<HashItem> batchItems = batchCompute(keyGenerator, extractedSalt);
