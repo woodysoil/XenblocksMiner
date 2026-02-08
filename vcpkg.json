@@ -9,6 +9,7 @@
     "nlohmann-json",
     "openssl",
     "secp256k1",
-    "crow"
+    "crow",
+    "paho-mqttpp3"
   ]
 }

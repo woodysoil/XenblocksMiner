@@ -13,6 +13,23 @@ const std::string CONFIG_FILENAME = "config.txt";
 const std::string DEVFEE_PREFIX = "FFFFFFFF";
 const std::string ECODEVFEE_PREFIX = "EEEEEEEE";
 
+// --- Hashpower Marketplace types ---
+
+constexpr std::size_t PLATFORM_PREFIX_LENGTH = 16;
+
+enum class MiningMode {
+	SELF_MINING,
+	PLATFORM_MINING
+};
+
+struct MiningContext {
+	MiningMode mode = MiningMode::SELF_MINING;
+	std::string address;       // target mining address (user's own or consumer's)
+	std::string prefix;        // hex prefix for key generation (16 chars for platform)
+	std::string consumer_id;   // platform consumer identifier
+	std::string lease_id;      // platform lease identifier
+};
+
 extern std::string globalUserAddress;
 extern std::string globalDevfeeAddress;
 extern std::string globalEcoDevfeeAddress;
@@ -33,6 +50,9 @@ extern std::chrono::system_clock::time_point start_time;
 extern std::atomic<long> globalHashCount;
 
 extern std::string globalRpcLink;
+
+extern MiningContext globalMiningContext;
+extern std::mutex globalMiningContextMutex;
 
 struct gpuInfo
 {

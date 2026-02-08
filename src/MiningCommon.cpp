@@ -23,3 +23,6 @@ std::atomic<long> globalHashCount = 0;
 std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();
 
 std::string globalRpcLink = "http://xenblocks.io";
+
+MiningContext globalMiningContext;
+std::mutex globalMiningContextMutex;
