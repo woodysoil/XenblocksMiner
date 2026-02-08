@@ -13,6 +13,11 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(CMAKE_CUDA_ARCHITECTURES 35 37 50 52 61 70 75 80 86 89 90 CACHE STRING "CUDA architectures")
 
+if(WIN32)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --allow-unsupported-compiler")
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+endif()
+
 find_package(CUDAToolkit REQUIRED)
 
 find_package(unofficial-argon2 CONFIG REQUIRED)
@@ -69,10 +74,5 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<COMPILE_LANGUAGE:CXX>:-O2>
-    $<$<COMPILE_LANGUAGE:CUDA>:-O2>
-)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES 
-    COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets>"
+    $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-gpu-targets>
 )
