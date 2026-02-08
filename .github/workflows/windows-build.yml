@@ -32,15 +32,9 @@ jobs:
         run: |
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
-          echo "CMAKE_CUDA_HOST_COMPILER=$cl" >> $env:GITHUB_ENV
           Write-Host "CUDAHOSTCXX=$cl"
-          Write-Host "cl.exe version:"
-          & $cl 2>&1 | Select-Object -First 3
           Write-Host "CUDA_PATH=$env:CUDA_PATH"
-          Write-Host "nvcc version:"
-          nvcc --version
           # Trim PATH to under 8191 chars to avoid "input line too long" from nvcc's vcvarsall.
-          # Keep essential dirs: CUDA, MSVC, Windows SDK, CMake, Ninja, vcpkg, Git, system.
           $keep = @()
           foreach ($p in ($env:PATH -split ';')) {
             if ($p -eq '') { continue }
@@ -60,42 +54,27 @@ jobs:
       - name: CMake configure
         shell: pwsh
         run: |
-          $cl = $env:CUDAHOSTCXX
-          Write-Host "Running cmake configure..."
-          Write-Host "CMAKE_CUDA_HOST_COMPILER=$cl"
-          cmake --preset ninja-multi-vcpkg `
-            -DCMAKE_CUDA_HOST_COMPILER="$cl" `
-            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler" `
-            --log-level=VERBOSE 2>&1
+          cmake -S . -B build `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH/bin/nvcc.exe" `
+            -DCUDAToolkit_ROOT="$env:CUDA_PATH" `
+            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "CMake configure FAILED with exit code $LASTEXITCODE"
-            Write-Host ""
             Write-Host "=== CMakeError.log ==="
             Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "--- $($_.FullName) ---"
               Get-Content $_.FullName -ErrorAction SilentlyContinue
             }
-            Write-Host ""
-            Write-Host "=== CMakeOutput.log ==="
-            Get-ChildItem -Recurse -Filter "CMakeOutput.log" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "--- $($_.FullName) ---"
-              Get-Content $_.FullName -ErrorAction SilentlyContinue | Select-Object -Last 100
-            }
             exit 1
           }
 
       - name: CMake build
-        shell: pwsh
-        run: |
-          cmake --build --preset ninja-vcpkg-release 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "CMake build FAILED with exit code $LASTEXITCODE"
-            exit 1
-          }
+        run: cmake --build build --config Release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: xenblocksMiner-windows
           path: build/bin
