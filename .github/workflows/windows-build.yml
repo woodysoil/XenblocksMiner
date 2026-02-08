@@ -25,7 +25,6 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          toolset: 14.29
 
       - name: Set CUDA host compiler and trim PATH
         shell: pwsh
