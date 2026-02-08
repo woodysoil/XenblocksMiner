@@ -24,6 +24,9 @@ public:
 		const std::string& consumer_id,
 		const std::string& lease_id);
 
+	// Generic context update (exclusive/write lock)
+	void updateContext(const MiningContext& ctx);
+
 private:
 	MiningCoordinator() = default;
 	MiningCoordinator(const MiningCoordinator&) = delete;

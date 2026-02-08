@@ -50,3 +50,9 @@ void MiningCoordinator::switchToPlatformMining(const std::string& address,
 	context_.consumer_id = consumer_id;
 	context_.lease_id = lease_id;
 }
+
+void MiningCoordinator::updateContext(const MiningContext& ctx)
+{
+	std::unique_lock<std::shared_mutex> lock(mutex_);
+	context_ = ctx;
+}
