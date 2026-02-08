@@ -326,6 +326,7 @@ void PlatformManager::leaseWatchdogLoop()
 		// Attempt recovery from error state
 		if (state_ == PlatformState::ERROR) {
 			std::cout << "PlatformManager: Attempting recovery..." << std::endl;
+			transitionTo(PlatformState::IDLE);
 			if (mqtt_->isConnected()) {
 				reporter_.sendRegistration(eth_address_, gpus_);
 				transitionTo(PlatformState::AVAILABLE);

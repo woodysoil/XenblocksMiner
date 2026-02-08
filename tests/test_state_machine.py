@@ -32,7 +32,7 @@ class MinerState(enum.Enum):
 # Legal transitions: from_state -> set of allowed to_states
 LEGAL_TRANSITIONS: Dict[MinerState, Set[MinerState]] = {
     MinerState.IDLE: {MinerState.AVAILABLE},
-    MinerState.AVAILABLE: {MinerState.LEASED, MinerState.IDLE},
+    MinerState.AVAILABLE: {MinerState.LEASED, MinerState.IDLE, MinerState.ERROR},
     MinerState.LEASED: {MinerState.MINING, MinerState.ERROR, MinerState.IDLE},
     MinerState.MINING: {MinerState.COMPLETED, MinerState.ERROR},
     MinerState.COMPLETED: {MinerState.IDLE, MinerState.AVAILABLE},
@@ -197,6 +197,13 @@ class TestLegalTransitions:
         sm.transition_to(MinerState.AVAILABLE)
         sm.transition_to(MinerState.IDLE)
         assert sm.state == MinerState.IDLE
+
+    def test_available_to_error(self):
+        """Registration rejected by platform."""
+        sm = PlatformStateMachine()
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.ERROR)
+        assert sm.state == MinerState.ERROR
 
     def test_full_happy_path(self):
         sm = PlatformStateMachine()

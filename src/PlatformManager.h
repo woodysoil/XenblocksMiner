@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <functional>
+#include <vector>
 #include "MqttClient.h"
 #include "WorkerReporter.h"
 #include "LeaseManager.h"

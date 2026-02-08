@@ -5,6 +5,7 @@
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <vector>
 #include <mqtt/async_client.h>
 #include <nlohmann/json.hpp>
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <map>
+#include <chrono>
 
 constexpr std::size_t HASH_LENGTH = 64;
 constexpr std::size_t MAX_SUBMIT_RETRIES = 5;
@@ -50,9 +51,6 @@ extern std::chrono::system_clock::time_point start_time;
 extern std::atomic<long> globalHashCount;
 
 extern std::string globalRpcLink;
-
-extern MiningContext globalMiningContext;
-extern std::mutex globalMiningContextMutex;
 
 struct gpuInfo
 {
