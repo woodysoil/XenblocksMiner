@@ -1,6 +1,9 @@
 name: Windows-build
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'claude/**'
 
 jobs:
   job:
