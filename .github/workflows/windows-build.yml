@@ -23,12 +23,23 @@ jobs:
         with:
           arch: x64
 
-      - name: Set CUDA host compiler
+      - name: Set CUDA host compiler and trim PATH
         shell: pwsh
         run: |
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
-          echo "CUDAFLAGS=--use-local-env" >> $env:GITHUB_ENV
+          # Trim PATH to under 8191 chars to avoid "input line too long" from nvcc's vcvarsall.
+          # Keep essential dirs: CUDA, MSVC, Windows SDK, CMake, Ninja, vcpkg, Git, system.
+          $keep = @()
+          foreach ($p in ($env:PATH -split ';')) {
+            if ($p -eq '') { continue }
+            if ($p -match '(?i)(CUDA|MSVC|Visual Studio|Windows Kits|cmake|ninja|vcpkg|\\git\\|System32|WindowsPowerShell|\\bin)') {
+              $keep += $p
+            }
+          }
+          $newPath = ($keep | Select-Object -Unique) -join ';'
+          Write-Host "Trimmed PATH from $($env:PATH.Length) to $($newPath.Length) chars"
+          echo "PATH=$newPath" >> $env:GITHUB_ENV
 
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
