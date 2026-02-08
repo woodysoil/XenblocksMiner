@@ -430,3 +430,179 @@ class TestTransitionMapCompleteness:
     def test_no_state_can_transition_to_itself(self):
         for state, targets in LEGAL_TRANSITIONS.items():
             assert state not in targets, f"{state} can transition to itself"
+
+
+# ── Tests: error recovery integration ─────────────────────────────────────
+
+class TestErrorRecoveryIntegration:
+    """Verify the full ERROR → IDLE → AVAILABLE recovery path and beyond."""
+
+    def test_full_recovery_through_mining(self):
+        """ERROR → IDLE → AVAILABLE → LEASED → MINING (complete recovery)."""
+        sm = PlatformStateMachine()
+        # Normal startup
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        # Hit error
+        sm.transition_to(MinerState.ERROR)
+        # Recovery: must go through IDLE first
+        sm.transition_to(MinerState.IDLE)
+        sm.transition_to(MinerState.AVAILABLE)
+        # Re-assigned a new task
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        assert sm.state == MinerState.MINING
+
+        expected = [
+            (MinerState.IDLE, MinerState.AVAILABLE),
+            (MinerState.AVAILABLE, MinerState.LEASED),
+            (MinerState.LEASED, MinerState.MINING),
+            (MinerState.MINING, MinerState.ERROR),
+            (MinerState.ERROR, MinerState.IDLE),
+            (MinerState.IDLE, MinerState.AVAILABLE),
+            (MinerState.AVAILABLE, MinerState.LEASED),
+            (MinerState.LEASED, MinerState.MINING),
+        ]
+        assert sm.transition_log == expected
+
+    def test_full_recovery_to_completion(self):
+        """Recovery then successfully complete a task."""
+        sm = PlatformStateMachine()
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.ERROR)
+        # Recover
+        sm.transition_to(MinerState.IDLE)
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.COMPLETED)
+        sm.transition_to(MinerState.AVAILABLE)
+        assert sm.state == MinerState.AVAILABLE
+
+    def test_consecutive_errors_from_mining(self):
+        """Multiple errors in a row, each recovered through IDLE."""
+        sm = PlatformStateMachine()
+        for i in range(3):
+            sm.transition_to(MinerState.AVAILABLE)
+            sm.transition_to(MinerState.LEASED)
+            sm.transition_to(MinerState.MINING)
+            sm.transition_to(MinerState.ERROR)
+            sm.transition_to(MinerState.IDLE)
+
+        # After 3 error-recovery cycles, should be back at IDLE
+        assert sm.state == MinerState.IDLE
+        # Verify we can still proceed normally
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.COMPLETED)
+        assert sm.state == MinerState.COMPLETED
+
+    def test_consecutive_errors_from_leased(self):
+        """Error during lease setup (before mining starts), repeated."""
+        sm = PlatformStateMachine()
+        for i in range(3):
+            sm.transition_to(MinerState.AVAILABLE)
+            sm.transition_to(MinerState.LEASED)
+            sm.transition_to(MinerState.ERROR)
+            sm.transition_to(MinerState.IDLE)
+
+        assert sm.state == MinerState.IDLE
+        sm.transition_to(MinerState.AVAILABLE)
+        assert sm.state == MinerState.AVAILABLE
+
+    def test_error_from_available_recovery(self):
+        """Registration rejected (AVAILABLE → ERROR), then recover."""
+        sm = PlatformStateMachine()
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.ERROR)
+        sm.transition_to(MinerState.IDLE)
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        assert sm.state == MinerState.MINING
+
+    def test_error_from_each_state_then_recover(self):
+        """Test ERROR entry from every state that allows it, then full recovery."""
+        # States that can transition to ERROR: AVAILABLE, LEASED, MINING
+        error_sources = [
+            # (setup transitions, state that errors)
+            ([MinerState.AVAILABLE], MinerState.AVAILABLE),
+            ([MinerState.AVAILABLE, MinerState.LEASED], MinerState.LEASED),
+            ([MinerState.AVAILABLE, MinerState.LEASED, MinerState.MINING], MinerState.MINING),
+        ]
+        for setup, source in error_sources:
+            sm = PlatformStateMachine()
+            for s in setup:
+                sm.transition_to(s)
+            assert sm.state == source
+            sm.transition_to(MinerState.ERROR)
+            assert sm.state == MinerState.ERROR
+            sm.transition_to(MinerState.IDLE)
+            assert sm.state == MinerState.IDLE
+            # Can fully recover
+            sm.transition_to(MinerState.AVAILABLE)
+            sm.transition_to(MinerState.LEASED)
+            sm.transition_to(MinerState.MINING)
+            sm.transition_to(MinerState.COMPLETED)
+            assert sm.state == MinerState.COMPLETED
+
+    def test_error_recovery_cannot_skip_idle(self):
+        """ERROR must go through IDLE; cannot jump directly to AVAILABLE."""
+        sm = PlatformStateMachine()
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.ERROR)
+        with pytest.raises(InvalidTransitionError):
+            sm.transition_to(MinerState.AVAILABLE)
+
+    def test_error_recovery_callbacks_fire(self):
+        """Verify callbacks fire during ERROR → IDLE → AVAILABLE recovery."""
+        sm = PlatformStateMachine()
+        log = []
+        sm.register_on_exit(MinerState.ERROR, lambda: log.append("exit_error"))
+        sm.register_on_enter(MinerState.IDLE, lambda: log.append("enter_idle"))
+        sm.register_on_exit(MinerState.IDLE, lambda: log.append("exit_idle"))
+        sm.register_on_enter(MinerState.AVAILABLE, lambda: log.append("enter_available"))
+
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.ERROR)
+        log.clear()
+
+        sm.transition_to(MinerState.IDLE)
+        sm.transition_to(MinerState.AVAILABLE)
+
+        assert log == ["exit_error", "enter_idle", "exit_idle", "enter_available"]
+
+    def test_mixed_error_and_completion_cycles(self):
+        """Alternate between successful completions and error recoveries."""
+        sm = PlatformStateMachine()
+
+        # Cycle 1: success
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.COMPLETED)
+        sm.transition_to(MinerState.IDLE)
+
+        # Cycle 2: error
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.ERROR)
+        sm.transition_to(MinerState.IDLE)
+
+        # Cycle 3: success again
+        sm.transition_to(MinerState.AVAILABLE)
+        sm.transition_to(MinerState.LEASED)
+        sm.transition_to(MinerState.MINING)
+        sm.transition_to(MinerState.COMPLETED)
+        sm.transition_to(MinerState.AVAILABLE)
+
+        assert sm.state == MinerState.AVAILABLE
+        assert len(sm.transition_log) == 15
