@@ -24,8 +24,14 @@ jobs:
       run: |
         apt-get update
         apt-get install -y git curl zip unzip tar build-essential pkg-config \
-          ninja-build cmake autoconf automake libtool perl
+          ninja-build autoconf automake libtool perl
         git config --global --add safe.directory "*"
+
+    - name: Get CMake 3.29.0
+      run: |
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.29.0/cmake-3.29.0-linux-x86_64.sh -o cmake-install.sh
+          chmod +x cmake-install.sh
+          ./cmake-install.sh --skip-license --prefix=/usr/local
 
     - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
       run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
