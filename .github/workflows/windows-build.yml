@@ -54,7 +54,8 @@ jobs:
       - name: CMake configure
         shell: pwsh
         run: |
-          cmake -S . -B build `
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows-static `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
@@ -71,7 +72,7 @@ jobs:
           }
 
       - name: CMake build
-        run: cmake --build build --config Release
+        run: cmake --build build
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
