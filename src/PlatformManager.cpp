@@ -48,9 +48,12 @@ bool PlatformManager::start()
 	mqtt_->subscribe(mqtt_->buildTopic(MqttClient::TOPIC_TASK));
 	mqtt_->subscribe(mqtt_->buildTopic(MqttClient::TOPIC_CONTROL));
 
-	// Set up message handler
+	// Set up message handler — dispatch off the Paho callback thread
+	// to avoid deadlock when publishing from within the callback.
 	mqtt_->setMessageCallback([this](const std::string& topic, const std::string& payload) {
-		onMessage(topic, payload);
+		std::thread([this, topic, payload]() {
+			onMessage(topic, payload);
+		}).detach();
 	});
 
 	// Send registration
