@@ -71,17 +71,16 @@ jobs:
       - name: Package Linux release
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          mkdir -p staging
-          cp -r build/bin/* staging/
-          cp README.md staging/ 2>/dev/null || true
-          tar -czf xenblocksMiner-${VERSION}-linux.tar.gz -C staging .
+          tar -czf xenblocksMiner-${VERSION}-linux.tar.gz -C build/bin .
 
       - name: Package HiveOS release
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          mkdir -p staging-hiveos
-          cp -r build/bin/* staging-hiveos/
-          cp -r hiveos/* staging-hiveos/
+          mkdir -p staging-hiveos/xenblocksMiner
+          cp build/bin/* staging-hiveos/xenblocksMiner/
+          cp hiveos/* staging-hiveos/xenblocksMiner/
+          chmod +x staging-hiveos/xenblocksMiner/*.sh
+          chmod +x staging-hiveos/xenblocksMiner/xenblocksMiner
           tar -czf xenblocksMiner-${VERSION}_hiveos.tar.gz -C staging-hiveos .
 
       - name: Upload artifacts
@@ -165,10 +164,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
-          New-Item -ItemType Directory -Path staging -Force
-          Copy-Item -Path build/bin/* -Destination staging/ -Recurse
-          if (Test-Path README.md) { Copy-Item README.md staging/ }
-          Compress-Archive -Path staging/* -DestinationPath "xenblocksMiner-${version}-windows.zip"
+          Compress-Archive -Path build/bin/* -DestinationPath "xenblocksMiner-${version}-windows.zip"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
