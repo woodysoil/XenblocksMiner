@@ -10,12 +10,20 @@ jobs:
     runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
-      NVCC_PREPEND_FLAGS: --allow-unsupported-compiler
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - uses: Jimver/cuda-toolkit@v0.2.30
         id: cuda-toolkit
         with:
-          cuda: '11.8.0'
+          cuda: '12.6.3'
+          use-github-cache: true
 
       - uses: actions/checkout@v4
         with:
@@ -32,8 +40,6 @@ jobs:
         run: |
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
-          Write-Host "CUDAHOSTCXX=$cl"
-          Write-Host "CUDA_PATH=$env:CUDA_PATH"
           # Trim PATH to under 8191 chars to avoid "input line too long" from nvcc's vcvarsall.
           $keep = @()
           foreach ($p in ($env:PATH -split ';')) {
@@ -60,13 +66,11 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=x64-windows-static `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
             -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH/bin/nvcc.exe" `
-            -DCUDAToolkit_ROOT="$env:CUDA_PATH" `
-            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler"
+            -DCUDAToolkit_ROOT="$env:CUDA_PATH"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "=== CMakeError.log ==="
             Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "--- $($_.FullName) ---"
-              Get-Content $_.FullName -ErrorAction SilentlyContinue
+              Write-Host "--- $($_.FullName) ---"; Get-Content $_.FullName
             }
             exit 1
           }
