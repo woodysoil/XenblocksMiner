@@ -7,11 +7,20 @@ jobs:
     runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
+      - name: Export GitHub Actions cache variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - uses: Jimver/cuda-toolkit@v0.2.30
         id: cuda-toolkit
         with:
-          cuda: '11.8.0'
+          cuda: '12.6.3'
+          use-github-cache: true
 
       - uses: actions/checkout@v4
         with:
@@ -29,7 +38,6 @@ jobs:
           $cl = (Get-Command cl.exe).Source
           echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
           # Trim PATH to under 8191 chars to avoid "input line too long" from nvcc's vcvarsall.
-          # Keep essential dirs: CUDA, MSVC, Windows SDK, CMake, Ninja, vcpkg, Git, system.
           $keep = @()
           foreach ($p in ($env:PATH -split ';')) {
             if ($p -eq '') { continue }
@@ -46,11 +54,26 @@ jobs:
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
-      - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: 'ninja-multi-vcpkg'
-          buildPreset: 'ninja-vcpkg-release'
+      - name: CMake configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH/bin/nvcc.exe" `
+            -DCUDAToolkit_ROOT="$env:CUDA_PATH"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "=== CMakeError.log ==="
+            Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"; Get-Content $_.FullName
+            }
+            exit 1
+          }
+
+      - name: CMake build
+        run: cmake --build build --config Release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
