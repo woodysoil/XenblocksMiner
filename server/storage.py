@@ -31,7 +31,7 @@ logger = logging.getLogger("storage")
 # Schema version & migrations
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS workers (
     min_duration_sec INTEGER NOT NULL DEFAULT 60,
     max_duration_sec INTEGER NOT NULL DEFAULT 86400,
     total_online_sec REAL NOT NULL DEFAULT 0.0,
-    last_online_at   REAL
+    last_online_at   REAL,
+    self_blocks_found INTEGER NOT NULL DEFAULT 0
 );
 
 -- Leases: hashpower rental agreements
@@ -93,7 +94,7 @@ CREATE TABLE IF NOT EXISTS leases (
 -- Blocks: mined block records
 CREATE TABLE IF NOT EXISTS blocks (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    lease_id     TEXT NOT NULL,
+    lease_id     TEXT NOT NULL DEFAULT '',
     worker_id    TEXT NOT NULL,
     block_hash   TEXT NOT NULL,
     key          TEXT NOT NULL,
@@ -103,8 +104,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     prefix_valid INTEGER NOT NULL DEFAULT 1,
     chain_verified INTEGER NOT NULL DEFAULT 0,
     chain_block_id INTEGER,
-    created_at   REAL NOT NULL,
-    FOREIGN KEY (lease_id) REFERENCES leases(lease_id)
+    created_at   REAL NOT NULL
 );
 
 -- Settlements: completed lease settlements
@@ -138,6 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_leases_state ON leases(state);
 CREATE INDEX IF NOT EXISTS idx_leases_worker ON leases(worker_id);
 CREATE INDEX IF NOT EXISTS idx_leases_consumer ON leases(consumer_id);
 CREATE INDEX IF NOT EXISTS idx_blocks_lease ON blocks(lease_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_worker ON blocks(worker_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_lease ON settlements(lease_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_api_key ON accounts(api_key);
@@ -355,7 +356,7 @@ class WorkerRepo:
             "SELECT worker_id, eth_address, gpu_count, total_memory_gb, gpus_json, "
             "version, state, hashrate, active_gpus, last_heartbeat, registered_at, "
             "price_per_min, min_duration_sec, max_duration_sec, "
-            "total_online_sec, last_online_at "
+            "total_online_sec, last_online_at, self_blocks_found "
             "FROM workers WHERE worker_id = ?",
             (worker_id,),
         ) as cursor:
@@ -379,6 +380,7 @@ class WorkerRepo:
             "max_duration_sec": row[13],
             "total_online_sec": row[14] or 0.0,
             "last_online_at": row[15],
+            "self_blocks_found": row[16],
         }
 
     async def update_heartbeat(self, worker_id: str, hashrate: float, active_gpus: int):
@@ -419,13 +421,20 @@ class WorkerRepo:
         )
         await self._db.commit()
 
+    async def increment_self_blocks(self, worker_id: str):
+        await self._db.execute(
+            "UPDATE workers SET self_blocks_found = self_blocks_found + 1 WHERE worker_id = ?",
+            (worker_id,),
+        )
+        await self._db.commit()
+
     async def list_all(self) -> List[dict]:
         results = []
         async with self._db.execute(
             "SELECT worker_id, eth_address, gpu_count, total_memory_gb, gpus_json, "
             "version, state, hashrate, active_gpus, last_heartbeat, registered_at, "
             "price_per_min, min_duration_sec, max_duration_sec, "
-            "total_online_sec, last_online_at "
+            "total_online_sec, last_online_at, self_blocks_found "
             "FROM workers"
         ) as cursor:
             async for row in cursor:
@@ -446,6 +455,7 @@ class WorkerRepo:
                     "max_duration_sec": row[13],
                     "total_online_sec": row[14] or 0.0,
                     "last_online_at": row[15],
+                    "self_blocks_found": row[16],
                 })
         return results
 
@@ -943,6 +953,47 @@ class StorageManager:
                     )
                 except Exception:
                     pass
+
+            # V6 migration: add self_blocks_found to workers, remove FK on blocks.lease_id
+            if current_version < 6:
+                try:
+                    await self._db.execute(
+                        "ALTER TABLE workers ADD COLUMN self_blocks_found INTEGER NOT NULL DEFAULT 0"
+                    )
+                except Exception:
+                    pass  # column already exists from CREATE TABLE
+
+                # Recreate blocks table without FK constraint
+                try:
+                    await self._db.execute(
+                        "CREATE TABLE IF NOT EXISTS blocks_new ("
+                        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        "  lease_id TEXT NOT NULL DEFAULT '',"
+                        "  worker_id TEXT NOT NULL,"
+                        "  block_hash TEXT NOT NULL,"
+                        "  key TEXT NOT NULL,"
+                        "  account TEXT NOT NULL DEFAULT '',"
+                        "  attempts INTEGER NOT NULL DEFAULT 0,"
+                        "  hashrate TEXT NOT NULL DEFAULT '0.0',"
+                        "  prefix_valid INTEGER NOT NULL DEFAULT 1,"
+                        "  chain_verified INTEGER NOT NULL DEFAULT 0,"
+                        "  chain_block_id INTEGER,"
+                        "  created_at REAL NOT NULL"
+                        ")"
+                    )
+                    await self._db.execute(
+                        "INSERT INTO blocks_new SELECT * FROM blocks"
+                    )
+                    await self._db.execute("DROP TABLE blocks")
+                    await self._db.execute("ALTER TABLE blocks_new RENAME TO blocks")
+                    await self._db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_blocks_lease ON blocks(lease_id)"
+                    )
+                    await self._db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_blocks_worker ON blocks(worker_id)"
+                    )
+                except Exception:
+                    logger.exception("V6 blocks table migration failed")
 
             await self._db.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",

@@ -106,7 +106,10 @@ bool WorkerReporter::sendBlockFound(const std::string& lease_id,
 	std::string topic = mqtt_->buildTopic(MqttClient::TOPIC_BLOCK);
 	bool ok = mqtt_->publish(topic, payload);
 	if (ok) {
-		std::cout << GREEN << "MQTT: Block reported for lease " << lease_id << RESET << std::endl;
+		if (lease_id.empty())
+			std::cout << GREEN << "MQTT: Self-mined block reported" << RESET << std::endl;
+		else
+			std::cout << GREEN << "MQTT: Block reported for lease " << lease_id << RESET << std::endl;
 	}
 	return ok;
 }

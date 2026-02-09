@@ -723,12 +723,9 @@ int main(int argc, const char *const *argv)
                 return;
             }
 
-            // Report block to platform if in platform mining mode
+            // Report block to platform if in platform mode
             if (globalPlatformManager && globalPlatformManager->isRunning()) {
-                MiningContext ctx = MiningCoordinator::getInstance().getContext();
-                if (ctx.mode == MiningMode::PLATFORM_MINING) {
-                    globalPlatformManager->onBlockFound(hashed_data, key, "0x" + hexsalt, attempts, hashrate);
-                }
+                globalPlatformManager->onBlockFound(hashed_data, key, "0x" + hexsalt, attempts, hashrate);
             }
 
             std::ostringstream hashrateStream;

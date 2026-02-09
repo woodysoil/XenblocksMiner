@@ -107,6 +107,7 @@ _DASHBOARD_HTML = """\
   .badge-completed, .badge-COMPLETED { background: rgba(139,148,158,0.15); color: var(--text2); }
   .badge-error, .badge-ERROR { background: rgba(248,81,73,0.15); color: var(--red); }
   .badge-idle, .badge-IDLE, .badge-offline { background: rgba(139,148,158,0.1); color: var(--text2); }
+  .badge-self { background: rgba(210,153,34,0.15); color: var(--yellow); }
 
   /* Rent form */
   .rent-form {
@@ -161,6 +162,10 @@ _DASHBOARD_HTML = """\
       <div class="card-value yellow" id="card-blocks">-</div>
     </div>
     <div class="card">
+      <div class="card-label">Self-Mined</div>
+      <div class="card-value yellow" id="card-self-mined">-</div>
+    </div>
+    <div class="card">
       <div class="card-label">Settlements</div>
       <div class="card-value" id="card-settlements">-</div>
     </div>
@@ -183,7 +188,7 @@ _DASHBOARD_HTML = """\
   <div class="panel active" id="panel-workers">
     <table>
       <thead>
-        <tr><th>Worker ID</th><th>State</th><th>Reputation</th><th>GPUs</th><th>Memory</th><th>Hashrate</th><th>$/min</th><th>Duration</th><th>Address</th><th>Last HB</th></tr>
+        <tr><th>Worker ID</th><th>State</th><th>Reputation</th><th>GPUs</th><th>Memory</th><th>Hashrate</th><th>Self Blocks</th><th>$/min</th><th>Duration</th><th>Address</th><th>Last HB</th></tr>
       </thead>
       <tbody id="tbody-workers"></tbody>
     </table>
@@ -303,6 +308,7 @@ async function refresh() {
     document.getElementById('card-workers').textContent = st.workers ?? 0;
     document.getElementById('card-leases').textContent = st.active_leases ?? 0;
     document.getElementById('card-blocks').textContent = st.total_blocks ?? 0;
+    document.getElementById('card-self-mined').textContent = st.self_mined_blocks ?? 0;
     document.getElementById('card-settlements').textContent = st.total_settlements ?? 0;
     document.getElementById('card-mqtt').textContent = (st.mqtt_clients || []).length;
   }
@@ -337,6 +343,7 @@ async function refresh() {
         <td>${w.gpu_count}</td>
         <td>${w.total_memory_gb} GB</td>
         <td>${typeof w.hashrate === 'number' ? w.hashrate.toFixed(1) : w.hashrate || '-'} H/s</td>
+        <td>${w.self_blocks_found || 0}</td>
         <td>${price}</td>
         <td>${durRange}</td>
         <td>${truncate(w.eth_address, 14)}</td>
@@ -386,7 +393,7 @@ async function refresh() {
         ? (b.chain_verified ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
         : '-';
       tbody.innerHTML += `<tr>
-        <td>${truncate(b.lease_id, 16)}</td>
+        <td>${b.lease_id ? truncate(b.lease_id, 16) : '<span class="badge badge-self">self</span>'}</td>
         <td>${b.worker_id}</td>
         <td>${truncate(b.block_hash || b.hash, 18)}</td>
         <td><code>${(b.key || '').substring(0, 16)}</code></td>

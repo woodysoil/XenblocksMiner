@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from server.chain_simulator import ChainSimulator
-    from server.storage import BlockRepo, LeaseRepo
+    from server.storage import BlockRepo, LeaseRepo, WorkerRepo
 
 logger = logging.getLogger("watcher")
 
@@ -26,10 +26,12 @@ class BlockWatcher:
         block_repo: "BlockRepo",
         lease_repo: "LeaseRepo",
         chain: Optional["ChainSimulator"] = None,
+        worker_repo: Optional["WorkerRepo"] = None,
     ):
         self._blocks = block_repo
         self._leases = lease_repo
         self._chain = chain
+        self._workers = worker_repo
 
     async def handle_block_found(self, msg: dict, worker_id_from_topic: str):
         """Process a block_found message from a worker."""
@@ -41,6 +43,13 @@ class BlockWatcher:
         attempts = msg.get("attempts", 0)
         hashrate = msg.get("hashrate", "0.0")
         timestamp = msg.get("timestamp", 0)
+
+        # Self-mined block (no lease)
+        if not lease_id:
+            await self._handle_self_mined_block(
+                worker_id, block_hash, key, account, attempts, hashrate,
+            )
+            return
 
         # Verify the lease exists
         lease = await self._leases.get(lease_id)
@@ -104,6 +113,31 @@ class BlockWatcher:
             "Block recorded: lease=%s worker=%s hash=%s..%s prefix_valid=%s chain_verified=%s (verified_total=%d)",
             lease_id, worker_id, block_hash[:8], block_hash[-4:],
             prefix_valid, chain_verified, blocks_count,
+        )
+
+    async def _handle_self_mined_block(
+        self, worker_id: str, block_hash: str, key: str,
+        account: str, attempts: int, hashrate: str,
+    ):
+        """Record a block found during self-mining (no active lease)."""
+        await self._blocks.create(
+            lease_id="",
+            worker_id=worker_id,
+            block_hash=block_hash,
+            key=key,
+            account=account,
+            attempts=attempts,
+            hashrate=hashrate,
+            prefix_valid=True,
+            chain_verified=True,
+        )
+
+        if self._workers is not None:
+            await self._workers.increment_self_blocks(worker_id)
+
+        logger.info(
+            "Self-mined block recorded: worker=%s hash=%s..%s",
+            worker_id, block_hash[:8], block_hash[-4:],
         )
 
     async def get_blocks_for_lease(self, lease_id: str) -> List[dict]:

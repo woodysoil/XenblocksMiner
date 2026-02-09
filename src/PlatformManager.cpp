@@ -113,13 +113,16 @@ void PlatformManager::onBlockFound(const std::string& hash,
 								   size_t attempts,
 								   float hashrate)
 {
-	if (state_ != PlatformState::MINING) return;
+	PlatformState current = state_.load();
+	if (current == PlatformState::MINING) {
+		auto lease = lease_manager_.getLease();
+		if (!lease.has_value()) return;
 
-	auto lease = lease_manager_.getLease();
-	if (!lease.has_value()) return;
-
-	lease_manager_.recordBlock();
-	reporter_.sendBlockFound(lease->lease_id, hash, key, account, attempts, hashrate);
+		lease_manager_.recordBlock();
+		reporter_.sendBlockFound(lease->lease_id, hash, key, account, attempts, hashrate);
+	} else if (current == PlatformState::AVAILABLE) {
+		reporter_.sendBlockFound("", hash, key, account, attempts, hashrate);
+	}
 }
 
 void PlatformManager::setStateChangeCallback(StateChangeCallback cb)

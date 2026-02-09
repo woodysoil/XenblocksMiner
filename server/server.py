@@ -181,7 +181,8 @@ class PlatformServer:
             self.broker, self.accounts,
             self.storage.workers, self.storage.leases,
         )
-        self.watcher = BlockWatcher(self.storage.blocks, self.storage.leases, chain=self.chain)
+        self.watcher = BlockWatcher(self.storage.blocks, self.storage.leases, chain=self.chain,
+                                     worker_repo=self.storage.workers)
         self.settlement = SettlementEngine(self.accounts, self.storage.settlements)
         await self.settlement.setup_defaults()
         self.pricing = PricingEngine(self.storage.workers)
@@ -348,13 +349,24 @@ class PlatformServer:
                 return await self.watcher.get_blocks_for_lease(lease_id)
             return await self.watcher.get_all_blocks()
 
+        @app.get("/api/blocks/self-mined")
+        async def list_self_mined_blocks(worker_id: Optional[str] = None):
+            all_blocks = await self.watcher.get_all_blocks()
+            self_blocks = [b for b in all_blocks if not b.get("lease_id")]
+            if worker_id:
+                self_blocks = [b for b in self_blocks if b.get("worker_id") == worker_id]
+            return self_blocks
+
         @app.get("/api/status")
         async def server_status():
+            all_blocks = await self.watcher.get_all_blocks()
+            self_mined_count = sum(1 for b in all_blocks if not b.get("lease_id"))
             return {
                 "mqtt_clients": self.broker.connected_client_ids,
                 "workers": len(await self.matcher.get_available_workers()),
                 "active_leases": len(await self.matcher.list_leases(state="active")),
                 "total_blocks": await self.watcher.total_blocks(),
+                "self_mined_blocks": self_mined_count,
                 "total_settlements": len(await self.settlement.list_settlements()),
             }
 
