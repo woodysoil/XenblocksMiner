@@ -158,6 +158,7 @@ void PlatformManager::onMessage(const std::string& topic, const std::string& pay
 	try {
 		auto msg = nlohmann::json::parse(payload);
 		std::string command = msg.value("command", "");
+		std::cerr << "[DEBUG] MQTT message: topic=" << topic << " command=" << command << std::endl;
 
 		if (command == "register_ack") {
 			handleRegisterAck(msg);
@@ -190,6 +191,7 @@ void PlatformManager::handleRegisterAck(const nlohmann::json& msg)
 
 void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 {
+	std::cerr << "[DEBUG] handleAssignTask called, state=" << platformStateToString(state_) << std::endl;
 	if (state_ != PlatformState::AVAILABLE) {
 		std::cerr << YELLOW << "PlatformManager: Received assign_task but not AVAILABLE (state="
 				  << platformStateToString(state_) << ")" << RESET << std::endl;
@@ -202,6 +204,8 @@ void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 	std::string prefix = msg.value("prefix", "");
 	int duration_sec = msg.value("duration_sec", 3600);
 
+	std::cerr << "[DEBUG] assign_task parsed: lease=" << lease_id << " prefix=" << prefix << " len=" << prefix.length() << std::endl;
+
 	// Validate prefix length
 	if (!prefix.empty() && prefix.length() != PLATFORM_PREFIX_LENGTH) {
 		std::cerr << RED << "PlatformManager: Invalid prefix length: " << prefix.length() << RESET << std::endl;
@@ -210,6 +214,7 @@ void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 	}
 
 	transitionTo(PlatformState::LEASED);
+	std::cerr << "[DEBUG] transitioned to LEASED, calling startLease" << std::endl;
 
 	// Start the lease
 	if (!lease_manager_.startLease(lease_id, consumer_id, consumer_address, prefix, duration_sec)) {
@@ -218,11 +223,15 @@ void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 		return;
 	}
 
+	std::cerr << "[DEBUG] startLease succeeded, switching to platform mining" << std::endl;
+
 	// Switch mining to platform mode
 	MiningContext ctx = lease_manager_.toMiningContext();
 	switchToPlatformMining(ctx);
 
+	std::cerr << "[DEBUG] switchToPlatformMining done, transitioning to MINING" << std::endl;
 	transitionTo(PlatformState::MINING);
+	std::cerr << "[DEBUG] handleAssignTask complete, state=MINING" << std::endl;
 }
 
 void PlatformManager::handleRelease(const nlohmann::json& msg)

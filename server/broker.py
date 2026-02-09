@@ -166,6 +166,7 @@ class MQTTBroker:
             raw = str(payload).encode("utf-8")
 
         pkt = self._build_publish_packet(topic, raw, qos)
+        delivered = False
         async with self._lock:
             for session in list(self._clients.values()):
                 for pattern in session.subscriptions:
@@ -173,9 +174,14 @@ class MQTTBroker:
                         try:
                             session.writer.write(pkt)
                             await session.writer.drain()
+                            logger.info("Delivered %s to %s (%d bytes)", topic, session.client_id, len(raw))
+                            delivered = True
                         except Exception:
                             logger.debug("Failed to deliver to %s", session.client_id)
                         break
+        if not delivered:
+            logger.warning("No subscribers for topic %s (clients: %s)", topic,
+                          [f"{s.client_id}:{s.subscriptions}" for s in self._clients.values()])
 
     @property
     def connected_client_ids(self) -> List[str]:
