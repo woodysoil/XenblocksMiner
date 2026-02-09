@@ -104,11 +104,13 @@ class ChainSimulator:
         base_difficulty: int = DEFAULT_DIFFICULTY,
         difficulty_adjust_interval: int = DIFFICULTY_ADJUST_INTERVAL,
         xuni_always_valid: bool = True,
+        block_marker: str = "",
     ):
         self._difficulty = base_difficulty
         self._base_difficulty = base_difficulty
         self._adjust_interval = difficulty_adjust_interval
         self._xuni_always_valid = xuni_always_valid  # Skip time-window check for testing
+        self._block_marker = block_marker or NORMAL_BLOCK_MARKER
 
         self._blocks: List[ChainBlock] = []
         self._next_block_id = 1
@@ -134,7 +136,7 @@ class ChainSimulator:
 
     def classify_block(self, hash_value: str) -> Optional[str]:
         """Determine block type from hash content. Returns None if invalid."""
-        if NORMAL_BLOCK_MARKER in hash_value:
+        if self._block_marker in hash_value:
             uppercase_count = sum(1 for c in hash_value if c.isupper())
             if uppercase_count >= SUPERBLOCK_UPPERCASE_THRESHOLD:
                 return "super"

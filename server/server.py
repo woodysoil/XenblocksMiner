@@ -121,10 +121,11 @@ class PlatformServer:
     """Single-process mock platform server combining MQTT broker, REST API, and services."""
 
     def __init__(self, mqtt_port: int = 1883, api_port: int = 8080, db_path: str = "data/marketplace.db",
-                 enable_chain: bool = True):
+                 enable_chain: bool = True, block_marker: str = ""):
         self.mqtt_port = mqtt_port
         self.api_port = api_port
         self.db_path = db_path
+        self._block_marker = block_marker
 
         # Broker (created immediately, no async needed)
         self.broker = MQTTBroker(port=mqtt_port)
@@ -156,7 +157,7 @@ class PlatformServer:
 
         # Embed chain simulator routes on the same app
         if self._enable_chain:
-            self.chain = ChainSimulator()
+            self.chain = ChainSimulator(block_marker=self._block_marker)
             self.chain.register_routes(self.app)
             logger.info("Chain simulator embedded on platform server")
 
@@ -582,11 +583,13 @@ def main():
     parser.add_argument("--api-port", type=int, default=8080, help="REST API port (default: 8080)")
     parser.add_argument("--db-path", default="data/marketplace.db", help="SQLite database path (default: data/marketplace.db)")
     parser.add_argument("--no-chain", action="store_true", help="Disable embedded chain simulator")
+    parser.add_argument("--block-marker", default="", help="Override block detection marker for testing (default: XEN11)")
     args = parser.parse_args()
 
     server = PlatformServer(
         mqtt_port=args.mqtt_port, api_port=args.api_port,
         db_path=args.db_path, enable_chain=not args.no_chain,
+        block_marker=args.block_marker,
     )
 
     logger.info("=" * 60)
@@ -596,6 +599,8 @@ def main():
     logger.info("  Dashboard:   http://localhost:%d/dashboard", args.api_port)
     logger.info("  Database:    %s", args.db_path)
     logger.info("  Chain sim:   %s", "enabled" if not args.no_chain else "disabled")
+    if args.block_marker:
+        logger.info("  Block marker: %s (test override)", args.block_marker)
     logger.info("=" * 60)
 
     try:

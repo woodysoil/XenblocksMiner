@@ -75,10 +75,11 @@ int MineUnit::runMineLoop()
 
 		std::vector<HashItem> batchItems = batchCompute(keyGenerator, extractedSalt);
 
+		std::string blockPattern = globalTestBlockPattern.empty() ? "XEN11" : globalTestBlockPattern;
 		std::regex pattern(R"(XUNI\d)");
 		for (const auto& item : batchItems) {
 			attempts++;
-			if (item.hashed.find("XEN11") != std::string::npos) {
+			if (item.hashed.find(blockPattern) != std::string::npos) {
 				// std::cout << "XEN11 found Hash " << item.hashed << std::endl;
 				submitCallback(extractedSalt, item.key, item.hashed, attempts, hashrate);
 				attempts = 0;

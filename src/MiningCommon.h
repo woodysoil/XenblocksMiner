@@ -52,6 +52,7 @@ extern std::chrono::system_clock::time_point start_time;
 extern std::atomic<long> globalHashCount;
 
 extern std::string globalRpcLink;
+extern std::string globalTestBlockPattern;
 
 struct gpuInfo
 {

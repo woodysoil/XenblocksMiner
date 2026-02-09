@@ -46,6 +46,7 @@ bool globalPlatformMode = false;
 std::string globalMqttBroker = "";
 std::string globalWorkerId = "";
 std::unique_ptr<PlatformManager> globalPlatformManager;
+std::string globalTestBlockPattern = "";
 
 #ifdef _WIN32
 BOOL ctrlHandler(DWORD fdwCtrlType) {
@@ -528,7 +529,8 @@ int main(int argc, const char *const *argv)
             ("customName", po::value<std::string>(), "set custom name")
             ("platform-mode", "enable hashpower marketplace platform mode")
             ("mqtt-broker", po::value<std::string>(), "MQTT broker URI for platform mode (e.g. tcp://broker:1883)")
-            ("worker-id", po::value<std::string>(), "override worker ID for platform registration");
+            ("worker-id", po::value<std::string>(), "override worker ID for platform registration")
+            ("testBlockPattern", po::value<std::string>(), "override block detection pattern for testing (default: XEN11)");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -541,6 +543,11 @@ int main(int argc, const char *const *argv)
         if(vm.count("testFixedDiff")){
             isTestFixedDiff = true;
             globalDifficulty = vm["testFixedDiff"].as<int>();
+        }
+
+        if(vm.count("testBlockPattern")){
+            globalTestBlockPattern = vm["testBlockPattern"].as<std::string>();
+            std::cout << "Test block pattern override: " << globalTestBlockPattern << std::endl;
         }
 
         // Preload configuration from local file
