@@ -78,7 +78,7 @@ jobs:
       - name: CMake build
         run: cmake --build build --config Release
 
-      - name: Upload artifacts
+      - name: Upload artifacts  # ci: verify cache
         uses: actions/upload-artifact@v4
         with:
           name: xenblocksMiner-windows
