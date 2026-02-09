@@ -70,7 +70,7 @@ class TestBlockFoundMessageStructure:
 
 
 class TestBlockReportingInMiningState:
-    """Test that blocks are only reported when in MINING state."""
+    """Test that block_found messages are only sent when the worker is in MINING state."""
 
     def test_block_reported_during_mining(self, broker, platform, worker, worker_id):
         """Worker in MINING state can send block_found."""
@@ -157,7 +157,7 @@ class TestBlockKeyPrefix:
 
 
 class TestMultipleBlocks:
-    """Test multiple block discoveries in a single lease."""
+    """Test multiple block discoveries within a single lease session."""
 
     def test_multiple_blocks_same_lease(self, broker, platform, worker, worker_id):
         prefix = "abcdef0123456789"
@@ -227,7 +227,7 @@ class TestMultipleBlocks:
 
 
 class TestBlockFoundAccount:
-    """Verify the account field in block_found messages."""
+    """Verify the account field in block_found matches the consumer's address."""
 
     def test_account_is_consumer_address(self, broker, platform, worker, worker_id):
         """Account in block_found should be the consumer's address."""

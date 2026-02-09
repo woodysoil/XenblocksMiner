@@ -31,11 +31,13 @@ TOPIC_PLATFORM_CMD = "platform/command"
 
 @pytest.fixture
 def broker():
+    """Fresh MockMQTTBroker for each test."""
     return MockMQTTBroker()
 
 
 @pytest.fixture
 def miner_id():
+    """Default miner identifier for single-miner tests."""
     return "miner-gpu-001"
 
 
@@ -60,6 +62,7 @@ def miner_client(broker, miner_id):
 # ── Tests: topic matching ──────────────────────────────────────────────────
 
 class TestTopicMatching:
+    """Verify MQTT topic pattern matching with exact, +, and # wildcards."""
     def test_exact_match(self):
         assert mqtt_topic_matches("a/b/c", "a/b/c")
 
@@ -92,6 +95,7 @@ class TestTopicMatching:
 # ── Tests: broker basics ──────────────────────────────────────────────────
 
 class TestBrokerBasics:
+    """Verify core MockMQTTBroker functionality: connect, disconnect, pub/sub."""
     def test_create_and_connect(self, broker):
         client = broker.create_client("test-01")
         assert not client.is_connected
@@ -173,6 +177,7 @@ class TestBrokerBasics:
 # ── Tests: MQTT on_message callback ───────────────────────────────────────
 
 class TestOnMessageCallback:
+    """Verify that on_message callbacks fire correctly on incoming messages."""
     def test_callback_fires(self, broker):
         received = []
         sub = broker.create_client("sub")
@@ -336,6 +341,7 @@ class TestRegistrationFlow:
 # ── Tests: heartbeat ──────────────────────────────────────────────────────
 
 class TestHeartbeat:
+    """Verify heartbeat message routing and timeout detection."""
     def test_heartbeat_received(self, broker, miner_client, platform_client, miner_id):
         hb_topic = TOPIC_HEARTBEAT.format(miner_id=miner_id)
         miner_client.publish(hb_topic, {"miner_id": miner_id, "ts": time.time()})
@@ -364,6 +370,7 @@ class TestHeartbeat:
 # ── Tests: multiple miners ────────────────────────────────────────────────
 
 class TestMultipleMiners:
+    """Verify independent topic isolation for multiple connected miners."""
     def test_two_miners_independent(self, broker):
         platform = broker.create_client("platform")
         miner_a = broker.create_client("miner-a")

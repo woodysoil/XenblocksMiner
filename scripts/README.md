@@ -1,5 +1,28 @@
 # Scripts
 
+## run_mock_server.sh
+
+Convenience wrapper to start the mock platform server for development or
+manual testing. Automatically installs Python dependencies if missing.
+
+### Usage
+
+```bash
+# Start with default ports (MQTT 1883, API 8080)
+./scripts/run_mock_server.sh
+
+# Override ports
+./scripts/run_mock_server.sh --mqtt-port 11883 --api-port 18080
+
+# Custom database path
+./scripts/run_mock_server.sh --db-path /tmp/my-marketplace.db
+```
+
+All arguments are forwarded to `python3 -m server.server`. See the server
+documentation for the full list of options.
+
+---
+
 ## test_cpp_integration.sh
 
 End-to-end integration test that launches the mock platform server and the
@@ -59,9 +82,30 @@ Interactive demo of the hashpower marketplace using simulated Python workers
 (no CUDA GPU required). Starts the mock server, launches simulated workers,
 rents hashpower, watches blocks, and prints settlement.
 
+### Prerequisites
+
+- **Python 3** with mock server dependencies installed:
+  ```bash
+  pip install -r server/requirements.txt
+  ```
+
+### Usage
+
 ```bash
 ./scripts/demo.sh
 ```
+
+The demo uses hardcoded ports (MQTT=11883, API=18080) and runs 2 simulated
+workers with a block interval of 3 seconds for a 15-second mining session.
+It walks through the full lifecycle:
+
+1. Start mock platform server
+2. Launch simulated workers
+3. Verify worker registration
+4. Rent hashpower via REST API
+5. Wait and watch blocks being mined
+6. Stop lease and trigger settlement
+7. Print final summary (lease detail, account balances, settlements)
 
 ---
 

@@ -24,7 +24,11 @@ from .conftest import (
 
 
 class TestLeaseCompletionData:
-    """Verify all data needed for settlement is available after a lease completes."""
+    """Verify all data needed for settlement is available after a lease completes.
+
+    Settlement requires: block count, lease_id, worker_id, consumer address,
+    and block key prefix correctness.
+    """
 
     def test_completed_lease_has_block_count(self, broker, platform, worker, worker_id):
         """After lease release, platform knows how many blocks were found."""
@@ -145,7 +149,7 @@ class TestSettlementDataIntegrity:
 
 
 class TestMultiLeaseSettlement:
-    """Test settlement data across multiple leases."""
+    """Test settlement data integrity across multiple sequential leases."""
 
     def test_blocks_correctly_attributed_across_leases(self, broker, platform, worker, worker_id):
         """Blocks from different leases have correct lease_ids."""
@@ -200,7 +204,7 @@ class TestMultiLeaseSettlement:
 
 
 class TestStatusFlowForSettlement:
-    """Verify status updates that settlement logic might depend on."""
+    """Verify status update sequence that settlement logic depends on."""
 
     def test_completed_status_emitted(self, broker, platform, worker, worker_id):
         """After release, COMPLETED status should be visible."""

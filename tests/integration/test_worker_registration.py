@@ -202,7 +202,7 @@ class TestReRegistration:
 
 
 class TestRegistrationEdgeCases:
-    """Edge cases and boundary conditions for registration."""
+    """Edge cases and boundary conditions for worker registration."""
 
     def test_worker_with_custom_eth_address(self, broker, platform):
         w = WorkerSimulator(broker, "custom-addr",

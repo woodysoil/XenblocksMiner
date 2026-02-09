@@ -107,10 +107,13 @@ class BlockWatcher:
         )
 
     async def get_blocks_for_lease(self, lease_id: str) -> List[dict]:
+        """Return all recorded blocks for a given lease."""
         return await self._blocks.get_for_lease(lease_id)
 
     async def get_all_blocks(self) -> List[dict]:
+        """Return all recorded blocks."""
         return await self._blocks.get_all()
 
     async def total_blocks(self) -> int:
+        """Return the total number of recorded blocks."""
         return await self._blocks.count()

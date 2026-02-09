@@ -264,7 +264,7 @@ class TestPayloadSigning:
 # ── Tests: key injection boundary ─────────────────────────────────────────
 
 class TestKeyInjectionBoundary:
-    """Ensure prefix injection cannot exceed key boundaries."""
+    """Ensure prefix injection cannot produce keys that exceed HASH_LENGTH boundaries."""
 
     def test_prefix_plus_random_equals_hash_length(self):
         prefix = "a" * MAX_PLATFORM_PREFIX_LENGTH
@@ -294,7 +294,7 @@ class TestKeyInjectionBoundary:
 # ── Tests: devfee prefix safety ────────────────────────────────────────────
 
 class TestDevFeePrefixSafety:
-    """Ensure devfee prefixes cannot be spoofed in platform mode."""
+    """Ensure devfee prefixes (FFFFFFFF/EEEEEEEE) cannot be spoofed via platform mode."""
 
     def test_devfee_prefix_is_8_chars(self):
         assert len(DEVFEE_PREFIX) == 8
@@ -317,7 +317,7 @@ class TestDevFeePrefixSafety:
 # ── Tests: salt validation ─────────────────────────────────────────────────
 
 class TestSaltValidation:
-    """Validate salt derived from Ethereum addresses."""
+    """Validate salt derivation from Ethereum addresses (40 hex chars after 0x)."""
 
     def test_salt_from_valid_address(self):
         addr = "0x24691E54aFafe2416a8252097C9Ca67557271475"

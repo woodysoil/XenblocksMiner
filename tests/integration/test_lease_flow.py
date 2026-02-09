@@ -177,7 +177,7 @@ class TestLeaseRelease:
 
 
 class TestSequentialLeases:
-    """Test multiple leases in sequence."""
+    """Test multiple sequential lease assignments on the same worker."""
 
     def test_two_sequential_leases(self, broker, platform, worker, worker_id):
         platform.send_register_ack(worker_id, accepted=True)
@@ -218,7 +218,7 @@ class TestSequentialLeases:
 
 
 class TestPrefixValidation:
-    """Test prefix field in assign_task."""
+    """Test prefix field validation in assign_task messages."""
 
     def test_valid_16_char_prefix(self, broker, platform, worker, worker_id):
         platform.send_register_ack(worker_id, accepted=True)
@@ -242,7 +242,7 @@ class TestPrefixValidation:
 
 
 class TestDurationField:
-    """Test duration_sec in assign_task."""
+    """Test duration_sec field in assign_task messages."""
 
     def test_default_duration(self, broker, platform, worker, worker_id):
         platform.send_register_ack(worker_id, accepted=True)

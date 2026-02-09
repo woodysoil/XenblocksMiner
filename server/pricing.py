@@ -9,7 +9,6 @@ max_duration_sec columns).
 """
 
 import logging
-import time
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:

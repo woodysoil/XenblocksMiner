@@ -40,6 +40,8 @@ HEX_CHARS_LOWER = "0123456789abcdef"
 
 
 class RandomHexKeyGenerator:
+    """Python port of src/RandomHexKeyGenerator.h for test use."""
+
     def __init__(self, prefix: str = "", key_length: int = 64):
         self.total_length = key_length
         self.prefix = prefix.lower()
@@ -177,6 +179,8 @@ class SimulatedMiner:
 # ── Tests: key prefix injection in mining ──────────────────────────────────
 
 class TestKeyPrefixInMining:
+    """Verify key prefix injection through the SimulatedMiner mining flow."""
+
     USER = "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01"
 
     def test_self_mining_no_prefix(self):
@@ -290,6 +294,8 @@ class TestSimplifiedMining:
 # ── Tests: mode switching ──────────────────────────────────────────────────
 
 class TestModeSwitching:
+    """Test transitions between self-mining and platform mining modes."""
+
     USER = "0x" + "b" * 40
 
     def test_self_to_platform_to_self(self):
@@ -356,6 +362,8 @@ class TestModeSwitching:
 # ── Tests: DevFee rotation ────────────────────────────────────────────────
 
 class TestDevFeeRotation:
+    """Verify devfee batch counter wrapping and correct trigger timing."""
+
     USER = "0x" + "c" * 40
     DEVFEE = "0x" + "d" * 40
     ECO = "0x" + "e" * 40
@@ -400,6 +408,8 @@ class TestDevFeeRotation:
 # ── Tests: Argon2id integration (if available) ─────────────────────────────
 
 class TestArgon2Integration:
+    """Verify argon2id hashing when the argon2-cffi library is available."""
+
     USER = "0x" + "f" * 40
 
     @pytest.mark.skipif(not HAS_ARGON2, reason="argon2-cffi not installed")

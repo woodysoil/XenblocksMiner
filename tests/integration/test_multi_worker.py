@@ -111,7 +111,7 @@ class TestLeaseIsolation:
 
 
 class TestMultiWorkerBlocks:
-    """Test block reporting from multiple workers."""
+    """Test block reporting and attribution across multiple workers."""
 
     def test_blocks_attributed_to_correct_worker(self, broker, platform, worker_factory):
         w_a = worker_factory("worker-A")
@@ -174,7 +174,7 @@ class TestMultiWorkerBlocks:
 
 
 class TestMultiWorkerHeartbeats:
-    """Test heartbeat isolation between workers."""
+    """Test heartbeat isolation and correct attribution between workers."""
 
     def test_heartbeats_tracked_per_worker(self, broker, platform, worker_factory):
         w_a = worker_factory("worker-A")
@@ -207,7 +207,7 @@ class TestMultiWorkerHeartbeats:
 
 
 class TestMultiWorkerControlIsolation:
-    """Test that control commands target only the intended worker."""
+    """Test that control commands (pause/resume/shutdown) target only the intended worker."""
 
     def test_pause_one_worker_only(self, broker, platform, worker_factory):
         w_a = worker_factory("worker-A")
@@ -253,7 +253,7 @@ class TestMultiWorkerControlIsolation:
 
 
 class TestTopicIsolation:
-    """Verify topic namespacing prevents cross-worker interference."""
+    """Verify MQTT topic namespacing prevents cross-worker message interference."""
 
     def test_worker_only_receives_own_topics(self, broker, platform, worker_factory):
         """Worker-A should not receive messages for worker-B."""

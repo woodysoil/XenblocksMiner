@@ -21,6 +21,8 @@ from typing import Optional, Callable, Dict, Set
 # ── Python model of PlatformManager state machine ──────────────────────────
 
 class MinerState(enum.Enum):
+    """Platform leasing state machine states (mirrors PlatformManager.h PlatformState)."""
+
     IDLE = "IDLE"
     AVAILABLE = "AVAILABLE"
     LEASED = "LEASED"
@@ -41,10 +43,12 @@ LEGAL_TRANSITIONS: Dict[MinerState, Set[MinerState]] = {
 
 
 class InvalidTransitionError(Exception):
+    """Raised when an illegal state transition is attempted."""
     pass
 
 
 class StateTimeoutError(Exception):
+    """Raised when a state exceeds its configured timeout."""
     pass
 
 

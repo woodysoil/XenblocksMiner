@@ -35,25 +35,45 @@ Where `worker_id` is the machine-unique identifier (`machineId` global) and
 
 ## Message Dispatch
 
-Platform-to-worker messages on the `task` and `control` topics are dispatched
-by the `command` field in the JSON payload:
+Platform-to-worker messages arrive on two topics and are dispatched by
+different fields:
 
-- `task` topic: `register_ack`, `assign_task`, `release`
-- `control` topic: messages with an `action` field (`pause`, `resume`, `shutdown`)
+- **`task` topic**: dispatched by the `command` field -- `register_ack`,
+  `assign_task`, or `release`.
+- **`control` topic**: dispatched by the `action` field -- `pause`, `resume`,
+  or `shutdown`.
 
-If the `command` field does not match `register_ack`, `assign_task`, or
-`release`, the message is routed to the control handler which reads the
-`action` field.
+On the C++ side, if the `command` field does not match `register_ack`,
+`assign_task`, or `release`, the message is forwarded to the control handler
+which reads the `action` field instead.
 
 ## Schema Files
 
 - `worker_to_platform.json` - JSON Schema for all worker-published messages
 - `platform_to_worker.json` - JSON Schema for all platform-published messages
-- `examples/` - Example payloads for each message type
+- `examples/` - Example payloads for each message type:
+  - `register.json` - Worker registration
+  - `heartbeat.json` - Periodic heartbeat
+  - `status.json` - Status update with active lease
+  - `status_offline.json` - Status update going offline
+  - `block_found.json` - Block discovery report
+  - `register_ack_accepted.json` - Registration accepted
+  - `register_ack_rejected.json` - Registration rejected
+  - `assign_task.json` - Lease assignment
+  - `release.json` - Lease release
+  - `control_pause.json` - Pause command
+  - `control_resume.json` - Resume command
+  - `control_shutdown.json` - Shutdown command
+
+Note: The example files include `_description`, `_topic`, and `_source`
+metadata fields for documentation purposes. These fields are not part of the
+wire protocol and would not pass strict `additionalProperties: false` schema
+validation.
 
 ## Worker States
 
-The worker progresses through a 6-state machine:
+The worker progresses through a 6-state machine, plus a virtual `offline`
+state used in status messages when disconnecting:
 
 ```
 IDLE -> AVAILABLE -> LEASED -> MINING -> COMPLETED -> AVAILABLE
@@ -68,6 +88,7 @@ IDLE -> AVAILABLE -> LEASED -> MINING -> COMPLETED -> AVAILABLE
 | `MINING` | Actively mining for a consumer |
 | `COMPLETED` | Lease completed, transitioning back |
 | `ERROR` | Error state, will attempt recovery |
+| `offline` | Sent in status messages when the worker is shutting down (not a state machine state) |
 
 ## Key Constants
 

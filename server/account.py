@@ -31,22 +31,28 @@ class AccountService:
         self, account_id: str, role: str,
         balance: float = 0.0, eth_address: str = ""
     ) -> dict:
+        """Create a new account or return existing one."""
         acct = await self._repo.create(account_id, role, balance=balance, eth_address=eth_address)
         if acct:
             logger.info("Created/found account %s role=%s balance=%.4f", account_id, role, acct["balance"])
         return acct
 
     async def get_account(self, account_id: str) -> Optional[dict]:
+        """Retrieve an account by ID, or None if not found."""
         return await self._repo.get(account_id)
 
     async def get_or_create_provider(self, worker_id: str, eth_address: str) -> dict:
+        """Get an existing provider account or create one for the given worker."""
         return await self._repo.get_or_create_provider(worker_id, eth_address)
 
     async def deposit(self, account_id: str, amount: float) -> dict:
+        """Deposit funds into an account."""
         return await self._repo.deposit(account_id, amount)
 
     async def transfer(self, from_id: str, to_id: str, amount: float):
+        """Transfer funds between two accounts."""
         await self._repo.transfer(from_id, to_id, amount)
 
     async def list_accounts(self) -> Dict[str, dict]:
+        """Return all accounts as a dict keyed by account_id."""
         return await self._repo.list_all()

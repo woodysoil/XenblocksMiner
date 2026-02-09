@@ -1,5 +1,5 @@
 """
-broker.py - Embedded async MQTT broker using gmqtt for client connections.
+broker.py - Embedded async MQTT broker for client connections.
 
 This module wraps a lightweight pure-Python MQTT broker that listens on a
 configurable port (default 1883).  Workers connect to it via standard MQTT.

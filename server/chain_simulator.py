@@ -27,12 +27,10 @@ Usage (integrated into mock platform server):
 """
 
 import argparse
-import asyncio
 import logging
 import re
 import sys
 import time
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path

@@ -415,6 +415,7 @@ def platform(broker):
 
 @pytest.fixture
 def worker_id():
+    """Default worker ID used in single-worker integration tests."""
     return "test-worker-001"
 
 
@@ -447,11 +448,13 @@ def worker_factory(broker):
 
 @pytest.fixture
 def sample_lease_id():
+    """A unique lease ID for testing."""
     return f"lease-{uuid.uuid4()}"
 
 
 @pytest.fixture
 def sample_consumer_address():
+    """A valid-format consumer Ethereum address for testing."""
     return "0x" + "ee" * 20
 
 

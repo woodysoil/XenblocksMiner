@@ -155,7 +155,7 @@ class TestPrefixInjection:
 
 
 class TestPrefixLowercase:
-    """C++ lowercases the prefix; verify Python port does the same."""
+    """C++ lowercases the prefix; verify the Python port does the same."""
 
     def test_uppercase_prefix_lowered(self):
         gen = RandomHexKeyGenerator("AABBCCDD", HASH_LENGTH)
@@ -253,7 +253,11 @@ class TestDevFeePlatformPriority:
 # ── Tests: salt construction (mirrors MineUnit::runMineLoop) ───────────────
 
 class TestSaltConstruction:
-    """Validate the salt used for argon2id hashing."""
+    """Validate the salt selection logic used for argon2id hashing.
+
+    Mirrors the salt selection in MineUnit::runMineLoop, choosing between
+    user address, devfee address, and eco-devfee address based on batch count.
+    """
 
     USER_ADDRESS = "0x24691E54aFafe2416a8252097C9Ca67557271475"
     DEVFEE_ADDRESS = "0xDevFeeAddr000000000000000000000000000000"

@@ -26,26 +26,26 @@ _project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from server.broker import MQTTBroker
-from server.storage import StorageManager
-from server.account import AccountService
-from server.matcher import MatchingEngine
-from server.watcher import BlockWatcher
-from server.settlement import SettlementEngine
-from server.chain_simulator import ChainSimulator
-from server.pricing import PricingEngine
-from server.reputation import ReputationEngine
-from server.auth import AuthService, ensure_api_keys_for_defaults
-from server.dashboard import register_dashboard
-
 try:
-    from fastapi import Depends, FastAPI, Header, HTTPException
+    from fastapi import FastAPI, Header, HTTPException
     from pydantic import BaseModel
     import uvicorn
 except ImportError:
     print("ERROR: FastAPI and uvicorn are required. Install with:")
     print("  pip install fastapi uvicorn pydantic")
     sys.exit(1)
+
+from server.account import AccountService
+from server.auth import AuthService, ensure_api_keys_for_defaults
+from server.broker import MQTTBroker
+from server.chain_simulator import ChainSimulator
+from server.dashboard import register_dashboard
+from server.matcher import MatchingEngine
+from server.pricing import PricingEngine
+from server.reputation import ReputationEngine
+from server.settlement import SettlementEngine
+from server.storage import StorageManager
+from server.watcher import BlockWatcher
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -62,29 +62,41 @@ logger = logging.getLogger("server")
 # ---------------------------------------------------------------------------
 
 class RentRequest(BaseModel):
+    """Request body for renting hashpower from a worker."""
+
     consumer_id: str
     consumer_address: str
     duration_sec: int = 3600
     worker_id: Optional[str] = None
 
 class StopRequest(BaseModel):
+    """Request body for stopping an active lease."""
+
     lease_id: str
 
 class DepositRequest(BaseModel):
+    """Request body for depositing funds into an account."""
+
     amount: float
 
 class PricingRequest(BaseModel):
+    """Request body for setting worker pricing parameters."""
+
     price_per_min: float
     min_duration_sec: int = 60
     max_duration_sec: int = 86400
 
 class RegisterRequest(BaseModel):
+    """Request body for registering a new account."""
+
     account_id: str
     role: str  # "provider" or "consumer"
     eth_address: str = ""
     balance: float = 0.0
 
 class LoginRequest(BaseModel):
+    """Request body for logging in to an existing account."""
+
     account_id: str
 
 # ---------------------------------------------------------------------------
@@ -95,6 +107,7 @@ _TOPIC_RE = re.compile(r"^xenminer/([^/]+)/(\w+)$")
 
 
 def parse_topic(topic: str):
+    """Parse an MQTT topic into (worker_id, message_type), or (None, None) if invalid."""
     m = _TOPIC_RE.match(topic)
     if m:
         return m.group(1), m.group(2)
@@ -105,6 +118,8 @@ def parse_topic(topic: str):
 # ---------------------------------------------------------------------------
 
 class PlatformServer:
+    """Single-process mock platform server combining MQTT broker, REST API, and services."""
+
     def __init__(self, mqtt_port: int = 1883, api_port: int = 8080, db_path: str = "data/marketplace.db",
                  enable_chain: bool = True):
         self.mqtt_port = mqtt_port
@@ -135,7 +150,7 @@ class PlatformServer:
         self._enable_chain = enable_chain
 
         # FastAPI app
-        self.app = FastAPI(title="XenMiner Mock Platform", version="0.2.0")
+        self.app = FastAPI(title="XenMiner Mock Platform", version="0.3.0")
         self._register_routes()
         register_dashboard(self.app)
 
@@ -552,6 +567,7 @@ class PlatformServer:
         await self._uvicorn_server.serve()
 
     async def stop(self):
+        """Stop all services, broker, and the API server."""
         self._watchdog_task.cancel()
         await self.broker.stop()
         if self.storage:
@@ -560,6 +576,7 @@ class PlatformServer:
 
 
 def main():
+    """CLI entry point for the mock platform server."""
     parser = argparse.ArgumentParser(description="XenMiner Mock Platform Server")
     parser.add_argument("--mqtt-port", type=int, default=1883, help="MQTT broker port (default: 1883)")
     parser.add_argument("--api-port", type=int, default=8080, help="REST API port (default: 8080)")

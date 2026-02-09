@@ -6,7 +6,7 @@
   "worker_id": "abc123def456",
   "eth_address": "0x1234567890abcdef1234567890abcdef12345678",
   "gpu_count": 2,
-  "total_memory_gb": 24,
+  "total_memory_gb": 34,
   "gpus": [
     {
       "index": 0,

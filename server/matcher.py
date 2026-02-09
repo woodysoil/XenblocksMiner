@@ -11,7 +11,7 @@ import secrets
 import time
 import uuid
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from server.broker import MQTTBroker
@@ -50,6 +50,7 @@ class MatchingEngine:
     # -------------------------------------------------------------------
 
     async def register_worker(self, msg: dict) -> bool:
+        """Register a new worker and send an acknowledgement via MQTT."""
         worker_id = msg["worker_id"]
         await self._workers.upsert(
             worker_id=worker_id,
@@ -73,6 +74,7 @@ class MatchingEngine:
         return True
 
     async def update_heartbeat(self, msg: dict):
+        """Update worker heartbeat and lease hashrate statistics."""
         worker_id = msg.get("worker_id", "")
         hashrate = msg.get("hashrate", 0.0)
         active_gpus = msg.get("active_gpus", 0)
@@ -83,12 +85,14 @@ class MatchingEngine:
             await self._leases.update_hashrate_stats(lease["lease_id"], hashrate)
 
     async def update_worker_state(self, msg: dict):
+        """Update a worker's state from an incoming status message."""
         worker_id = msg.get("worker_id", "")
         state = msg.get("state", "")
         await self._workers.update_state(worker_id, state)
         logger.debug("Worker %s state -> %s", worker_id, state)
 
     async def get_available_workers(self) -> List[dict]:
+        """Return all registered workers with their current status."""
         workers = await self._workers.list_all()
         return [
             {
@@ -213,12 +217,15 @@ class MatchingEngine:
         return completed
 
     async def get_lease(self, lease_id: str) -> Optional[dict]:
+        """Retrieve a lease by ID."""
         return await self._leases.get(lease_id)
 
     async def get_active_lease_for_worker(self, worker_id: str) -> Optional[dict]:
+        """Return the active lease for a worker, if any."""
         return await self._leases.get_active_lease_for_worker(worker_id)
 
     async def list_leases(self, state: Optional[str] = None) -> List[dict]:
+        """List leases, optionally filtered by state."""
         leases = await self._leases.list_all(state=state)
         return [
             {

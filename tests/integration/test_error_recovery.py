@@ -186,7 +186,7 @@ class TestReleaseInInvalidStates:
 
 
 class TestControlActions:
-    """Verify all three control actions."""
+    """Verify all three control actions: pause, resume, and shutdown."""
 
     @pytest.mark.parametrize("action", ["pause", "resume", "shutdown"])
     def test_control_action_valid(self, action):
@@ -199,7 +199,7 @@ class TestControlActions:
 
 
 class TestGracefulRecoveryAfterLease:
-    """Test worker can recover and accept new lease after various disruptions."""
+    """Test that a worker can recover and accept new leases after various disruptions."""
 
     def test_new_lease_after_release(self, broker, platform, worker, worker_id):
         platform.send_register_ack(worker_id, accepted=True)
