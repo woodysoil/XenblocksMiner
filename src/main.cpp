@@ -819,7 +819,7 @@ int main(int argc, const char *const *argv)
             }
         };
 
-        if (!isTestFixedDiff) {
+        if (!isTestFixedDiff || globalPlatformMode) {
             std::lock_guard<std::mutex> lock(mtx_submit);
             taskQueue.push(std::move(task));
         } else {
