@@ -1,31 +1,85 @@
 name: Windows-build
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   job:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
     steps:
-      - uses: Jimver/cuda-toolkit@v0.2.14
+      - uses: Jimver/cuda-toolkit@v0.2.30
         id: cuda-toolkit
         with:
-          cuda: '11.8.0'
-        
+          cuda: '12.6.3'
+          method: network
+          sub-packages: '["nvcc", "cudart", "nvml_dev", "visual_studio_integration"]'
+          use-github-cache: true
+
       - uses: actions/checkout@v4
         with:
           submodules: true
 
       - uses: lukka/get-cmake@latest
 
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set CUDA host compiler and trim PATH
+        shell: pwsh
+        run: |
+          $cl = (Get-Command cl.exe).Source
+          echo "CUDAHOSTCXX=$cl" >> $env:GITHUB_ENV
+          $keep = @()
+          foreach ($p in ($env:PATH -split ';')) {
+            if ($p -eq '') { continue }
+            if ($p -match '(?i)(CUDA|MSVC|Visual Studio|Windows Kits|cmake|ninja|vcpkg|\\git\\|System32|WindowsPowerShell|\\bin)') {
+              $keep += $p
+            }
+          }
+          $newPath = ($keep | Select-Object -Unique) -join ';'
+          Write-Host "Trimmed PATH from $($env:PATH.Length) to $($newPath.Length) chars"
+          echo "PATH=$newPath" >> $env:GITHUB_ENV
+
       - name: Restore from cache and setup vcpkg executable and data files.
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
-      - name: Run CMake+vcpkg+Ninja+CTest to build packages and generate/build/test the code.
-        uses: lukka/run-cmake@v10
+      - name: Restore vcpkg installed packages
+        uses: actions/cache@v4
         with:
-          configurePreset: 'ninja-multi-vcpkg'
-          buildPreset: 'ninja-vcpkg-release'
+          path: build/vcpkg_installed
+          key: vcpkg-installed-${{ runner.os }}-x64-windows-static-${{ hashFiles('vcpkg.json') }}
+
+      - name: CMake configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DCMAKE_CUDA_COMPILER="$env:CUDA_PATH/bin/nvcc.exe" `
+            -DCUDAToolkit_ROOT="$env:CUDA_PATH"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "=== CMakeError.log ==="
+            Get-ChildItem -Recurse -Filter "CMakeError.log" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"; Get-Content $_.FullName
+            }
+            exit 1
+          }
+
+      - name: CMake build
+        run: cmake --build build --config Release
+
+      - name: Upload artifacts  # ci: verify cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: xenblocksMiner-windows
+          path: build/bin
