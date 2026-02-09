@@ -1,0 +1,10 @@
+{
+  "_description": "Status update with active lease - sent on every state transition",
+  "_topic": "xenminer/abc123def456/status",
+  "_source": "WorkerReporter::sendStatusUpdate()",
+
+  "worker_id": "abc123def456",
+  "state": "MINING",
+  "lease_id": "lease-550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": 1700003600
+}

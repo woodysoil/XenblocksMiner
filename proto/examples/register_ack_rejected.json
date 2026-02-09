@@ -1,0 +1,9 @@
+{
+  "_description": "Registration rejected by platform",
+  "_topic": "xenminer/abc123def456/task",
+  "_source": "PlatformManager::handleRegisterAck()",
+
+  "command": "register_ack",
+  "accepted": false,
+  "reason": "version_unsupported"
+}

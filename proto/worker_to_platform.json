@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xenminer-worker-to-platform",
+  "title": "XenblocksMiner Worker-to-Platform MQTT Messages",
+  "description": "JSON schemas for all messages published by the worker to the platform via MQTT.",
+
+  "$defs": {
+    "gpu_info": {
+      "type": "object",
+      "description": "Individual GPU descriptor (from gpuInfo struct in MiningCommon.h)",
+      "properties": {
+        "index":     { "type": "integer", "description": "GPU device index" },
+        "name":      { "type": "string",  "description": "GPU device name" },
+        "memory_gb": { "type": "integer", "description": "GPU memory in GB (gpuInfo.memory)" },
+        "bus_id":    { "type": "integer", "description": "PCI bus ID (gpuInfo.busId)" }
+      },
+      "required": ["index", "name", "memory_gb", "bus_id"],
+      "additionalProperties": false
+    },
+
+    "register": {
+      "type": "object",
+      "description": "Worker registration message. Published to xenminer/{worker_id}/register on startup and on resume from IDLE. Source: WorkerReporter::sendRegistration()",
+      "properties": {
+        "worker_id":       { "type": "string",  "description": "Machine-unique identifier (machineId global)" },
+        "eth_address":     { "type": "string",  "description": "Worker's Ethereum address" },
+        "gpu_count":       { "type": "integer", "description": "Number of GPUs (gpus.size())" },
+        "total_memory_gb": { "type": "integer", "description": "Sum of all GPU memory in GB" },
+        "gpus": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/gpu_info" },
+          "description": "Array of GPU descriptors"
+        },
+        "version":   { "type": "string",  "description": "Software version string (hardcoded \"2.0.0\")" },
+        "timestamp": { "type": "integer", "description": "Unix epoch seconds (int64)" }
+      },
+      "required": ["worker_id", "eth_address", "gpu_count", "total_memory_gb", "gpus", "version", "timestamp"],
+      "additionalProperties": false
+    },
+
+    "heartbeat": {
+      "type": "object",
+      "description": "Periodic heartbeat message. Published to xenminer/{worker_id}/heartbeat every HEARTBEAT_INTERVAL_SEC (30s). Source: WorkerReporter::sendHeartbeat()",
+      "properties": {
+        "worker_id":       { "type": "string",  "description": "Machine-unique identifier" },
+        "hashrate":        { "type": "number",  "description": "Total hashrate across all GPUs (float)" },
+        "active_gpus":     { "type": "integer", "description": "Number of currently active GPUs" },
+        "accepted_blocks": { "type": "integer", "description": "Total accepted blocks (normal + super)" },
+        "difficulty":      { "type": "integer", "description": "Current mining difficulty (globalDifficulty)" },
+        "uptime_sec":      { "type": "integer", "description": "Worker uptime in seconds since start" },
+        "timestamp":       { "type": "integer", "description": "Unix epoch seconds (int64)" }
+      },
+      "required": ["worker_id", "hashrate", "active_gpus", "accepted_blocks", "difficulty", "uptime_sec", "timestamp"],
+      "additionalProperties": false
+    },
+
+    "status": {
+      "type": "object",
+      "description": "State change notification. Published to xenminer/{worker_id}/status on every state transition. Source: WorkerReporter::sendStatusUpdate()",
+      "properties": {
+        "worker_id": { "type": "string", "description": "Machine-unique identifier" },
+        "state": {
+          "type": "string",
+          "description": "Current platform state name",
+          "enum": ["IDLE", "AVAILABLE", "LEASED", "MINING", "COMPLETED", "ERROR", "offline"]
+        },
+        "lease_id":  { "type": "string", "description": "Active lease ID (optional, included when non-empty)" },
+        "detail":    { "type": "string", "description": "Additional detail string (optional, included when non-empty)" },
+        "timestamp": { "type": "integer", "description": "Unix epoch seconds (int64)" }
+      },
+      "required": ["worker_id", "state", "timestamp"],
+      "additionalProperties": false
+    },
+
+    "block_found": {
+      "type": "object",
+      "description": "Block-found report during a lease. Published to xenminer/{worker_id}/block when a block is found in MINING state. Source: WorkerReporter::sendBlockFound()",
+      "properties": {
+        "worker_id": { "type": "string",  "description": "Machine-unique identifier" },
+        "lease_id":  { "type": "string",  "description": "Active lease ID" },
+        "hash":      { "type": "string",  "description": "Block hash (hex string)" },
+        "key":       { "type": "string",  "description": "Mining key used (hex string)" },
+        "account":   { "type": "string",  "description": "Account/address the block was mined for" },
+        "attempts":  { "type": "integer", "description": "Number of hash attempts to find this block" },
+        "hashrate":  { "type": "string",  "description": "Hashrate at time of discovery (string, formatted to 2 decimal places)" },
+        "timestamp": { "type": "integer", "description": "Unix epoch seconds (int64)" }
+      },
+      "required": ["worker_id", "lease_id", "hash", "key", "account", "attempts", "hashrate", "timestamp"],
+      "additionalProperties": false
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/register" },
+    { "$ref": "#/$defs/heartbeat" },
+    { "$ref": "#/$defs/status" },
+    { "$ref": "#/$defs/block_found" }
+  ]
+}

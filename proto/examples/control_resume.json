@@ -1,0 +1,7 @@
+{
+  "_description": "Resume control command - re-registers and transitions to AVAILABLE",
+  "_topic": "xenminer/abc123def456/control",
+  "_source": "PlatformManager::handleControl()",
+
+  "action": "resume"
+}

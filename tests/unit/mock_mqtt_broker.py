@@ -175,19 +175,25 @@ class MockMQTTBroker:
         return client
 
     def _register_client(self, client: MockMQTTClient):
+        retained_to_deliver = []
         with self._lock:
             self._clients[client.client_id] = client
-            # Deliver retained messages for the client's subscriptions
+            # Collect retained messages to deliver outside the lock
             for pattern in client._subscriptions:
                 for topic, msg in self._retained.items():
                     if mqtt_topic_matches(pattern, topic):
-                        client._deliver(msg)
+                        retained_to_deliver.append(msg)
+        for msg in retained_to_deliver:
+            client._deliver(msg)
 
     def _unregister_client(self, client: MockMQTTClient):
         with self._lock:
             self._clients.pop(client.client_id, None)
 
     def _route_message(self, msg: MQTTMessage, sender_id: str = ""):
+        # Collect recipients under lock, then deliver outside to avoid
+        # deadlock when callbacks publish new messages (re-entrant _route_message).
+        recipients = []
         with self._lock:
             self._message_log.append(msg)
 
@@ -197,8 +203,11 @@ class MockMQTTBroker:
             for cid, client in self._clients.items():
                 for pattern in client._subscriptions:
                     if mqtt_topic_matches(pattern, msg.topic):
-                        client._deliver(msg)
+                        recipients.append(client)
                         break  # don't deliver same msg twice to same client
+
+        for client in recipients:
+            client._deliver(msg)
 
     @property
     def message_log(self) -> List[MQTTMessage]:

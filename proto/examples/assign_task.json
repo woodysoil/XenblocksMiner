@@ -1,0 +1,13 @@
+{
+  "_description": "Lease assignment from platform - assigns worker to mine for a consumer",
+  "_topic": "xenminer/abc123def456/task",
+  "_source": "PlatformManager::handleAssignTask()",
+  "_notes": "lease_id, consumer_id, consumer_address are required (accessed via msg.at()). prefix and duration_sec have defaults.",
+
+  "command": "assign_task",
+  "lease_id": "lease-550e8400-e29b-41d4-a716-446655440000",
+  "consumer_id": "consumer-7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "consumer_address": "0xaabbccddee1234567890abcdef1234567890abcd",
+  "prefix": "a1b2c3d4e5f6a7b8",
+  "duration_sec": 3600
+}

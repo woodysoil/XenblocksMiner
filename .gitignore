@@ -1,3 +1,5 @@
 **/build/
 **/vcpkg_installed/
-log*
+log*__pycache__/
+*.pyc
+data/

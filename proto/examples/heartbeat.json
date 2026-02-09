@@ -1,0 +1,13 @@
+{
+  "_description": "Periodic heartbeat - sent every 30 seconds",
+  "_topic": "xenminer/abc123def456/heartbeat",
+  "_source": "WorkerReporter::sendHeartbeat()",
+
+  "worker_id": "abc123def456",
+  "hashrate": 1250.75,
+  "active_gpus": 2,
+  "accepted_blocks": 15,
+  "difficulty": 8,
+  "uptime_sec": 7200,
+  "timestamp": 1700007200
+}
