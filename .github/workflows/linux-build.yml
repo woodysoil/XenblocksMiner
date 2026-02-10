@@ -64,6 +64,12 @@ jobs:
           cmake -B build -S . --preset ninja-multi-vcpkg
           cmake --build build --preset ninja-vcpkg-release
 
+    - name: Run Python tests
+      run: |
+          apt-get install -y python3 python3-pip -qq
+          pip3 install aiosqlite fastapi pydantic uvicorn httpx pytest pytest-asyncio --quiet
+          python3 -m pytest tests/ -v --tb=short --ignore=tests/integration/test_cpp_worker.py
+
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
