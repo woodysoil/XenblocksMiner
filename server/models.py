@@ -19,6 +19,11 @@ class DepositRequest(BaseModel):
     amount: float
 
 
+class WithdrawRequest(BaseModel):
+    amount: float
+    eth_address: str = ""
+
+
 class PricingRequest(BaseModel):
     price_per_min: float
     min_duration_sec: int = 60

@@ -5,7 +5,7 @@ from starlette.requests import Request
 
 from server.auth import SIGN_MESSAGE_TEMPLATE
 from server.deps import get_server
-from server.models import RegisterRequest, LoginRequest, DepositRequest, WalletVerifyRequest
+from server.models import RegisterRequest, LoginRequest, DepositRequest, WithdrawRequest, WalletVerifyRequest
 
 router = APIRouter()
 
@@ -141,4 +141,29 @@ async def deposit(
     return {
         "account_id": acct["account_id"],
         "balance": acct["balance"],
+    }
+
+
+@router.post("/api/accounts/{account_id}/withdraw")
+async def withdraw(
+    request: Request,
+    account_id: str,
+    req: WithdrawRequest,
+    x_api_key: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
+    srv = get_server(request)
+    caller = await srv.auth.get_current_account(x_api_key=x_api_key, authorization=authorization)
+    if caller["role"] != "admin" and caller["account_id"] != account_id:
+        raise HTTPException(status_code=403, detail="You can only withdraw from your own account")
+    try:
+        acct = await srv.accounts.withdraw(account_id, req.amount)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Account not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "account_id": acct["account_id"],
+        "balance": acct["balance"],
+        "withdrawn": req.amount,
     }

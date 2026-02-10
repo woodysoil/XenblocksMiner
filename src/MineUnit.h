@@ -7,7 +7,7 @@
 #include "MiningCommon.h"
 #include "argon2-common.h"
 #include "argon2params.h"
-#include "kernelrunner.h"
+#include "ComputeBackend.h"
 
 class RandomHexKeyGenerator;
 
@@ -19,7 +19,7 @@ struct HashItem {
 class MineUnit
 {
 private:
-	std::size_t deviceIndex;
+	ComputeBackend& backend_;
 	std::size_t difficulty;
 	std::size_t batchSize = 1;
 	Argon2Params params;
@@ -35,15 +35,11 @@ private:
 	int busId;
 
 	std::vector<std::string> passwordStorage;
-	KernelRunner kernelRunner;
 public:
-	MineUnit(std::size_t deviceIndex, std::size_t difficulty,
+	MineUnit(ComputeBackend& backend, std::size_t difficulty,
 		SubmitCallback submitCallback, StatCallback statCallback)
-		: deviceIndex(deviceIndex), difficulty(difficulty),
-		submitCallback(submitCallback), statCallback(statCallback),
-		kernelRunner(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13, 1,
-			1, Argon2Params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13, HASH_LENGTH, "abcdef", NULL, 0, NULL, 0,
-				1, difficulty, 1).getSegmentBlocks(), batchSize)
+		: backend_(backend), difficulty(difficulty),
+		submitCallback(submitCallback), statCallback(statCallback)
 	{
 	}
 
@@ -57,4 +53,3 @@ private:
 	void mine();
 	void stat();
 };
-

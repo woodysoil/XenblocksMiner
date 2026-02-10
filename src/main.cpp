@@ -17,6 +17,7 @@
 #include <nvml.h>
 #include "MiningCommon.h"
 #include "CudaDevice.h"
+#include "CudaBackend.h"
 #include "MineUnit.h"
 #include "AppConfig.h"
 #include "Logger.h"
@@ -302,27 +303,18 @@ void startServer() {
     app.port(42069).multithreaded().run();
 }
 
-void runMiningOnDevice(int deviceIndex,
+void runMiningOnDevice(ComputeBackend& backend,
                        SubmitCallback submitCallback,
                        StatCallback statCallback)
 {
-    cudaError_t cudaStatus = cudaSetDevice(deviceIndex);
-    if (cudaStatus != cudaSuccess)
-    {
-        std::cerr << "cudaSetDevice failed for device index: " << deviceIndex << std::endl;
-        return;
-    }
-    auto devices = CudaDevice::getAllDevices();
-    auto device = devices[deviceIndex];
-    // std::cout << "Starting mining on device #" << deviceIndex << ": "
-    //           << device.getName() << std::endl;
+    backend.activate();
 
     while (running)
     {
-        MineUnit unit(deviceIndex, globalDifficulty, submitCallback, statCallback);
+        MineUnit unit(backend, globalDifficulty, submitCallback, statCallback);
         if (unit.runMineLoop() < 0)
         {
-            std::cerr << "Mining loop failed on device #" << deviceIndex << std::endl;
+            std::cerr << "Mining loop failed on device #" << backend.getDeviceInfo().index << std::endl;
             break;
         }
     }
@@ -918,8 +910,13 @@ int main(int argc, const char *const *argv)
     }
     start_time = std::chrono::system_clock::now();
 
+    std::map<int, std::unique_ptr<ComputeBackend>> backends;
     for (auto deviceIndex : usedDevices) {
-        std::thread t(runMiningOnDevice, deviceIndex, submitCallback, statCallback);
+        backends[deviceIndex] = std::make_unique<CudaBackend>(static_cast<int>(deviceIndex));
+    }
+
+    for (auto deviceIndex : usedDevices) {
+        std::thread t(runMiningOnDevice, std::ref(*backends[deviceIndex]), submitCallback, statCallback);
         t.detach();
     }
 

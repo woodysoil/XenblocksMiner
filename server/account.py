@@ -60,6 +60,9 @@ class AccountService:
         """Deposit funds into an account."""
         return await self._repo.deposit(account_id, amount)
 
+    async def withdraw(self, account_id: str, amount: float) -> dict:
+        return await self._repo.withdraw(account_id, amount)
+
     async def transfer(self, from_id: str, to_id: str, amount: float):
         """Transfer funds between two accounts."""
         await self._repo.transfer(from_id, to_id, amount)

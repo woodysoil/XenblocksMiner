@@ -4,7 +4,6 @@
 #include <iomanip>
 #include "RandomHexKeyGenerator.h"
 #include "Logger.h"
-#include "CudaDevice.h"
 #include "MiningCommon.h"
 #include "MiningCoordinator.h"
 using namespace std;
@@ -20,11 +19,12 @@ bool is_within_five_minutes_of_hour() {
 int MineUnit::runMineLoop()
 {// run mine loop in fixed diff until it's break
 	int batchComputeCount = 0;
-	cudaSetDevice(deviceIndex);
-	gpuName = CudaDevice(deviceIndex).getName();
-	busId = CudaDevice(deviceIndex).getPicBusId();
-	size_t freeMemory, totalMemory;
-	cudaMemGetInfo(&freeMemory, &totalMemory);
+	backend_.activate();
+	DeviceInfo devInfo = backend_.getDeviceInfo();
+	gpuName = devInfo.name;
+	busId = devInfo.busId;
+	size_t totalMemory = devInfo.totalMemoryBytes;
+	size_t freeMemory = backend_.getFreeMemory();
 	freeMemory -= 100*1024*1024; // reserve 100MB for other usage
 	if(freeMemory < 0) {
 		std::cout << "Not enough memory" << std::endl;
@@ -39,7 +39,13 @@ int MineUnit::runMineLoop()
 
 	start_time = std::chrono::system_clock::now();
 	RandomHexKeyGenerator keyGenerator("", HASH_LENGTH);
-	kernelRunner.init(batchSize);
+
+	uint32_t segBlocks = Argon2Params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
+		HASH_LENGTH, "abcdef", NULL, 0, NULL, 0,
+		1, difficulty, 1).getSegmentBlocks();
+	backend_.init(batchSize, argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
+		1, 1, segBlocks);
+
 	while (running) {
 
 		{
@@ -161,8 +167,8 @@ std::vector<HashItem> MineUnit::batchCompute(RandomHexKeyGenerator& keyGenerator
 		setPassword(i, keyGenerator.nextRandomKey());
 	}
 
-	kernelRunner.run();
-	kernelRunner.finish();
+	backend_.run();
+	backend_.finish();
 
 	std::vector<HashItem> hashItems;
 
@@ -180,7 +186,7 @@ std::vector<HashItem> MineUnit::batchCompute(RandomHexKeyGenerator& keyGenerator
 
 void MineUnit::setPassword(std::size_t index, std::string pwd)
 {
-	params.fillFirstBlocks(kernelRunner.getInputMemory(index), pwd.c_str(), pwd.size());
+	params.fillFirstBlocks(backend_.getInputMemory(index), pwd.c_str(), pwd.size());
 
 	if (passwordStorage.size() <= index) {
 		passwordStorage.resize(index + 1);
@@ -191,7 +197,7 @@ void MineUnit::setPassword(std::size_t index, std::string pwd)
 
 void MineUnit::getHash(std::size_t index, void* hash)
 {
-	params.finalize(hash, kernelRunner.getOutputMemory(index));
+	params.finalize(hash, backend_.getOutputMemory(index));
 }
 
 std::string MineUnit::getPW(std::size_t index)
@@ -204,14 +210,14 @@ std::string MineUnit::getPW(std::size_t index)
 
 void MineUnit::mine()
 {
-	
+
 }
 
 void MineUnit::stat()
 {
 	hashtotal += batchSize;
 	globalHashCount += batchSize;
-	
+
 	auto elapsed_time = chrono::system_clock::now() - start_time;
 	auto hours = chrono::duration_cast<chrono::hours>(elapsed_time).count();
 	auto minutes = chrono::duration_cast<chrono::minutes>(elapsed_time).count() % 60;
@@ -221,5 +227,5 @@ void MineUnit::stat()
 	hashrate = rate;
 
 	int memoryInGB = static_cast<int>(std::round(static_cast<float>(gpuMemory) / (1024 * 1024 * 1024)));
-	statCallback({ (int)deviceIndex, busId, gpuName, memoryInGB, usedMemory/(float)gpuMemory, 0, (float)rate, "", hashtotal });
+	statCallback({ (int)backend_.getDeviceInfo().index, busId, gpuName, memoryInGB, usedMemory/(float)gpuMemory, 0, (float)rate, "", hashtotal });
 }
