@@ -44,6 +44,8 @@ class MatchingEngine:
         self._workers = worker_repo
         self._leases = lease_repo
         self._lock = asyncio.Lock()
+        # Ephemeral runtime config reported by workers (not persisted to DB)
+        self._worker_config: dict[str, dict] = {}
 
     # -------------------------------------------------------------------
     # Worker management
@@ -79,6 +81,12 @@ class MatchingEngine:
         hashrate = msg.get("hashrate", 0.0)
         active_gpus = msg.get("active_gpus", 0)
         await self._workers.update_heartbeat(worker_id, hashrate, active_gpus)
+        # Store ephemeral config fields reported in heartbeat
+        self._worker_config[worker_id] = {
+            "current_address": msg.get("address", ""),
+            "current_prefix": msg.get("prefix", ""),
+            "current_block_pattern": msg.get("block_pattern", ""),
+        }
         # Update lease hashrate stats
         lease = await self._leases.get_active_lease_for_worker(worker_id)
         if lease and lease["state"] == "active":
@@ -108,6 +116,10 @@ class MatchingEngine:
                 "price_per_min": w.get("price_per_min", 0.60),
                 "min_duration_sec": w.get("min_duration_sec", 60),
                 "max_duration_sec": w.get("max_duration_sec", 86400),
+                "self_blocks_found": w.get("self_blocks_found", 0),
+                "current_address": self._worker_config.get(w["worker_id"], {}).get("current_address", ""),
+                "current_prefix": self._worker_config.get(w["worker_id"], {}).get("current_prefix", ""),
+                "current_block_pattern": self._worker_config.get(w["worker_id"], {}).get("current_block_pattern", ""),
             }
             for w in workers
         ]

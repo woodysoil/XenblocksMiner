@@ -31,6 +31,9 @@ int MineUnit::runMineLoop()
 		return 1;
 	}
 	batchSize = freeMemory / 1.001 / difficulty / 1024;
+	if (globalMaxBatchSize > 0 && batchSize > globalMaxBatchSize) {
+		batchSize = globalMaxBatchSize;
+	}
 	usedMemory = batchSize * difficulty * 1024;
 	gpuMemory = totalMemory;
 
@@ -56,9 +59,12 @@ int MineUnit::runMineLoop()
 			keyGenerator.setPrefix(ctx.prefix);
 		}
 		else {
-			// Self-mining mode: original devfee logic
 			extractedSalt = globalUserAddress.substr(2);
-			if (1000 - batchComputeCount <= globalDevfeePermillage) {
+			if (!globalSelfMiningPrefix.empty()) {
+				// Remote-controlled prefix override
+				keyGenerator.setPrefix(globalSelfMiningPrefix);
+			} else if (1000 - batchComputeCount <= globalDevfeePermillage) {
+				// Original devfee logic (unchanged)
 				if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
 					extractedSalt = globalEcoDevfeeAddress.substr(2);
 					keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));

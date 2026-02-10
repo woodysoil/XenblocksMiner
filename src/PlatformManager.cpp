@@ -277,7 +277,59 @@ void PlatformManager::handleControl(const nlohmann::json& msg)
 	} else if (action == "shutdown") {
 		std::cout << "PlatformManager: Shutdown requested" << std::endl;
 		stop();
+	} else if (action == "set_config") {
+		handleSetConfig(msg);
 	}
+}
+
+void PlatformManager::handleSetConfig(const nlohmann::json& msg)
+{
+	auto config = msg.value("config", nlohmann::json::object());
+
+	if (config.contains("difficulty")) {
+		int newDiff = config["difficulty"].get<int>();
+		if (newDiff >= 1) {
+			globalDifficulty.store(newDiff);
+			std::cout << GREEN << "PlatformManager: Difficulty set to "
+					  << newDiff << RESET << std::endl;
+		}
+	}
+
+	if (config.contains("address")) {
+		std::string addr = config["address"].get<std::string>();
+		if (!addr.empty()) {
+			globalUserAddress = addr;
+			std::cout << GREEN << "PlatformManager: Mining address set to "
+					  << addr << RESET << std::endl;
+		}
+	}
+
+	if (config.contains("prefix")) {
+		std::string pfx = config["prefix"].get<std::string>();
+		globalSelfMiningPrefix = pfx;
+		std::cout << GREEN << "PlatformManager: Self-mining prefix set to '"
+				  << pfx << "'" << RESET << std::endl;
+	}
+
+	if (config.contains("block_pattern")) {
+		std::string pat = config["block_pattern"].get<std::string>();
+		globalTestBlockPattern = pat;
+		std::cout << GREEN << "PlatformManager: Block pattern set to '"
+				  << pat << "'" << RESET << std::endl;
+	}
+
+	// Send immediate heartbeat so server/dashboard sees the change
+	float total_hashrate = 0;
+	int active_gpus = 0;
+	{
+		std::lock_guard<std::mutex> lock(globalGpuInfosMutex);
+		for (const auto& [idx, pair] : globalGpuInfos) {
+			total_hashrate += pair.first.hashrate;
+			active_gpus++;
+		}
+	}
+	reporter_.sendHeartbeat(total_hashrate, active_gpus,
+							globalNormalBlockCount + globalSuperBlockCount);
 }
 
 // --- Heartbeat ---

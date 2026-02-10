@@ -86,6 +86,12 @@ class PricingRequest(BaseModel):
     min_duration_sec: int = 60
     max_duration_sec: int = 86400
 
+class ControlRequest(BaseModel):
+    """Request body for sending a control command to a worker."""
+
+    action: str = "set_config"
+    config: dict = {}
+
 class RegisterRequest(BaseModel):
     """Request body for registering a new account."""
 
@@ -551,6 +557,29 @@ class PlatformServer:
             if caller and caller["role"] != "admin":
                 raise HTTPException(status_code=403, detail="Admin access required")
             return await self.settlement.list_settlements()
+
+        # --- Control endpoints (send commands to miners) ---
+
+        @app.post("/api/workers/{worker_id}/control")
+        async def send_control(worker_id: str, req: ControlRequest):
+            """Send a control command to a specific worker via MQTT."""
+            payload = {"action": req.action, "config": req.config}
+            await self.broker.publish(
+                f"xenminer/{worker_id}/control", payload
+            )
+            return {"status": "sent", "worker_id": worker_id, "action": req.action}
+
+        @app.post("/api/control/broadcast")
+        async def broadcast_control(req: ControlRequest):
+            """Send a control command to ALL connected workers."""
+            workers = await self.matcher.get_available_workers()
+            sent_to = []
+            for w in workers:
+                wid = w["worker_id"]
+                payload = {"action": req.action, "config": req.config}
+                await self.broker.publish(f"xenminer/{wid}/control", payload)
+                sent_to.append(wid)
+            return {"status": "sent", "workers": sent_to, "action": req.action}
 
     # -------------------------------------------------------------------
     # Run

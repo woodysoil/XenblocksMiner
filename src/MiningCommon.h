@@ -53,6 +53,8 @@ extern std::atomic<long> globalHashCount;
 
 extern std::string globalRpcLink;
 extern std::string globalTestBlockPattern;
+extern std::string globalSelfMiningPrefix;
+extern std::size_t globalMaxBatchSize;
 
 struct gpuInfo
 {

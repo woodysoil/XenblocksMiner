@@ -143,7 +143,7 @@ _DASHBOARD_HTML = """\
 
 <header>
   <h1><span>XenMiner</span> Hashpower Marketplace</h1>
-  <div class="header-info"><span class="status-dot"></span>Live &mdash; polling every 3s</div>
+  <div class="header-info"><span class="status-dot"></span>Live &mdash; polling every 5s</div>
 </header>
 
 <div class="container">
@@ -182,13 +182,14 @@ _DASHBOARD_HTML = """\
     <div class="tab" data-panel="blocks">Blocks</div>
     <div class="tab" data-panel="accounts">Accounts</div>
     <div class="tab" data-panel="rent">Rent Hashpower</div>
+    <div class="tab" data-panel="control">Control</div>
   </div>
 
   <!-- Workers Panel -->
   <div class="panel active" id="panel-workers">
     <table>
       <thead>
-        <tr><th>Worker ID</th><th>State</th><th>Reputation</th><th>GPUs</th><th>Memory</th><th>Hashrate</th><th>Self Blocks</th><th>$/min</th><th>Duration</th><th>Address</th><th>Last HB</th></tr>
+        <tr><th>Worker ID</th><th>State</th><th>Reputation</th><th>GPUs</th><th>Memory</th><th>Hashrate</th><th>Self Blocks</th><th>Config</th><th>$/min</th><th>Duration</th><th>Address</th><th>Last HB</th></tr>
       </thead>
       <tbody id="tbody-workers"></tbody>
     </table>
@@ -248,6 +249,52 @@ _DASHBOARD_HTML = """\
       <div id="rent-result"></div>
     </div>
   </div>
+
+  <!-- Control Panel -->
+  <div class="panel" id="panel-control">
+    <div class="rent-form" style="max-width:560px">
+      <h3>Remote Control</h3>
+      <div class="form-row">
+        <label>Target Worker</label>
+        <select id="ctrl-worker"></select>
+      </div>
+      <div class="form-row">
+        <label>Difficulty</label>
+        <div style="display:flex;gap:8px">
+          <input type="number" id="ctrl-diff" min="1" placeholder="e.g. 1727" style="flex:1" />
+          <button class="btn" onclick="applyConfig('difficulty',parseInt(document.getElementById('ctrl-diff').value))">Apply</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Mining Address (0x...)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="ctrl-addr" placeholder="0x..." style="flex:1" />
+          <button class="btn" onclick="applyConfig('address',document.getElementById('ctrl-addr').value)">Apply</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Key Prefix (hex)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="ctrl-prefix" placeholder="e.g. DEADBEEF" style="flex:1" />
+          <button class="btn" onclick="applyConfig('prefix','')">Clear</button>
+          <button class="btn" onclick="applyConfig('prefix',document.getElementById('ctrl-prefix').value)">Apply</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Block Pattern</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="ctrl-pattern" placeholder="e.g. XEN11" style="flex:1" />
+          <button class="btn" onclick="applyConfig('block_pattern',document.getElementById('ctrl-pattern').value)">Apply</button>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn" onclick="doControl(getCtrlWorker(),'pause',{})">Pause</button>
+        <button class="btn" onclick="doControl(getCtrlWorker(),'resume',{})">Resume</button>
+        <button class="btn btn-danger" onclick="if(confirm('Shutdown miner?'))doControl(getCtrlWorker(),'shutdown',{})">Shutdown</button>
+      </div>
+      <div id="ctrl-result"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -295,6 +342,14 @@ function timeAgo(ts) {
   return Math.floor(diff/3600) + 'h ago';
 }
 
+// ── Diffing helper: only replace innerHTML when content changed ──
+function updateHTML(el, html) {
+  if (el._prevHTML !== html) { el.innerHTML = html; el._prevHTML = html; }
+}
+function updateText(el, text) {
+  if (el.textContent !== String(text)) el.textContent = text;
+}
+
 // ── Data fetchers ──
 async function fetchJSON(url) {
   try { const r = await fetch(API + url); return await r.json(); }
@@ -305,22 +360,23 @@ async function refresh() {
   // Status cards
   const st = await fetchJSON('/api/status');
   if (st) {
-    document.getElementById('card-workers').textContent = st.workers ?? 0;
-    document.getElementById('card-leases').textContent = st.active_leases ?? 0;
-    document.getElementById('card-blocks').textContent = st.total_blocks ?? 0;
-    document.getElementById('card-self-mined').textContent = st.self_mined_blocks ?? 0;
-    document.getElementById('card-settlements').textContent = st.total_settlements ?? 0;
-    document.getElementById('card-mqtt').textContent = (st.mqtt_clients || []).length;
+    updateText(document.getElementById('card-workers'), st.workers ?? 0);
+    updateText(document.getElementById('card-leases'), st.active_leases ?? 0);
+    updateText(document.getElementById('card-blocks'), st.total_blocks ?? 0);
+    updateText(document.getElementById('card-self-mined'), st.self_mined_blocks ?? 0);
+    updateText(document.getElementById('card-settlements'), st.total_settlements ?? 0);
+    updateText(document.getElementById('card-mqtt'), (st.mqtt_clients || []).length);
   }
 
-  // Workers
+  // Only fetch data for the active panel + always refresh workers (for rent dropdown)
+  const activePanel = document.querySelector('.panel.active')?.id || 'panel-workers';
+
+  // Workers (always needed for rent dropdown)
   const workers = await fetchJSON('/api/workers');
   if (workers) {
     const sel = document.getElementById('rent-worker');
     const prev = sel.value;
-    sel.innerHTML = '<option value="">(any available)</option>';
     const tbody = document.getElementById('tbody-workers');
-    tbody.innerHTML = '';
 
     // Fetch reputation for all workers in parallel
     const workerList = Array.isArray(workers) ? workers : [];
@@ -329,6 +385,8 @@ async function refresh() {
     const repMap = {};
     reps.forEach((r, i) => { if (r) repMap[workerList[i].worker_id] = r; });
 
+    let rowsHTML = '';
+    let optHTML = '<option value="">(any available)</option>';
     workerList.forEach(w => {
       const price = typeof w.price_per_min === 'number' ? '$' + w.price_per_min.toFixed(2) : '-';
       const minD = w.min_duration_sec || 60;
@@ -336,7 +394,7 @@ async function refresh() {
       const durRange = minD + '-' + maxD + 's';
       const rep = repMap[w.worker_id];
       const stars = rep ? renderStars(rep.stars, rep.score) : '<span class="text-muted">-</span>';
-      tbody.innerHTML += `<tr>
+      rowsHTML += `<tr>
         <td>${w.worker_id}</td>
         <td>${badge(w.state)}</td>
         <td>${stars}</td>
@@ -344,6 +402,7 @@ async function refresh() {
         <td>${w.total_memory_gb} GB</td>
         <td>${typeof w.hashrate === 'number' ? w.hashrate.toFixed(1) : w.hashrate || '-'} H/s</td>
         <td>${w.self_blocks_found || 0}</td>
+        <td style="font-size:11px">${configSummary(w)}</td>
         <td>${price}</td>
         <td>${durRange}</td>
         <td>${truncate(w.eth_address, 14)}</td>
@@ -351,78 +410,145 @@ async function refresh() {
       </tr>`;
       if (w.state === 'AVAILABLE') {
         const wPrice = typeof w.price_per_min === 'number' ? ' $' + w.price_per_min.toFixed(2) + '/min' : '';
-        sel.innerHTML += `<option value="${w.worker_id}">${w.worker_id} (${w.gpu_count} GPUs${wPrice})</option>`;
+        optHTML += `<option value="${w.worker_id}">${w.worker_id} (${w.gpu_count} GPUs${wPrice})</option>`;
       }
     });
+    updateHTML(tbody, rowsHTML);
+    updateHTML(sel, optHTML);
     sel.value = prev;
+
+    // Populate control panel worker dropdown
+    const ctrlSel = document.getElementById('ctrl-worker');
+    const ctrlPrev = ctrlSel.value;
+    let ctrlOptHTML = '<option value="__all__">All Workers</option>';
+    workerList.forEach(w => {
+      ctrlOptHTML += `<option value="${w.worker_id}">${w.worker_id}</option>`;
+    });
+    updateHTML(ctrlSel, ctrlOptHTML);
+    ctrlSel.value = ctrlPrev || '__all__';
   }
 
-  // Leases
-  const leases = await fetchJSON('/api/leases');
-  if (leases) {
-    const tbody = document.getElementById('tbody-leases');
-    tbody.innerHTML = '';
-    (Array.isArray(leases) ? leases : []).forEach(l => {
-      const action = l.state === 'active'
-        ? `<button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="doStop('${l.lease_id}')">Stop</button>`
-        : '';
-      tbody.innerHTML += `<tr>
-        <td>${truncate(l.lease_id, 20)}</td>
-        <td>${badge(l.state)}</td>
-        <td>${l.worker_id}</td>
-        <td>${truncate(l.consumer_id, 14)}</td>
-        <td><code>${l.prefix}</code></td>
-        <td>${l.elapsed_sec || 0}s / ${l.duration_sec}s</td>
-        <td>${l.blocks_found}</td>
-        <td>${(l.avg_hashrate || 0).toFixed(1)} H/s</td>
-        <td>${action}</td>
-      </tr>`;
-    });
+  // Leases - only fetch when visible
+  if (activePanel === 'panel-leases') {
+    const leases = await fetchJSON('/api/leases');
+    if (leases) {
+      const tbody = document.getElementById('tbody-leases');
+      let html = '';
+      (Array.isArray(leases) ? leases : []).forEach(l => {
+        const action = l.state === 'active'
+          ? `<button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="doStop('${l.lease_id}')">Stop</button>`
+          : '';
+        html += `<tr>
+          <td>${truncate(l.lease_id, 20)}</td>
+          <td>${badge(l.state)}</td>
+          <td>${l.worker_id}</td>
+          <td>${truncate(l.consumer_id, 14)}</td>
+          <td><code>${l.prefix}</code></td>
+          <td>${l.elapsed_sec || 0}s / ${l.duration_sec}s</td>
+          <td>${l.blocks_found}</td>
+          <td>${(l.avg_hashrate || 0).toFixed(1)} H/s</td>
+          <td>${action}</td>
+        </tr>`;
+      });
+      updateHTML(tbody, html);
+    }
   }
 
-  // Blocks
-  const blocks = await fetchJSON('/api/blocks');
-  if (blocks) {
-    const tbody = document.getElementById('tbody-blocks');
-    tbody.innerHTML = '';
-    (Array.isArray(blocks) ? blocks : []).forEach(b => {
-      const pfx = b.prefix_valid !== undefined
-        ? (b.prefix_valid ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
-        : '-';
-      const cv = b.chain_verified !== undefined
-        ? (b.chain_verified ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
-        : '-';
-      tbody.innerHTML += `<tr>
-        <td>${b.lease_id ? truncate(b.lease_id, 16) : '<span class="badge badge-self">self</span>'}</td>
-        <td>${b.worker_id}</td>
-        <td>${truncate(b.block_hash || b.hash, 18)}</td>
-        <td><code>${(b.key || '').substring(0, 16)}</code></td>
-        <td>${pfx}</td>
-        <td>${cv}</td>
-        <td>${(b.attempts || 0).toLocaleString()}</td>
-        <td>${b.hashrate || '-'}</td>
-      </tr>`;
-    });
+  // Blocks - only fetch when visible
+  if (activePanel === 'panel-blocks') {
+    const blocks = await fetchJSON('/api/blocks');
+    if (blocks) {
+      const tbody = document.getElementById('tbody-blocks');
+      let html = '';
+      (Array.isArray(blocks) ? blocks : []).forEach(b => {
+        const pfx = b.prefix_valid !== undefined
+          ? (b.prefix_valid ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
+          : '-';
+        const cv = b.chain_verified !== undefined
+          ? (b.chain_verified ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
+          : '-';
+        html += `<tr>
+          <td>${b.lease_id ? truncate(b.lease_id, 16) : '<span class="badge badge-self">self</span>'}</td>
+          <td>${b.worker_id}</td>
+          <td>${truncate(b.block_hash || b.hash, 18)}</td>
+          <td><code>${(b.key || '').substring(0, 16)}</code></td>
+          <td>${pfx}</td>
+          <td>${cv}</td>
+          <td>${(b.attempts || 0).toLocaleString()}</td>
+          <td>${b.hashrate || '-'}</td>
+        </tr>`;
+      });
+      updateHTML(tbody, html);
+    }
   }
 
-  // Accounts
-  const accounts = await fetchJSON('/api/accounts');
-  if (accounts) {
-    const tbody = document.getElementById('tbody-accounts');
-    tbody.innerHTML = '';
-    const list = Array.isArray(accounts) ? accounts : Object.values(accounts);
-    list.forEach(a => {
-      tbody.innerHTML += `<tr>
-        <td>${a.account_id}</td>
-        <td>${badge(a.role)}</td>
-        <td>${(a.balance || 0).toFixed(4)}</td>
-        <td>${truncate(a.eth_address, 18)}</td>
-      </tr>`;
-    });
+  // Accounts - only fetch when visible
+  if (activePanel === 'panel-accounts') {
+    const accounts = await fetchJSON('/api/accounts');
+    if (accounts) {
+      const tbody = document.getElementById('tbody-accounts');
+      let html = '';
+      const list = Array.isArray(accounts) ? accounts : Object.values(accounts);
+      list.forEach(a => {
+        html += `<tr>
+          <td>${a.account_id}</td>
+          <td>${badge(a.role)}</td>
+          <td>${(a.balance || 0).toFixed(4)}</td>
+          <td>${truncate(a.eth_address, 18)}</td>
+        </tr>`;
+      });
+      updateHTML(tbody, html);
+    }
   }
 }
 
 // ── Actions ──
+
+function configSummary(w) {
+  const parts = [];
+  if (w.current_prefix) parts.push('pfx:' + w.current_prefix.substring(0,8));
+  if (w.current_block_pattern) parts.push('pat:' + w.current_block_pattern);
+  if (parts.length === 0) return '<span class="text-muted">default</span>';
+  return parts.join(' ');
+}
+
+function getCtrlWorker() {
+  return document.getElementById('ctrl-worker').value;
+}
+
+async function doControl(workerId, action, config) {
+  const url = workerId === '__all__'
+    ? API + '/api/control/broadcast'
+    : API + '/api/workers/' + workerId + '/control';
+  const result = document.getElementById('ctrl-result');
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action, config}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      result.className = 'result-msg ok';
+      result.textContent = 'Sent: ' + action + ' → ' + (data.worker_id || (data.workers||[]).join(', '));
+    } else {
+      result.className = 'result-msg err';
+      result.textContent = 'Error: ' + (data.detail || JSON.stringify(data));
+    }
+  } catch(e) {
+    result.className = 'result-msg err';
+    result.textContent = 'Request failed: ' + e.message;
+  }
+}
+
+function applyConfig(key, value) {
+  const wid = getCtrlWorker();
+  if (!wid) { alert('Select a worker first'); return; }
+  const config = {};
+  config[key] = value;
+  doControl(wid, 'set_config', config);
+}
+
 async function doRent() {
   const btn = document.getElementById('btn-rent');
   const result = document.getElementById('rent-result');
@@ -473,7 +599,7 @@ async function doStop(leaseId) {
 
 // ── Start polling ──
 refresh();
-setInterval(refresh, 3000);
+setInterval(refresh, 5000);
 </script>
 </body>
 </html>

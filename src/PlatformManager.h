@@ -67,6 +67,7 @@ private:
 	void handleAssignTask(const nlohmann::json& msg);
 	void handleRelease(const nlohmann::json& msg);
 	void handleControl(const nlohmann::json& msg);
+	void handleSetConfig(const nlohmann::json& msg);
 
 	// Heartbeat thread
 	void heartbeatLoop();
