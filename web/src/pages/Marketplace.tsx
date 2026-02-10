@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { tw, colors } from "../design/tokens";
+import { Skeleton } from "../design";
 import GpuBadge from "../design/GpuBadge";
 import HashText from "../design/HashText";
 import EmptyState from "../design/EmptyState";
@@ -9,6 +10,7 @@ import Pagination from "../components/Pagination";
 import ViewToggle from "../design/ViewToggle";
 import type { ViewMode } from "../design/ViewToggle";
 import { usePersistedState } from "../hooks/usePersistedState";
+import { formatHashrateCompact } from "../utils/format";
 
 interface ProviderListing {
   worker_id: string;
@@ -19,12 +21,6 @@ interface ProviderListing {
   blocks_mined: number;
   state: string;
   reputation: number;
-}
-
-function formatHashrate(h: number): string {
-  if (h >= 1e6) return (h / 1e6).toFixed(2) + " MH";
-  if (h >= 1e3) return (h / 1e3).toFixed(2) + " KH";
-  return h.toFixed(1);
 }
 
 function Stars({ score }: { score: number }) {
@@ -88,6 +84,8 @@ export default function Marketplace() {
         <button
           onClick={() => setRentalsOpen(!rentalsOpen)}
           className={`w-full flex items-center justify-between px-5 py-3 ${tw.textPrimary} text-sm font-medium hover:bg-[#1a2029]/80 active:bg-[#1f2835] transition-colors rounded-[10px]`}
+          aria-expanded={rentalsOpen}
+          aria-label="Toggle active rentals"
         >
           <span>Active Rentals (0)</span>
           <svg
@@ -142,9 +140,44 @@ export default function Marketplace() {
 
       {/* Provider cards */}
       {loading ? (
-        <div className="text-center py-16">
-          <div className={`animate-pulse ${tw.textTertiary}`}>Loading providers…</div>
-        </div>
+        viewMode === "grid" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} variant="card" className="h-48" />
+            ))}
+          </div>
+        ) : (
+          <div className={`${tw.card} overflow-x-auto`}>
+            <table className="w-full text-sm min-w-[700px]">
+              <thead>
+                <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Rating</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[#1f2835]">
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-6 w-14 rounded-md" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : providers.length === 0 ? (
         <EmptyState
           icon={
@@ -173,7 +206,7 @@ export default function Marketplace() {
 
                   <div className="grid grid-cols-3 gap-3 mt-4">
                     <div>
-                      <p className={`text-sm font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
+                      <p className={`text-sm font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrateCompact(p.hashrate)}</p>
                       <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
                     </div>
                     <div>
@@ -236,7 +269,7 @@ export default function Marketplace() {
                         <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
                       </td>
                       <td className={`${tw.tableCell} font-mono tabular-nums`}>
-                        {formatHashrate(p.hashrate)} <span className={tw.textTertiary}>H/s</span>
+                        {formatHashrateCompact(p.hashrate)} <span className={tw.textTertiary}>H/s</span>
                       </td>
                       <td className={`${tw.tableCell} font-mono tabular-nums`} style={{ color: colors.warning.DEFAULT }}>
                         {p.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>

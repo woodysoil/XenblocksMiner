@@ -1,4 +1,4 @@
-import { colors } from './tokens';
+import { tw, colors } from './tokens';
 
 interface GpuBadgeProps {
   name: string;
@@ -16,12 +16,12 @@ export default function GpuBadge({ name, memory }: GpuBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 ${`bg-[${colors.bg.surface3}]`} text-xs font-mono px-2 py-1 rounded-md border border-[${colors.border.default}]`}
+      className={`inline-flex items-center gap-1.5 ${tw.surface3} text-xs font-mono px-2 py-1 rounded-md border border-[#2a3441]`}
       style={{ borderLeftWidth: borderColor !== 'transparent' ? 2 : undefined, borderLeftColor: borderColor }}
     >
-      <span className={`font-bold text-[${colors.text.primary}]`}>{name}</span>
+      <span className={`font-bold ${tw.textPrimary}`}>{name}</span>
       {memory != null && (
-        <span className={`text-[${colors.text.secondary}]`}>{memory} GB</span>
+        <span className={tw.textSecondary}>{memory} GB</span>
       )}
     </span>
   );

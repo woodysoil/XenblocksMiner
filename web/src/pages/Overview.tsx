@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { tw, colors } from "../design/tokens";
+import Skeleton from "../design/Skeleton";
 import Pagination from "../components/Pagination";
+import { formatHashrate, timeAgo } from "../utils/format";
 
 interface OverviewStats {
   total_workers: number;
@@ -34,22 +36,6 @@ interface NetworkInfo {
   total_workers: number;
   total_blocks: number;
   chain_blocks: number;
-}
-
-function formatHashrate(h: number): string {
-  if (h >= 1e9) return (h / 1e9).toFixed(2) + " GH/s";
-  if (h >= 1e6) return (h / 1e6).toFixed(2) + " MH/s";
-  if (h >= 1e3) return (h / 1e3).toFixed(2) + " KH/s";
-  return h.toFixed(1) + " H/s";
-}
-
-function timeAgo(ts: string | number): string {
-  const ms = typeof ts === "number" ? (ts > 1e12 ? ts : ts * 1000) : new Date(ts).getTime();
-  const sec = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return `${Math.floor(sec / 86400)}d ago`;
 }
 
 const eventDotColor: Record<string, string> = {
@@ -182,7 +168,11 @@ export default function Overview() {
               <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>{c.label}</span>
               {c.icon}
             </div>
-            <div className={`text-2xl font-bold ${tw.textPrimary} mt-3 tabular-nums`}>{c.value}</div>
+            {!stats ? (
+              <Skeleton className="h-7 w-24 mt-3" />
+            ) : (
+              <div className={`text-2xl font-bold ${tw.textPrimary} mt-3 tabular-nums`}>{c.value}</div>
+            )}
           </div>
         ))}
       </div>
@@ -196,7 +186,17 @@ export default function Overview() {
             <span className={`text-xs ${tw.textTertiary}`}>Last 24h</span>
           </div>
           <div className="px-5 pb-4 max-h-[400px] overflow-y-auto">
-            {activity.length === 0 ? (
+            {!activityData ? (
+              <div className="space-y-0">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 py-2.5 border-b border-[#1f2835]">
+                    <Skeleton variant="circle" className="w-2.5 h-2.5" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-14 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            ) : activity.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <span className={`text-sm ${tw.textSecondary}`}>No activity yet</span>
               </div>
@@ -216,7 +216,7 @@ export default function Overview() {
                     />
                   </div>
                   <span className={`flex-1 truncate ${tw.textPrimary}`}>{eventLabel(a)}</span>
-                  <span className={`text-xs ${tw.textTertiary} tabular-nums shrink-0 w-16 text-right`}>{timeAgo(a.timestamp)}</span>
+                  <span className={`text-xs ${tw.textTertiary} tabular-nums shrink-0 w-16 text-right`}>{timeAgo(a.timestamp).text}</span>
                 </div>
               ))
             )}
@@ -231,17 +231,26 @@ export default function Overview() {
         {/* Network Status */}
         <div className={`lg:col-span-2 ${tw.card} p-5`}>
           <h3 className={`text-sm font-semibold ${tw.textPrimary} mb-4`}>Network Status</h3>
-          {networkItems.map((item, i) => (
-            <div
-              key={item.label}
-              className={`flex justify-between items-center py-3 ${
-                i < networkItems.length - 1 ? "border-b border-[#1f2835]/60" : ""
-              }`}
-            >
-              <span className={`text-xs ${tw.textTertiary}`}>{item.label}</span>
-              <span className={`text-sm ${tw.textPrimary} font-medium tabular-nums`}>{item.value}</span>
-            </div>
-          ))}
+          {!network ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className={`flex justify-between items-center py-3 ${i < 3 ? "border-b border-[#1f2835]/60" : ""}`}>
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))
+          ) : (
+            networkItems.map((item, i) => (
+              <div
+                key={item.label}
+                className={`flex justify-between items-center py-3 ${
+                  i < networkItems.length - 1 ? "border-b border-[#1f2835]/60" : ""
+                }`}
+              >
+                <span className={`text-xs ${tw.textTertiary}`}>{item.label}</span>
+                <span className={`text-sm ${tw.textPrimary} font-medium tabular-nums`}>{item.value}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

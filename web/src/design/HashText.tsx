@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { colors } from './tokens';
+import { tw } from './tokens';
 
 interface HashTextProps {
   text: string;
@@ -23,7 +23,7 @@ export default function HashText({ text, chars = 8, mono = true, copyable = fals
 
   return (
     <span
-      className={`inline-flex items-center gap-1 group ${mono ? 'font-mono' : ''} text-[${colors.text.secondary}] hover:text-[${colors.text.primary}] transition-colors`}
+      className={`inline-flex items-center gap-1 group ${mono ? 'font-mono' : ''} ${tw.textSecondary} hover:text-[#eaecef] transition-colors`}
     >
       <span title={text}>{truncated}</span>
       {copyable && (

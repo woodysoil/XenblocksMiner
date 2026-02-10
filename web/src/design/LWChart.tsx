@@ -59,7 +59,11 @@ export default function LWChart({ data, height = 260, formatValue, visibleWindow
       rightPriceScale: {
         borderColor: colors.border.default,
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: "rgba(34,209,238,0.2)", labelBackgroundColor: "#1a2029" },
+        horzLine: { color: "rgba(34,209,238,0.2)", labelBackgroundColor: "#1a2029" },
+      },
       localization: {
         locale: "en-US",
         ...(fmt ? { priceFormatter: fmt } : {}),

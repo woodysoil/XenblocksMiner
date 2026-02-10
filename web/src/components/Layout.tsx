@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useDashboard } from "../context/DashboardContext";
 import { useWallet } from "../context/WalletContext";
@@ -115,6 +115,10 @@ export default function Layout() {
   const title = pageTitles[location.pathname] || "XenBlocks";
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    document.title = title === "Overview" ? "XenBlocks" : `${title} — XenBlocks`;
+  }, [location.pathname]);
+
   const truncAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
   const closeSidebar = () => setSidebarOpen(false);
@@ -149,6 +153,7 @@ export default function Layout() {
           <button
             onClick={closeSidebar}
             className="ml-auto md:hidden text-[#848e9c] hover:text-[#eaecef] transition-colors"
+            aria-label="Close menu"
           >
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M5 5l10 10M15 5L5 15" />
@@ -210,6 +215,7 @@ export default function Layout() {
             <button
               onClick={() => setSidebarOpen(true)}
               className="md:hidden text-[#848e9c] hover:text-[#eaecef] transition-colors -ml-1"
+              aria-label="Open menu"
             >
               <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M4 6h14M4 11h14M4 16h14" />
@@ -221,6 +227,7 @@ export default function Layout() {
             <input
               type="text"
               placeholder="Search..."
+              aria-label="Search"
               className="hidden sm:block bg-[#0b0e11] border border-[#2a3441] rounded-md px-3 py-1.5 text-xs text-[#eaecef] placeholder-[#5e6673] focus:border-[#22d1ee] focus:outline-none w-48 transition-colors"
             />
             {address ? (
@@ -240,7 +247,7 @@ export default function Layout() {
                 {connecting ? "Connecting..." : "Connect Wallet"}
               </button>
             )}
-            <button className="text-[#848e9c] hover:text-[#eaecef] transition-colors">
+            <button className="text-[#848e9c] hover:text-[#eaecef] transition-colors" aria-label="Notifications">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M13.5 6.75a4.5 4.5 0 10-9 0c0 5.25-2.25 6.75-2.25 6.75h13.5s-2.25-1.5-2.25-6.75" />
                 <path d="M10.3 15.75a1.5 1.5 0 01-2.6 0" />

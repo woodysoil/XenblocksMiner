@@ -136,7 +136,11 @@ export const chartTheme = {
       borderRadius: "6px",
       fontSize: "12px",
       color: "#eaecef",
+      padding: "8px 12px",
     },
+    labelStyle: { color: "#848e9c", fontSize: "11px", marginBottom: "4px" },
+    itemStyle: { color: "#eaecef", fontSize: "12px" },
   },
+  cursor: { stroke: "rgba(34,209,238,0.3)" },
   areaGradient: { start: "rgba(34,209,238,0.25)", end: "rgba(34,209,238,0)" },
 } as const;

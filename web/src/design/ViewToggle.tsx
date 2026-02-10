@@ -13,11 +13,12 @@ export default function ViewToggle({ value, onChange }: ViewToggleProps) {
   const inactive = "text-[#5e6673] hover:text-[#848e9c]";
 
   return (
-    <div className="flex items-center gap-0.5 bg-[#0b0e11] rounded-md p-0.5 border border-[#2a3441]">
+    <div className="flex items-center gap-0.5 bg-[#0b0e11] rounded-md p-0.5 border border-[#2a3441]" role="group" aria-label="View mode">
       <button
         onClick={() => onChange("grid")}
         className={`${base} ${value === "grid" ? active : inactive}`}
         title="Grid view"
+        aria-label="Grid view"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <rect x="1" y="1" width="6" height="6" rx="1" />
@@ -30,6 +31,7 @@ export default function ViewToggle({ value, onChange }: ViewToggleProps) {
         onClick={() => onChange("list")}
         className={`${base} ${value === "list" ? active : inactive}`}
         title="List view"
+        aria-label="List view"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <rect x="1" y="1.5" width="14" height="3" rx="1" />

@@ -24,7 +24,7 @@ export default function StatusBadge({ status, size = 'md', label: labelOverride 
   const text = size === 'sm' ? 'text-xs' : 'text-sm';
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${text} text-[${color}]`}>
+    <span className={`inline-flex items-center gap-1.5 ${text}`} style={{ color }}>
       <span
         className={`${dot} rounded-full ${pulse ? 'animate-pulse' : ''}`}
         style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}50` }}

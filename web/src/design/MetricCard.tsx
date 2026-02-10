@@ -11,12 +11,12 @@ interface MetricCardProps {
   loading?: boolean;
 }
 
-const variantBorder: Record<string, string> = {
-  accent: `border-t-2 border-t-[${colors.accent.DEFAULT}]`,
-  success: `border-t-2 border-t-[${colors.success.DEFAULT}]`,
-  danger: `border-t-2 border-t-[${colors.danger.DEFAULT}]`,
-  info: `border-t-2 border-t-[${colors.info.DEFAULT}]`,
-  warning: `border-t-2 border-t-[${colors.warning.DEFAULT}]`,
+const variantColor: Record<string, string> = {
+  accent: colors.accent.DEFAULT,
+  success: colors.success.DEFAULT,
+  danger: colors.danger.DEFAULT,
+  info: colors.info.DEFAULT,
+  warning: colors.warning.DEFAULT,
 };
 
 const variantGlow: Record<string, string> = {
@@ -33,8 +33,11 @@ export default function MetricCard({ label, value, delta, icon, variant = 'defau
 
   return (
     <div
-      className={`${tw.card} ${tw.cardHover} p-5 ${variantBorder[variant] ?? ''}`}
-      style={variantGlow[variant] ? { boxShadow: variantGlow[variant] } : undefined}
+      className={`${tw.card} ${tw.cardHover} p-5 ${variantColor[variant] ? 'border-t-2' : ''}`}
+      style={{
+        ...(variantGlow[variant] ? { boxShadow: variantGlow[variant] } : {}),
+        ...(variantColor[variant] ? { borderTopColor: variantColor[variant] } : {}),
+      }}
     >
       <div className="flex items-center justify-between">
         <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>
@@ -56,8 +59,9 @@ export default function MetricCard({ label, value, delta, icon, variant = 'defau
           {delta && (
             <span
               className={`text-xs mt-1 inline-block ${
-                isPositive ? `text-[${colors.success.DEFAULT}]` : isNegative ? `text-[${colors.danger.DEFAULT}]` : tw.textSecondary
+                !isPositive && !isNegative ? tw.textSecondary : ''
               }`}
+              style={isPositive ? { color: colors.success.DEFAULT } : isNegative ? { color: colors.danger.DEFAULT } : undefined}
             >
               {delta}
             </span>

@@ -6,30 +6,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { useDashboard } from "../context/DashboardContext";
 import { tw, colors, chartTheme } from "../design/tokens";
-import { StatusBadge, ChartCard } from "../design";
+import { StatusBadge, ChartCard, Skeleton } from "../design";
 import Pagination from "../components/Pagination";
+import { formatHashrate, timeAgo } from "../utils/format";
 import type { Worker, Block, HashratePoint } from "../types";
-
-function timeAgo(ts: number): { text: string; sec: number } {
-  const sec = Math.floor(Date.now() / 1000 - ts);
-  let text: string;
-  if (sec < 60) text = `${sec}s ago`;
-  else if (sec < 3600) text = `${Math.floor(sec / 60)}m ago`;
-  else text = `${Math.floor(sec / 3600)}h ago`;
-  return { text, sec };
-}
 
 function lastSeenColor(sec: number): string {
   if (sec < 300) return "text-[#0ecb81]";   // <5m  green
   if (sec < 1800) return "text-[#f0b90b]";  // <30m yellow
   return "text-[#f6465d]";                   // >30m red
-}
-
-function formatHashrate(h: number): string {
-  if (h >= 1e9) return (h / 1e9).toFixed(2) + " GH/s";
-  if (h >= 1e6) return (h / 1e6).toFixed(2) + " MH/s";
-  if (h >= 1e3) return (h / 1e3).toFixed(2) + " KH/s";
-  return h.toFixed(1) + " H/s";
 }
 
 function gpuLabel(w: Worker): string {
@@ -154,6 +139,8 @@ export default function Monitoring() {
                   <th
                     className={`${tw.tableHeader} px-4 py-3 text-left cursor-pointer select-none hover:text-[#eaecef]`}
                     onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                    aria-sort={sortDir === "asc" ? "ascending" : "descending"}
+                    aria-label="Sort by hashrate"
                   >
                     Hashrate{" "}
                     <span className="text-[10px] ml-0.5">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>
@@ -165,11 +152,17 @@ export default function Monitoring() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-[#848e9c] text-sm">
-                      Loading...
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b border-[#1f2835]">
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>
+                    </tr>
+                  ))
                 ) : fleetWorkers.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-[#848e9c] text-sm">
@@ -270,6 +263,9 @@ export default function Monitoring() {
                   />
                   <Tooltip
                     contentStyle={chartTheme.tooltip.contentStyle}
+                    labelStyle={chartTheme.tooltip.labelStyle}
+                    itemStyle={chartTheme.tooltip.itemStyle}
+                    cursor={{ stroke: chartTheme.cursor.stroke }}
                     formatter={(v: number) => [formatHashrate(v), "Hashrate"]}
                   />
                   <Area

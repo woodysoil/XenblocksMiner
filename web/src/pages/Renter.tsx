@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { tw } from "../design/tokens";
 import MetricCard from "../design/MetricCard";
 import EmptyState from "../design/EmptyState";
@@ -34,23 +35,30 @@ export default function Renter() {
       <h2 className={`text-xl font-semibold ${tw.textPrimary}`}>Renter Dashboard</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard label="Active Leases" value="0" variant="accent" />
-        <MetricCard label="Total Spent" value="0.00 XNM" variant="warning" />
+        <MetricCard label="Active Leases" value="—" variant="accent" />
+        <MetricCard label="Total Spent" value="—" variant="warning" />
         <MetricCard label="Avg Cost" value="—" variant="info" />
       </div>
 
-      <div className={`${tw.card} p-6`}>
-        <p className={`text-sm ${tw.textSecondary} text-center py-4`}>
-          No active leases — browse the Marketplace to rent hashpower
+      <div className={`${tw.card} p-8 text-center`}>
+        <h3 className={`text-base font-semibold ${tw.textPrimary} mb-2`}>Ready to rent hashpower?</h3>
+        <p className={`text-sm ${tw.textSecondary} mb-4`}>
+          Browse available miners on the Marketplace and start your first lease.
         </p>
+        <Link
+          to="/marketplace"
+          className={tw.btnPrimary}
+        >
+          Browse Marketplace
+        </Link>
       </div>
 
       <div>
         <h3 className={`${tw.sectionTitle} mb-3`}>Lease History</h3>
-        <div className={tw.card}>
-          <table className="w-full">
+        <div className={`${tw.card} overflow-hidden`}>
+          <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#1f2835]">
+              <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
                 <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
                 <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Duration</th>
                 <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Cost</th>
@@ -58,9 +66,9 @@ export default function Renter() {
               </tr>
             </thead>
             <tbody>
-              <tr className="hover:bg-[#1a2029] transition-colors">
-                <td colSpan={4} className="py-10">
-                  <p className={`text-sm ${tw.textTertiary} text-center`}>No lease history</p>
+              <tr>
+                <td colSpan={4} className="py-12 text-center">
+                  <p className={`text-sm ${tw.textSecondary}`}>No lease history yet</p>
                 </td>
               </tr>
             </tbody>

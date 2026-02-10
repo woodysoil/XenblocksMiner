@@ -6,7 +6,7 @@ import { tw, colors } from "../design/tokens";
 import MetricCard from "../design/MetricCard";
 import StatusBadge from "../design/StatusBadge";
 import GpuBadge from "../design/GpuBadge";
-import { ChartCard } from "../design";
+import { ChartCard, Skeleton } from "../design";
 import LWChart from "../design/LWChart";
 import EmptyState from "../design/EmptyState";
 import ConfirmDialog from "../design/ConfirmDialog";
@@ -15,6 +15,7 @@ import type { ViewMode } from "../design/ViewToggle";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useWallet } from "../context/WalletContext";
 import { apiFetch } from "../api";
+import { formatHashrate, formatUptime } from "../utils/format";
 import type { WalletSnapshot, WalletAchievements } from "../types";
 
 interface MyWorker {
@@ -35,21 +36,6 @@ interface Dashboard {
   total_blocks_mined: number;
   avg_hashrate: number;
   worker_count: number;
-}
-
-function formatHashrate(h: number): string {
-  if (h >= 1e9) return (h / 1e9).toFixed(2) + " GH/s";
-  if (h >= 1e6) return (h / 1e6).toFixed(2) + " MH/s";
-  if (h >= 1e3) return (h / 1e3).toFixed(2) + " KH/s";
-  return h.toFixed(1) + " H/s";
-}
-
-function formatUptime(sec: number): string {
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h`;
-  return `${Math.floor(sec / 60)}m`;
 }
 
 const stateToStatus: Record<string, "mining" | "available" | "leased"> = {
@@ -84,7 +70,7 @@ export default function Provider() {
   } | null>(null);
   const [viewMode, setViewMode] = usePersistedState<ViewMode>("provider-workers-view", "grid");
 
-  const { data: workersData } = useQuery({
+  const { data: workersData, isLoading: workersLoading } = useQuery({
     queryKey: ["provider", "workers", address],
     queryFn: () => apiFetch<{ items: MyWorker[] }>("/api/provider/workers"),
     refetchInterval: 10_000,
@@ -92,7 +78,7 @@ export default function Provider() {
   });
   const workers = workersData?.items ?? [];
 
-  const { data: dashboard } = useQuery({
+  const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ["provider", "dashboard", address],
     queryFn: () => apiFetch<Dashboard>("/api/provider/dashboard"),
     refetchInterval: 10_000,
@@ -154,6 +140,7 @@ export default function Provider() {
     );
   }
 
+  const metricsLoading = dashboardLoading || !dashboard;
   const totalEarned = dashboard?.total_earned ?? 0;
   const totalBlocks = achievements?.total_blocks ?? dashboard?.total_blocks_mined ?? 0;
   const avgHashrate = dashboard?.avg_hashrate ?? 0;
@@ -180,6 +167,7 @@ export default function Provider() {
             navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard!"));
           }}
           className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#1f2835] border border-[#2a3441] text-sm text-[#848e9c] hover:text-[#eaecef] transition-colors"
+          aria-label="Share mining stats"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
@@ -192,17 +180,21 @@ export default function Provider() {
 
       {/* Achievement Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <MetricCard label="Total Blocks" value={totalBlocks.toLocaleString()} variant="accent" />
-        <MetricCard label="Peak Hashrate" value={formatHashrate(peakHashrate)} variant="info" />
-        <MetricCard label="Total Earned" value={`${totalEarned.toFixed(2)} XNM`} variant="success" />
-        <MetricCard label="Mining Days" value={miningDays.toFixed(0)} variant="warning" />
+        <MetricCard label="Total Blocks" value={totalBlocks.toLocaleString()} variant="accent" loading={metricsLoading} />
+        <MetricCard label="Peak Hashrate" value={formatHashrate(peakHashrate)} variant="info" loading={metricsLoading} />
+        <MetricCard label="Total Earned" value={`${totalEarned.toFixed(2)} XNM`} variant="success" loading={metricsLoading} />
+        <MetricCard label="Mining Days" value={miningDays.toFixed(0)} variant="warning" loading={metricsLoading} />
         <div
           className={`${tw.card} ${tw.cardHover} p-5 border-t-2 border-t-[#5e6673]`}
         >
           <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>Workers</span>
-          <div className={`text-2xl font-bold ${tw.textPrimary} mt-1 tabular-nums`}>
-            {workers.filter(w => w.online).length}/{workers.length}
-          </div>
+          {workersLoading ? (
+            <Skeleton className="h-7 w-16 mt-1" />
+          ) : (
+            <div className={`text-2xl font-bold ${tw.textPrimary} mt-1 tabular-nums`}>
+              {workers.filter(w => w.online).length}/{workers.length}
+            </div>
+          )}
         </div>
       </div>
 
@@ -305,7 +297,44 @@ export default function Provider() {
             );
           })}
         </div>
-        {filteredWorkers.length === 0 ? (
+        {workersLoading ? (
+          viewMode === "grid" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} variant="card" className="h-48" />
+              ))}
+            </div>
+          ) : (
+            <div className={`${tw.card} overflow-x-auto`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b border-[#1f2835]">
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-6 w-14 rounded-md" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : filteredWorkers.length === 0 ? (
           <EmptyState
             title={filter === "ALL" ? "No workers found" : `No ${filterTabs.find((t) => t.key === filter)?.label.toLowerCase()} workers`}
             description={filter === "ALL" ? "Make sure your miners are registered with this wallet address." : "Try a different filter."}
