@@ -3,8 +3,10 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useDashboard } from "../context/DashboardContext";
+import { useWallet } from "../context/WalletContext";
 import { tw, colors, chartTheme } from "../design/tokens";
 import { Pill, StatusBadge, ChartCard } from "../design";
+import Pagination from "../components/Pagination";
 import type { Worker, Block, HashratePoint } from "../types";
 
 function timeAgo(ts: number): string {
@@ -22,18 +24,41 @@ function formatHashrate(h: number): string {
 }
 
 function gpuLabel(w: Worker): string {
-  if (w.gpus?.length) {
-    const name = w.gpus[0].name || "GPU";
-    return w.gpu_count > 1 ? `${w.gpu_count}x ${name}` : name;
+  if (!w.gpus?.length) return `${w.gpu_count} GPU`;
+
+  // Aggregate GPU types
+  const counts = new Map<string, number>();
+  for (const g of w.gpus) {
+    const short = (g.name || "GPU").replace(/^NVIDIA\s+/, "").replace(/GeForce\s+/, "");
+    counts.set(short, (counts.get(short) || 0) + 1);
   }
-  return `${w.gpu_count} GPU`;
+
+  if (counts.size === 1) {
+    // All same type
+    const [name, count] = [...counts.entries()][0];
+    return count > 1 ? `${count}x ${name}` : name;
+  } else if (counts.size === 2 && w.gpu_count <= 4) {
+    // 2 different types, show both
+    return [...counts.entries()].map(([n, c]) => c > 1 ? `${c}x ${n}` : n).join(" + ");
+  } else {
+    // Many mixed types
+    return `${w.gpu_count}x (mixed)`;
+  }
 }
 
 type SortDir = "asc" | "desc";
 
+const PAGE_SIZE = 20;
+
 export default function Monitoring() {
-  const { workers, stats, recentBlocks } = useDashboard();
+  const { workers: wsWorkers, stats, recentBlocks } = useDashboard();
+  const { address } = useWallet();
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [myOnly, setMyOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [fleetWorkers, setFleetWorkers] = useState<Worker[]>([]);
+  const [loading, setLoading] = useState(false);
   const [chartData, setChartData] = useState<{ time: string; hashrate: number }[]>([]);
 
   const fetchChart = useCallback(() => {
@@ -57,21 +82,63 @@ export default function Monitoring() {
       .catch(() => {});
   }, []);
 
+  const fetchFleet = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+      sort: sortDir,
+    });
+    if (myOnly && address) {
+      params.set("eth_address", address);
+    }
+    fetch(`/api/monitoring/fleet?${params}`)
+      .then((r) => r.json())
+      .then((res: { items: Worker[]; total_pages: number }) => {
+        setFleetWorkers(res.items || []);
+        setTotalPages(res.total_pages || 1);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [page, sortDir, myOnly, address]);
+
   useEffect(() => {
     fetchChart();
     const id = setInterval(fetchChart, 60000);
     return () => clearInterval(id);
   }, [fetchChart]);
 
-  const sorted = useMemo(() => {
-    const list = [...workers];
-    list.sort((a, b) => (sortDir === "asc" ? a.hashrate - b.hashrate : b.hashrate - a.hashrate));
-    return list;
-  }, [workers, sortDir]);
+  useEffect(() => {
+    fetchFleet();
+  }, [fetchFleet]);
+
+  // Apply WebSocket real-time updates to current page workers
+  useEffect(() => {
+    if (wsWorkers.length === 0 || fleetWorkers.length === 0) return;
+    const wsMap = new Map(wsWorkers.map((w) => [w.worker_id, w]));
+    setFleetWorkers((prev) =>
+      prev.map((w) => {
+        const updated = wsMap.get(w.worker_id);
+        if (!updated) return w;
+        return {
+          ...w,
+          hashrate: updated.hashrate,
+          active_gpus: updated.active_gpus,
+          last_heartbeat: updated.last_heartbeat,
+          online: updated.online,
+        };
+      }),
+    );
+  }, [wsWorkers]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [sortDir, myOnly]);
 
   const maxHashrate = useMemo(
-    () => Math.max(...workers.map((w) => w.hashrate), 1),
-    [workers],
+    () => Math.max(...fleetWorkers.map((w) => w.hashrate), 1),
+    [fleetWorkers],
   );
 
   const formatY = (v: number) => {
@@ -80,25 +147,49 @@ export default function Monitoring() {
     return String(Math.round(v));
   };
 
+  const gpuSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const w of fleetWorkers) {
+      if (!w.gpus?.length) continue;
+      for (const g of w.gpus) {
+        const short = (g.name || "GPU").replace(/^NVIDIA\s+/, "").replace(/GeForce\s+/, "");
+        counts.set(short, (counts.get(short) || 0) + 1);
+      }
+    }
+    return [...counts.entries()].map(([name, n]) => `${n}x ${name}`).join(", ") || `${stats.active_gpus} GPU`;
+  }, [fleetWorkers, stats.active_gpus]);
+
   return (
     <div className="space-y-6">
       {/* Stat pills */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Pill label="Online" value={stats.online} color="success" />
         <Pill label="Offline" value={stats.offline} color="danger" />
         <Pill label="Hashrate" value={formatHashrate(stats.total_hashrate)} color="accent" />
-        <Pill label="GPUs" value={stats.active_gpus} />
+        <Pill label="GPUs" value={gpuSummary} />
         <Pill label="Blocks/hr" value={stats.blocks_last_hour} />
+        {address && (
+          <button
+            onClick={() => setMyOnly((v) => !v)}
+            className={`ml-auto px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              myOnly
+                ? "bg-[#22d1ee]/20 border border-[#22d1ee]/50 text-[#22d1ee]"
+                : "bg-[#1f2835] border border-[#2a3441] text-[#848e9c] hover:text-[#eaecef]"
+            }`}
+          >
+            My Miners
+          </button>
+        )}
       </div>
 
       {/* Main grid */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* Worker Fleet */}
-        <div className={`xl:col-span-3 ${tw.card} overflow-hidden`}>
+        <div className={`xl:col-span-3 ${tw.card} overflow-hidden flex flex-col`}>
           <div className="px-4 pt-4 pb-2">
             <h3 className={`text-sm font-semibold ${tw.textPrimary}`}>Worker Fleet</h3>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-sm">
               <thead>
                 <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
@@ -117,55 +208,69 @@ export default function Monitoring() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((w) => {
-                  const pct = w.online ? (w.hashrate / maxHashrate) * 100 : 0;
-                  const status: "online" | "offline" | "leased" = !w.online
-                    ? "offline"
-                    : w.state === "LEASED"
-                      ? "leased"
-                      : "online";
-                  return (
-                    <tr key={w.worker_id} className={tw.tableRow}>
-                      <td className={`${tw.tableCell} font-mono text-xs`}>
-                        {w.worker_id.slice(0, 12)}
-                      </td>
-                      <td className={tw.tableCell}>
-                        <span className="bg-[#1f2835] px-2 py-0.5 rounded text-xs font-mono text-[#848e9c]">
-                          {gpuLabel(w)}
-                        </span>
-                      </td>
-                      <td className={tw.tableCell}>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-[#22d1ee] w-20">
-                            {w.online ? formatHashrate(w.hashrate) : "\u2014"}
-                          </span>
-                          <div className="flex-1 h-1.5 bg-[rgba(34,209,238,0.1)] rounded-full overflow-hidden max-w-[120px]">
-                            <div
-                              className="h-full rounded-full bg-[rgba(34,209,238,0.5)]"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className={tw.tableCell}>
-                        <StatusBadge status={status} size="sm" />
-                      </td>
-                      <td className={tw.tableCell}>{w.self_blocks_found}</td>
-                      <td className={`${tw.tableCell} text-[#5e6673] text-xs`}>
-                        {timeAgo(w.last_heartbeat)}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {workers.length === 0 && (
+                {loading ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-[#848e9c] text-sm">
-                      No workers connected
+                      Loading...
                     </td>
                   </tr>
+                ) : fleetWorkers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-[#848e9c] text-sm">
+                      {myOnly ? "No miners match your wallet address" : "No workers connected"}
+                    </td>
+                  </tr>
+                ) : (
+                  fleetWorkers.map((w) => {
+                    const pct = w.online ? (w.hashrate / maxHashrate) * 100 : 0;
+                    const status: "online" | "offline" | "leased" = !w.online
+                      ? "offline"
+                      : w.state === "LEASED"
+                        ? "leased"
+                        : "online";
+                    return (
+                      <tr key={w.worker_id} className={tw.tableRow}>
+                        <td className={`${tw.tableCell} font-mono text-xs`}>
+                          {w.worker_id}
+                        </td>
+                        <td className={tw.tableCell}>
+                          <span className="bg-[#1f2835] px-2 py-0.5 rounded text-xs font-mono text-[#848e9c]">
+                            {gpuLabel(w)}
+                          </span>
+                        </td>
+                        <td className={tw.tableCell}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-[#22d1ee] w-20">
+                              {w.online ? formatHashrate(w.hashrate) : "\u2014"}
+                            </span>
+                            <div className="flex-1 h-1.5 bg-[rgba(34,209,238,0.1)] rounded-full overflow-hidden max-w-[120px]">
+                              <div
+                                className="h-full rounded-full bg-[rgba(34,209,238,0.5)]"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className={tw.tableCell}>
+                          <StatusBadge status={status} size="sm" />
+                        </td>
+                        <td className={tw.tableCell}>{w.self_blocks_found}</td>
+                        <td className={`${tw.tableCell} text-[#5e6673] text-xs`}>
+                          {timeAgo(w.last_heartbeat)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="px-4 pb-4">
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
           </div>
         </div>
 
@@ -250,7 +355,7 @@ function BlockRow({ block: b, isNew }: { block: Block; isNew?: boolean }) {
     >
       <span className="font-mono truncate text-[#eaecef]">{b.hash.slice(0, 16)}\u2026</span>
       <div className="flex items-center gap-2 shrink-0">
-        <span className="font-mono text-[#848e9c]">{b.worker_id.slice(0, 8)}</span>
+        <span className="font-mono text-[#848e9c]">{b.worker_id}</span>
         {b.lease_id ? (
           <span className={tw.badgeInfo}>leased</span>
         ) : (

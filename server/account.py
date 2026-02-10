@@ -45,6 +45,17 @@ class AccountService:
         """Get an existing provider account or create one for the given worker."""
         return await self._repo.get_or_create_provider(worker_id, eth_address)
 
+    async def get_or_create_by_eth_address(self, address: str) -> dict:
+        """Get or create an account by Ethereum wallet address."""
+        acct = await self._repo.get_by_eth_address(address)
+        if acct is not None:
+            return acct
+        account_id = f"wallet-{address[:10].lower()}"
+        acct = await self._repo.create(account_id, "provider", eth_address=address)
+        if acct:
+            logger.info("Created wallet account %s for %s", account_id, address)
+        return acct
+
     async def deposit(self, account_id: str, amount: float) -> dict:
         """Deposit funds into an account."""
         return await self._repo.deposit(account_id, amount)

@@ -32,9 +32,32 @@ logger = logging.getLogger("fleet")
 
 GPU_PROFILES = [
     {"name": "NVIDIA GeForce RTX 4090", "memory_gb": 24, "hashrate_range": (150, 170)},
-    {"name": "NVIDIA GeForce RTX 3090", "memory_gb": 24, "hashrate_range": (90, 110)},
     {"name": "NVIDIA GeForce RTX 4080", "memory_gb": 16, "hashrate_range": (120, 140)},
-    {"name": "NVIDIA A100",             "memory_gb": 80, "hashrate_range": (200, 230)},
+    {"name": "NVIDIA GeForce RTX 4070 Ti", "memory_gb": 12, "hashrate_range": (95, 115)},
+    {"name": "NVIDIA GeForce RTX 4070", "memory_gb": 12, "hashrate_range": (80, 100)},
+    {"name": "NVIDIA GeForce RTX 3090 Ti", "memory_gb": 24, "hashrate_range": (100, 120)},
+    {"name": "NVIDIA GeForce RTX 3090", "memory_gb": 24, "hashrate_range": (90, 110)},
+    {"name": "NVIDIA GeForce RTX 3080 Ti", "memory_gb": 12, "hashrate_range": (80, 95)},
+    {"name": "NVIDIA GeForce RTX 3080", "memory_gb": 10, "hashrate_range": (70, 90)},
+    {"name": "NVIDIA GeForce RTX 3070", "memory_gb": 8, "hashrate_range": (55, 70)},
+    {"name": "NVIDIA GeForce RTX 3060 Ti", "memory_gb": 8, "hashrate_range": (45, 60)},
+    {"name": "NVIDIA A100", "memory_gb": 80, "hashrate_range": (200, 250)},
+    {"name": "NVIDIA A100", "memory_gb": 40, "hashrate_range": (180, 220)},
+    {"name": "NVIDIA H100", "memory_gb": 80, "hashrate_range": (280, 350)},
+    {"name": "NVIDIA L40", "memory_gb": 48, "hashrate_range": (160, 200)},
+    {"name": "NVIDIA RTX A6000", "memory_gb": 48, "hashrate_range": (140, 170)},
+    {"name": "NVIDIA RTX A5000", "memory_gb": 24, "hashrate_range": (100, 130)},
+    {"name": "AMD Radeon RX 7900 XTX", "memory_gb": 24, "hashrate_range": (110, 140)},
+    {"name": "AMD Radeon RX 7900 XT", "memory_gb": 20, "hashrate_range": (90, 115)},
+    {"name": "AMD Radeon RX 6900 XT", "memory_gb": 16, "hashrate_range": (70, 90)},
+]
+
+# Multi-GPU configurations (gpu_count, same_gpu probability)
+MULTI_GPU_CONFIGS = [
+    (1, 1.0),   # 50% single GPU
+    (2, 0.8),   # 25% dual GPU (80% same type)
+    (4, 0.9),   # 15% quad GPU (90% same type)
+    (8, 1.0),   # 10% 8-GPU rig (always same type)
 ]
 
 
@@ -42,7 +65,7 @@ GPU_PROFILES = [
 class SimWorker:
     worker_id: str
     eth_address: str
-    gpu_profile: dict
+    gpus: list  # List of GPU profiles
     client: mqtt.Client = field(init=False, repr=False)
     online: bool = True
     blocks_found: int = 0
@@ -55,8 +78,20 @@ class SimWorker:
             client_id=f"sim-{self.worker_id}",
             protocol=mqtt.MQTTv311,
         )
-        lo, hi = self.gpu_profile["hashrate_range"]
-        self.current_hashrate = random.uniform(lo, hi)
+        # Sum hashrate from all GPUs
+        total_hr = 0.0
+        for gpu in self.gpus:
+            lo, hi = gpu["hashrate_range"]
+            total_hr += random.uniform(lo, hi)
+        self.current_hashrate = total_hr
+
+    @property
+    def gpu_count(self) -> int:
+        return len(self.gpus)
+
+    @property
+    def total_memory_gb(self) -> int:
+        return sum(g["memory_gb"] for g in self.gpus)
 
 
 def make_eth_address() -> str:
@@ -65,7 +100,7 @@ def make_eth_address() -> str:
 
 class FleetSimulator:
     def __init__(self, n_workers: int, broker_host: str, broker_port: int,
-                 block_interval: float):
+                 block_interval: float, owner: str = ""):
         self.broker_host = broker_host
         self.broker_port = broker_port
         self.block_interval = block_interval
@@ -73,11 +108,33 @@ class FleetSimulator:
         self._stop = False
 
         for i in range(n_workers):
-            profile = random.choice(GPU_PROFILES)
+            # Decide GPU count: 50% 1-GPU, 25% 2-GPU, 15% 4-GPU, 10% 8-GPU
+            r = random.random()
+            if r < 0.5:
+                gpu_count, same_prob = 1, 1.0
+            elif r < 0.75:
+                gpu_count, same_prob = 2, 0.8
+            elif r < 0.9:
+                gpu_count, same_prob = 4, 0.9
+            else:
+                gpu_count, same_prob = 8, 1.0
+
+            # Generate GPU list
+            primary_gpu = random.choice(GPU_PROFILES)
+            gpus = []
+            for idx in range(gpu_count):
+                if idx == 0 or random.random() < same_prob:
+                    gpu = primary_gpu.copy()
+                else:
+                    gpu = random.choice(GPU_PROFILES).copy()
+                gpu["index"] = idx
+                gpu["bus_id"] = idx
+                gpus.append(gpu)
+
             w = SimWorker(
                 worker_id=f"sim-worker-{i:03d}",
-                eth_address=make_eth_address(),
-                gpu_profile=profile,
+                eth_address=owner if owner else make_eth_address(),
+                gpus=gpus,
             )
             self.workers.append(w)
 
@@ -107,10 +164,10 @@ class FleetSimulator:
         msg = {
             "worker_id": w.worker_id,
             "eth_address": w.eth_address,
-            "gpu_count": 1,
-            "total_memory_gb": w.gpu_profile["memory_gb"],
-            "gpus": [{"index": 0, "name": w.gpu_profile["name"],
-                       "memory_gb": w.gpu_profile["memory_gb"], "bus_id": 0}],
+            "gpu_count": w.gpu_count,
+            "total_memory_gb": w.total_memory_gb,
+            "gpus": [{"index": g["index"], "name": g["name"],
+                       "memory_gb": g["memory_gb"], "bus_id": g["bus_id"]} for g in w.gpus],
             "version": "2.0.0",
             "timestamp": int(time.time()),
         }
@@ -119,13 +176,14 @@ class FleetSimulator:
     def _send_heartbeat(self, w: SimWorker):
         if not w._connected or not w.online:
             return
-        lo, hi = w.gpu_profile["hashrate_range"]
-        w.current_hashrate += random.uniform(-3, 3)
-        w.current_hashrate = max(lo * 0.9, min(hi * 1.1, w.current_hashrate))
+        # Fluctuate hashrate slightly
+        base_hr = sum((g["hashrate_range"][0] + g["hashrate_range"][1]) / 2 for g in w.gpus)
+        w.current_hashrate += random.uniform(-5 * w.gpu_count, 5 * w.gpu_count)
+        w.current_hashrate = max(base_hr * 0.85, min(base_hr * 1.15, w.current_hashrate))
         msg = {
             "worker_id": w.worker_id,
             "hashrate": round(w.current_hashrate, 2),
-            "active_gpus": 1,
+            "active_gpus": w.gpu_count,
             "accepted_blocks": w.blocks_found,
             "difficulty": 8,
             "uptime_sec": 0,
@@ -222,9 +280,11 @@ def main():
     parser.add_argument("--port", type=int, default=1883, help="MQTT broker port")
     parser.add_argument("--block-interval", type=float, default=60,
                         help="Average seconds between blocks per worker")
+    parser.add_argument("--owner", default="",
+                        help="Ethereum address for all workers (default: random per worker)")
     args = parser.parse_args()
 
-    fleet = FleetSimulator(args.workers, args.broker, args.port, args.block_interval)
+    fleet = FleetSimulator(args.workers, args.broker, args.port, args.block_interval, owner=args.owner)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

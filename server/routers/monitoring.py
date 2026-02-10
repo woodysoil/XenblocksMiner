@@ -11,9 +11,18 @@ router = APIRouter()
 
 
 @router.get("/api/monitoring/fleet")
-async def monitoring_fleet(request: Request):
+async def monitoring_fleet(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
     srv = get_server(request)
-    return await srv.monitoring.get_fleet_overview()
+    all_items = await srv.monitoring.get_fleet_overview()
+    total = len(all_items)
+    start = (page - 1) * limit
+    items = all_items[start:start + limit]
+    total_pages = (total + limit - 1) // limit
+    return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
 
 @router.get("/api/monitoring/stats")

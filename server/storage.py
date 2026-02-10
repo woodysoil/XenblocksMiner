@@ -31,7 +31,7 @@ logger = logging.getLogger("storage")
 # Schema version & migrations
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -151,6 +151,7 @@ CREATE INDEX IF NOT EXISTS idx_blocks_worker ON blocks(worker_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_lease ON settlements(lease_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_api_key ON accounts(api_key);
+CREATE INDEX IF NOT EXISTS idx_accounts_eth_address ON accounts(eth_address COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_blocks_created ON blocks(created_at);
 CREATE INDEX IF NOT EXISTS idx_blocks_self ON blocks(lease_id) WHERE lease_id = '';
 CREATE INDEX IF NOT EXISTS idx_snapshots_worker_ts ON hashrate_snapshots(worker_id, timestamp);
@@ -211,6 +212,28 @@ class AccountRepo:
             "SELECT account_id, role, eth_address, balance, api_key, created_at, updated_at "
             "FROM accounts WHERE api_key = ? AND api_key != ''",
             (api_key,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "account_id": row[0],
+            "role": row[1],
+            "eth_address": row[2],
+            "balance": row[3],
+            "api_key": row[4],
+            "created_at": row[5],
+            "updated_at": row[6],
+        }
+
+    async def get_by_eth_address(self, address: str) -> Optional[dict]:
+        """Look up an account by Ethereum address (case-insensitive)."""
+        if not address:
+            return None
+        async with self._db.execute(
+            "SELECT account_id, role, eth_address, balance, api_key, created_at, updated_at "
+            "FROM accounts WHERE eth_address = ? COLLATE NOCASE",
+            (address,),
         ) as cursor:
             row = await cursor.fetchone()
         if row is None:
@@ -1196,6 +1219,16 @@ class StorageManager:
                     )
                 except Exception:
                     logger.exception("V8 migration failed")
+
+            # V9 migration: add eth_address index for wallet auth
+            if current_version < 9:
+                try:
+                    await self._db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_accounts_eth_address "
+                        "ON accounts(eth_address COLLATE NOCASE)"
+                    )
+                except Exception:
+                    logger.exception("V9 migration failed")
 
             await self._db.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",

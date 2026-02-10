@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from starlette.requests import Request
 
 from server.deps import get_server
@@ -24,6 +24,8 @@ async def list_workers(request: Request):
 @router.get("/api/marketplace")
 async def browse_marketplace(
     request: Request,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=18, ge=1, le=100),
     sort_by: str = "price",
     gpu_type: Optional[str] = None,
     min_hashrate: Optional[float] = None,
@@ -32,7 +34,7 @@ async def browse_marketplace(
     available_only: bool = True,
 ):
     srv = get_server(request)
-    return await srv.pricing.browse_marketplace(
+    all_items = await srv.pricing.browse_marketplace(
         sort_by=sort_by,
         gpu_type=gpu_type,
         min_hashrate=min_hashrate,
@@ -40,6 +42,11 @@ async def browse_marketplace(
         min_gpus=min_gpus,
         available_only=available_only,
     )
+    total = len(all_items)
+    start = (page - 1) * limit
+    items = all_items[start:start + limit]
+    total_pages = (total + limit - 1) // limit
+    return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
 
 @router.get("/api/marketplace/estimate")

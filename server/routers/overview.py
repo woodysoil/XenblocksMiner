@@ -2,7 +2,7 @@
 
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from starlette.requests import Request
 
 from server.deps import get_server
@@ -59,12 +59,16 @@ async def overview_stats(request: Request):
 
 
 @router.get("/api/overview/activity")
-async def overview_activity(request: Request):
+async def overview_activity(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+):
     srv = get_server(request)
     activity = []
 
     # Recent blocks
-    blocks = await srv.watcher.get_all_blocks(limit=50)
+    blocks = await srv.watcher.get_all_blocks(limit=200)
     for b in blocks:
         activity.append({
             "type": "block",
@@ -77,7 +81,7 @@ async def overview_activity(request: Request):
         })
 
     # Recent leases
-    leases = await srv.storage.leases.list_all(limit=50)
+    leases = await srv.storage.leases.list_all(limit=200)
     for l in leases:
         if l["state"] in ("completed", "cancelled") and l.get("ended_at"):
             activity.append({
@@ -102,7 +106,11 @@ async def overview_activity(request: Request):
         })
 
     activity.sort(key=lambda x: x["timestamp"], reverse=True)
-    return activity[:50]
+    total = len(activity)
+    start = (page - 1) * limit
+    items = activity[start:start + limit]
+    total_pages = (total + limit - 1) // limit
+    return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
 
 @router.get("/api/overview/network")

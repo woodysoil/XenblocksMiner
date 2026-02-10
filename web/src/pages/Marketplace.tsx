@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { tw, colors } from "../design/tokens";
 import GpuBadge from "../design/GpuBadge";
 import HashText from "../design/HashText";
 import EmptyState from "../design/EmptyState";
+import Pagination from "../components/Pagination";
 
 interface ProviderListing {
   worker_id: string;
@@ -34,37 +35,57 @@ function Stars({ score }: { score: number }) {
   );
 }
 
+const PAGE_SIZE = 18;
+
 export default function Marketplace() {
   const [providers, setProviders] = useState<ProviderListing[]>([]);
+  const [gpuTypes, setGpuTypes] = useState<string[]>(["all"]);
+  const [totalPages, setTotalPages] = useState(1);
   const [gpuFilter, setGpuFilter] = useState("all");
   const [sort, setSort] = useState("price_asc");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [rentalsOpen, setRentalsOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const isFilterChange = useRef(false);
 
-  useEffect(() => {
-    fetch("/api/marketplace")
+  const fetchProviders = useCallback((p: number, sortBy: string, gpu: string, q: string) => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      page: String(p),
+      limit: String(PAGE_SIZE),
+      sort_by: sortBy,
+    });
+    if (gpu !== "all") params.set("gpu_type", gpu);
+    if (q) params.set("search", q);
+
+    fetch(`/api/marketplace?${params}`)
       .then((r) => r.json())
-      .then((d) => setProviders(d.providers || d || []))
+      .then((d) => {
+        setProviders(d.items || []);
+        setTotalPages(d.total_pages || 1);
+        if (d.gpu_types) setGpuTypes(["all", ...d.gpu_types]);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const gpuTypes = ["all", ...new Set(providers.map((p) => p.gpu_name).filter(Boolean))];
+  useEffect(() => {
+    fetchProviders(page, sort, gpuFilter, search);
+  }, [page, sort, gpuFilter, search, fetchProviders]);
 
-  const filtered = providers
-    .filter((p) => gpuFilter === "all" || p.gpu_name === gpuFilter)
-    .filter(
-      (p) =>
-        !search ||
-        p.worker_id.toLowerCase().includes(search.toLowerCase()) ||
-        (p.gpu_name || "").toLowerCase().includes(search.toLowerCase()),
-    )
-    .sort((a, b) => {
-      if (sort === "price_asc") return a.price_per_min - b.price_per_min;
-      if (sort === "hashrate_desc") return b.hashrate - a.hashrate;
-      return (b.reputation || 0) - (a.reputation || 0);
-    });
+  // Reset page when filters change
+  useEffect(() => {
+    if (isFilterChange.current) {
+      setPage(1);
+      isFilterChange.current = false;
+    }
+  }, [gpuFilter, sort, search]);
+
+  const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
+    isFilterChange.current = true;
+    setter(value);
+  };
 
   const isAvailable = (state: string) => state === "IDLE" || state === "AVAILABLE";
 
@@ -98,14 +119,14 @@ export default function Marketplace() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className={`text-xl font-semibold ${tw.textPrimary}`}>Hashpower Marketplace</h2>
         <div className="flex flex-wrap gap-3 items-center">
-          <select value={gpuFilter} onChange={(e) => setGpuFilter(e.target.value)} className={tw.input}>
+          <select value={gpuFilter} onChange={(e) => handleFilterChange(setGpuFilter, e.target.value)} className={tw.input}>
             {gpuTypes.map((g) => (
               <option key={g} value={g}>
                 {g === "all" ? "All GPUs" : g}
               </option>
             ))}
           </select>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} className={tw.input}>
+          <select value={sort} onChange={(e) => handleFilterChange(setSort, e.target.value)} className={tw.input}>
             <option value="price_asc">Price: Low → High</option>
             <option value="hashrate_desc">Hashrate: High → Low</option>
             <option value="reputation">Reputation</option>
@@ -114,7 +135,7 @@ export default function Marketplace() {
             type="text"
             placeholder="Search…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
             className={tw.input}
           />
         </div>
@@ -125,7 +146,7 @@ export default function Marketplace() {
         <div className="text-center py-16">
           <div className={`animate-pulse ${tw.textTertiary}`}>Loading providers…</div>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : providers.length === 0 ? (
         <EmptyState
           icon={
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -137,55 +158,58 @@ export default function Marketplace() {
           description="Check back later or adjust your filters"
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((p) => (
-            <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group`}>
-              <div className="flex items-center justify-between">
-                <HashText text={p.worker_id} chars={12} copyable />
-                <Stars score={p.reputation || 0} />
-              </div>
-
-              <div className="mt-3">
-                <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 mt-4">
-                <div>
-                  <p className={`text-sm font-semibold ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
-                  <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {providers.map((p) => (
+              <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group`}>
+                <div className="flex items-center justify-between">
+                  <HashText text={p.worker_id} chars={12} copyable />
+                  <Stars score={p.reputation || 0} />
                 </div>
-                <div>
-                  <p className="text-sm font-semibold" style={{ color: colors.warning.DEFAULT }}>
-                    {p.price_per_min.toFixed(4)}
-                  </p>
-                  <p className={`text-xs ${tw.textTertiary}`}>/min</p>
-                </div>
-                <div>
-                  <p className={`text-sm ${tw.textPrimary}`}>{p.blocks_mined}</p>
-                  <p className={`text-xs ${tw.textTertiary}`}>mined</p>
-                </div>
-              </div>
 
-              <div className="mt-4 pt-4 border-t border-[#1f2835] flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-xs">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
-                      boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
-                    }}
-                  />
-                  <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
-                    {isAvailable(p.state) ? "Available" : "Self-mining"}
+                <div className="mt-3">
+                  <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div>
+                    <p className={`text-sm font-semibold ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
+                    <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: colors.warning.DEFAULT }}>
+                      {p.price_per_min.toFixed(4)}
+                    </p>
+                    <p className={`text-xs ${tw.textTertiary}`}>/min</p>
+                  </div>
+                  <div>
+                    <p className={`text-sm ${tw.textPrimary}`}>{p.blocks_mined}</p>
+                    <p className={`text-xs ${tw.textTertiary}`}>mined</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-[#1f2835] flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 text-xs">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
+                        boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
+                      }}
+                    />
+                    <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
+                      {isAvailable(p.state) ? "Available" : "Self-mining"}
+                    </span>
                   </span>
-                </span>
-                <button className={`${tw.btnPrimary} opacity-0 group-hover:opacity-100 transition-opacity`}>
-                  Rent
-                </button>
+                  <button className={`${tw.btnPrimary} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                    Rent
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </div>
   );

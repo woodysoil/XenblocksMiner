@@ -1,12 +1,42 @@
 """Account router — /api/auth/*, /api/accounts/{id}/* endpoints."""
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 from starlette.requests import Request
 
+from server.auth import SIGN_MESSAGE_TEMPLATE
 from server.deps import get_server
-from server.models import RegisterRequest, LoginRequest, DepositRequest
+from server.models import RegisterRequest, LoginRequest, DepositRequest, WalletVerifyRequest
 
 router = APIRouter()
+
+
+@router.get("/api/auth/nonce")
+async def auth_nonce(request: Request, address: str = Query(...)):
+    srv = get_server(request)
+    if not address.startswith("0x") or len(address) != 42:
+        raise HTTPException(status_code=400, detail="Invalid Ethereum address")
+    nonce = srv.auth.generate_nonce(address)
+    return {
+        "nonce": nonce,
+        "message": SIGN_MESSAGE_TEMPLATE.format(nonce=nonce),
+    }
+
+
+@router.post("/api/auth/verify")
+async def auth_verify(request: Request, req: WalletVerifyRequest):
+    srv = get_server(request)
+    if not srv.auth.verify_signature(req.address, req.signature, req.nonce):
+        raise HTTPException(status_code=401, detail="Invalid signature or expired nonce")
+    acct = await srv.accounts.get_or_create_by_eth_address(req.address)
+    if acct is None:
+        raise HTTPException(status_code=500, detail="Failed to create account")
+    token = srv.auth.issue_jwt(req.address, acct["role"], acct["account_id"])
+    return {
+        "token": token,
+        "address": req.address,
+        "account_id": acct["account_id"],
+        "role": acct["role"],
+    }
 
 
 @router.post("/api/auth/register")
@@ -47,11 +77,15 @@ async def auth_login(request: Request, req: LoginRequest):
 
 
 @router.get("/api/auth/me")
-async def auth_me(request: Request, x_api_key: str = Header(default="")):
+async def auth_me(
+    request: Request,
+    x_api_key: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
     srv = get_server(request)
-    acct = await srv.auth.resolve_account(x_api_key)
+    acct = await srv.auth.resolve_account(x_api_key, authorization)
     if acct is None:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        raise HTTPException(status_code=401, detail="Invalid or missing credentials")
     return {
         "account_id": acct["account_id"],
         "role": acct["role"],
@@ -61,11 +95,16 @@ async def auth_me(request: Request, x_api_key: str = Header(default="")):
 
 
 @router.get("/api/accounts/{account_id}/balance")
-async def get_balance(request: Request, account_id: str, x_api_key: str = Header(default="")):
+async def get_balance(
+    request: Request,
+    account_id: str,
+    x_api_key: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
     srv = get_server(request)
     caller = None
-    if srv.auth and x_api_key:
-        caller = await srv.auth.resolve_account(x_api_key)
+    if srv.auth and (x_api_key or authorization):
+        caller = await srv.auth.resolve_account(x_api_key, authorization)
     if caller and caller["role"] != "admin" and caller["account_id"] != account_id:
         raise HTTPException(status_code=403, detail="You can only view your own balance")
     acct = await srv.accounts.get_account(account_id)
@@ -80,11 +119,17 @@ async def get_balance(request: Request, account_id: str, x_api_key: str = Header
 
 
 @router.post("/api/accounts/{account_id}/deposit")
-async def deposit(request: Request, account_id: str, req: DepositRequest, x_api_key: str = Header(default="")):
+async def deposit(
+    request: Request,
+    account_id: str,
+    req: DepositRequest,
+    x_api_key: str = Header(default=""),
+    authorization: str = Header(default=""),
+):
     srv = get_server(request)
     caller = None
-    if srv.auth and x_api_key:
-        caller = await srv.auth.resolve_account(x_api_key)
+    if srv.auth and (x_api_key or authorization):
+        caller = await srv.auth.resolve_account(x_api_key, authorization)
     if caller and caller["role"] != "admin" and caller["account_id"] != account_id:
         raise HTTPException(status_code=403, detail="You can only deposit to your own account")
     try:

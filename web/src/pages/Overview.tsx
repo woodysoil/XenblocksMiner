@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { tw, colors } from "../design/tokens";
+import Pagination from "../components/Pagination";
 
 interface OverviewStats {
   total_workers: number;
@@ -16,6 +17,14 @@ interface ActivityItem {
   type: string;
   timestamp: number | string;
   details: Record<string, unknown>;
+}
+
+interface ActivityResponse {
+  items: ActivityItem[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 interface NetworkInfo {
@@ -42,6 +51,7 @@ function timeAgo(ts: string | number): string {
 }
 
 const eventDotColor: Record<string, string> = {
+  block: colors.accent.DEFAULT,
   block_found: colors.accent.DEFAULT,
   lease_started: colors.info.DEFAULT,
   lease_completed: colors.success.DEFAULT,
@@ -49,8 +59,9 @@ const eventDotColor: Record<string, string> = {
 };
 
 const eventLabel = (a: ActivityItem): string => {
-  const wid = a.details?.worker_id ? String(a.details.worker_id).slice(0, 12) : "";
+  const wid = a.details?.worker_id ? String(a.details.worker_id) : "";
   switch (a.type) {
+    case "block":
     case "block_found": return `Block mined by ${wid || "unknown"}`;
     case "lease_started": return `Lease started${wid ? ` — ${wid}` : ""}`;
     case "lease_completed": return `Lease completed${wid ? ` — ${wid}` : ""}`;
@@ -61,20 +72,30 @@ const eventLabel = (a: ActivityItem): string => {
 export default function Overview() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityTotalPages, setActivityTotalPages] = useState(1);
   const [network, setNetwork] = useState<NetworkInfo | null>(null);
 
   const fetchAll = useCallback(() => {
     fetch("/api/overview/stats").then((r) => r.json()).then(setStats).catch(() => {});
-    fetch("/api/overview/activity")
+    fetch(`/api/overview/activity?page=${activityPage}&limit=50`)
       .then((r) => r.json())
-      .then((d) => setActivity(Array.isArray(d) ? d : d.items || []))
+      .then((d: ActivityResponse | ActivityItem[]) => {
+        if (Array.isArray(d)) {
+          setActivity(d);
+          setActivityTotalPages(1);
+        } else {
+          setActivity(d.items || []);
+          setActivityTotalPages(d.total_pages || 1);
+        }
+      })
       .catch(() => {});
     fetch("/api/overview/network").then((r) => r.json()).then(setNetwork).catch(() => {});
-  }, []);
+  }, [activityPage]);
 
   useEffect(() => {
     fetchAll();
-    const id = setInterval(fetchAll, 30000);
+    const id = setInterval(fetchAll, 10000);
     return () => clearInterval(id);
   }, [fetchAll]);
 
@@ -187,6 +208,11 @@ export default function Overview() {
               ))
             )}
           </div>
+          <Pagination
+            currentPage={activityPage}
+            totalPages={activityTotalPages}
+            onPageChange={setActivityPage}
+          />
         </div>
 
         {/* Network Status */}

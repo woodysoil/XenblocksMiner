@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useDashboard } from "../context/DashboardContext";
+import { useWallet } from "../context/WalletContext";
 
 const navItems = [
   {
@@ -56,8 +57,11 @@ const pageTitles: Record<string, string> = {
 
 export default function Layout() {
   const { connected } = useDashboard();
+  const { address, connecting, connect, disconnect } = useWallet();
   const location = useLocation();
   const title = pageTitles[location.pathname] || "XenBlocks";
+
+  const truncAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
   return (
     <div className="flex min-h-screen bg-[#0b0e11]">
@@ -133,6 +137,23 @@ export default function Layout() {
               placeholder="Search..."
               className="bg-[#0b0e11] border border-[#2a3441] rounded-md px-3 py-1.5 text-xs text-[#eaecef] placeholder-[#5e6673] focus:border-[#22d1ee] focus:outline-none w-48 transition-colors"
             />
+            {address ? (
+              <button
+                onClick={disconnect}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#1f2835] border border-[#2a3441] text-xs font-mono text-[#22d1ee] hover:border-[#22d1ee] transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#0ecb81]" />
+                {truncAddr}
+              </button>
+            ) : (
+              <button
+                onClick={connect}
+                disabled={connecting}
+                className="px-3 py-1.5 rounded-md bg-[#22d1ee]/10 border border-[#22d1ee]/30 text-xs font-medium text-[#22d1ee] hover:bg-[#22d1ee]/20 transition-colors disabled:opacity-50"
+              >
+                {connecting ? "Connecting..." : "Connect Wallet"}
+              </button>
+            )}
             <button className="text-[#848e9c] hover:text-[#eaecef] transition-colors">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M13.5 6.75a4.5 4.5 0 10-9 0c0 5.25-2.25 6.75-2.25 6.75h13.5s-2.25-1.5-2.25-6.75" />

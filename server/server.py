@@ -81,11 +81,12 @@ class PlatformServer:
     """Single-process mock platform server combining MQTT broker, REST API, and services."""
 
     def __init__(self, mqtt_port: int = 1883, api_port: int = 8080, db_path: str = "data/marketplace.db",
-                 enable_chain: bool = True, block_marker: str = ""):
+                 enable_chain: bool = True, block_marker: str = "", jwt_secret: str = ""):
         self.mqtt_port = mqtt_port
         self.api_port = api_port
         self.db_path = db_path
         self._block_marker = block_marker
+        self._jwt_secret = jwt_secret
 
         # Broker (created immediately, no async needed)
         self.broker = MQTTBroker(port=mqtt_port)
@@ -142,7 +143,7 @@ class PlatformServer:
         self.reputation = ReputationEngine(
             self.storage.workers, self.storage.leases, self.storage.blocks,
         )
-        self.auth = AuthService(self.storage.accounts)
+        self.auth = AuthService(self.storage.accounts, jwt_secret=self._jwt_secret)
         await ensure_api_keys_for_defaults(self.auth)
 
         self.ws_manager = WSManager(self.storage.workers, self.storage.blocks)
@@ -275,12 +276,13 @@ def main():
     parser.add_argument("--db-path", default="data/marketplace.db", help="SQLite database path (default: data/marketplace.db)")
     parser.add_argument("--no-chain", action="store_true", help="Disable embedded chain simulator")
     parser.add_argument("--block-marker", default="", help="Override block detection marker for testing (default: XEN11)")
+    parser.add_argument("--jwt-secret", default="", help="Secret key for JWT signing (auto-generated if not set)")
     args = parser.parse_args()
 
     server = PlatformServer(
         mqtt_port=args.mqtt_port, api_port=args.api_port,
         db_path=args.db_path, enable_chain=not args.no_chain,
-        block_marker=args.block_marker,
+        block_marker=args.block_marker, jwt_secret=args.jwt_secret,
     )
 
     logger.info("=" * 60)

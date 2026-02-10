@@ -39,3 +39,9 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     account_id: str
+
+
+class WalletVerifyRequest(BaseModel):
+    address: str
+    signature: str
+    nonce: str
