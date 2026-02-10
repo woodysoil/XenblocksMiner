@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { tw, colors } from "../design/tokens";
 import MetricCard from "../design/MetricCard";
 import StatusBadge from "../design/StatusBadge";
@@ -91,10 +91,10 @@ export default function Provider() {
   const [leases, setLeases] = useState<Lease[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!address) return;
-    apiFetch<{ workers: MyWorker[] }>("/api/provider/workers")
-      .then((d) => setWorkers(d.workers || []))
+    apiFetch<{ items: MyWorker[] }>("/api/provider/workers")
+      .then((d) => setWorkers(d.items || []))
       .catch(() => {});
     apiFetch<Dashboard>("/api/provider/dashboard")
       .then((d) => setDashboard(d))
@@ -103,6 +103,12 @@ export default function Provider() {
       .then((d) => setLeases(d.earnings || []))
       .catch(() => {});
   }, [address]);
+
+  useEffect(() => {
+    fetchData();
+    const id = setInterval(fetchData, 10000);
+    return () => clearInterval(id);
+  }, [fetchData]);
 
   if (!address) {
     return (
