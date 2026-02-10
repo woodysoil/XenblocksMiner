@@ -1,7 +1,9 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../api";
 import { useDashboard } from "../context/DashboardContext";
 import { tw, colors, chartTheme } from "../design/tokens";
 import { StatusBadge, ChartCard } from "../design";
@@ -25,7 +27,6 @@ function formatHashrate(h: number): string {
 function gpuLabel(w: Worker): string {
   if (!w.gpus?.length) return `${w.gpu_count} GPU`;
 
-  // Aggregate GPU types
   const counts = new Map<string, number>();
   for (const g of w.gpus) {
     const short = (g.name || "GPU").replace(/^NVIDIA\s+/, "").replace(/GeForce\s+/, "");
@@ -33,14 +34,11 @@ function gpuLabel(w: Worker): string {
   }
 
   if (counts.size === 1) {
-    // All same type
     const [name, count] = [...counts.entries()][0];
     return count > 1 ? `${count}x ${name}` : name;
   } else if (counts.size === 2 && w.gpu_count <= 4) {
-    // 2 different types, show both
     return [...counts.entries()].map(([n, c]) => c > 1 ? `${c}x ${n}` : n).join(" + ");
   } else {
-    // Many mixed types
     return `${w.gpu_count}x (mixed)`;
   }
 }
@@ -51,79 +49,57 @@ const PAGE_SIZE = 20;
 
 export default function Monitoring() {
   const { workers: wsWorkers, stats, recentBlocks } = useDashboard();
+  const queryClient = useQueryClient();
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [fleetWorkers, setFleetWorkers] = useState<Worker[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [chartData, setChartData] = useState<{ time: string; hashrate: number }[]>([]);
 
-  const fetchChart = useCallback(() => {
-    fetch("/api/monitoring/hashrate-history?hours=1")
-      .then((r) => r.json())
-      .then((pts: HashratePoint[]) => {
-        const buckets = new Map<number, number>();
-        for (const p of pts) {
-          const key = Math.floor(p.timestamp / 30) * 30;
-          buckets.set(key, (buckets.get(key) || 0) + p.hashrate);
-        }
-        setChartData(
-          [...buckets.entries()]
-            .sort((a, b) => a[0] - b[0])
-            .map(([ts, hr]) => ({
-              time: new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-              hashrate: hr,
-            })),
-        );
-      })
-      .catch(() => {});
-  }, []);
+  // Chart data (poll every 60s)
+  const { data: chartData = [] } = useQuery({
+    queryKey: ["monitoring", "chart"],
+    queryFn: async () => {
+      const pts = await apiFetch<HashratePoint[]>("/api/monitoring/hashrate-history?hours=1");
+      const buckets = new Map<number, number>();
+      for (const p of pts) {
+        const key = Math.floor(p.timestamp / 30) * 30;
+        buckets.set(key, (buckets.get(key) || 0) + p.hashrate);
+      }
+      return [...buckets.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([ts, hr]) => ({
+          time: new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+          hashrate: hr,
+        }));
+    },
+    refetchInterval: 60_000,
+  });
 
-  const fetchFleet = useCallback(() => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(PAGE_SIZE),
-      sort: sortDir,
-    });
-    fetch(`/api/monitoring/fleet?${params}`)
-      .then((r) => r.json())
-      .then((res: { items: Worker[]; total_pages: number }) => {
-        setFleetWorkers(res.items || []);
-        setTotalPages(res.total_pages || 1);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [page, sortDir]);
-
-  useEffect(() => {
-    fetchChart();
-    const id = setInterval(fetchChart, 60000);
-    return () => clearInterval(id);
-  }, [fetchChart]);
-
-  useEffect(() => {
-    fetchFleet();
-  }, [fetchFleet]);
+  // Fleet data (depends on page and sortDir)
+  const { data: fleetData, isLoading: loading } = useQuery({
+    queryKey: ["monitoring", "fleet", page, sortDir],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), sort: sortDir });
+      return apiFetch<{ items: Worker[]; total_pages: number }>(`/api/monitoring/fleet?${params}`);
+    },
+  });
+  const fleetWorkers = fleetData?.items ?? [];
+  const totalPages = fleetData?.total_pages ?? 1;
 
   // Apply WebSocket real-time updates to current page workers
   useEffect(() => {
-    if (wsWorkers.length === 0 || fleetWorkers.length === 0) return;
+    if (wsWorkers.length === 0 || !fleetData?.items?.length) return;
     const wsMap = new Map(wsWorkers.map((w) => [w.worker_id, w]));
-    setFleetWorkers((prev) =>
-      prev.map((w) => {
-        const updated = wsMap.get(w.worker_id);
-        if (!updated) return w;
-        return {
-          ...w,
-          hashrate: updated.hashrate,
-          active_gpus: updated.active_gpus,
-          last_heartbeat: updated.last_heartbeat,
-          online: updated.online,
-        };
-      }),
-    );
-  }, [wsWorkers]);
+    queryClient.setQueryData(["monitoring", "fleet", page, sortDir], (old: typeof fleetData) => {
+      if (!old) return old;
+      return {
+        ...old,
+        items: old.items.map((w) => {
+          const updated = wsMap.get(w.worker_id);
+          if (!updated) return w;
+          return { ...w, hashrate: updated.hashrate, active_gpus: updated.active_gpus, last_heartbeat: updated.last_heartbeat, online: updated.online };
+        }),
+      };
+    });
+  }, [wsWorkers, fleetData, page, sortDir, queryClient]);
 
   // Reset page when sort changes
   useEffect(() => {
@@ -330,7 +306,7 @@ function BlockRow({ block: b, isNew }: { block: Block; isNew?: boolean }) {
         isNew ? "animate-[blockFlash_1s_ease-out]" : ""
       }`}
     >
-      <span className="font-mono truncate text-[#eaecef]">{b.hash.slice(0, 16)}\u2026</span>
+      <span className="font-mono truncate text-[#eaecef]">{b.hash.slice(0, 16)}{"\u2026"}</span>
       <div className="flex items-center gap-2 shrink-0">
         <span className="font-mono text-[#848e9c]">{b.worker_id}</span>
         {b.lease_id ? (

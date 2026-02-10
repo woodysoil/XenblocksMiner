@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "../api";
 import { tw, colors } from "../design/tokens";
 import Pagination from "../components/Pagination";
 
@@ -69,35 +71,41 @@ const eventLabel = (a: ActivityItem): string => {
   }
 };
 
+function normalizeActivity(d: ActivityResponse | ActivityItem[]): {
+  items: ActivityItem[];
+  totalPages: number;
+} {
+  if (Array.isArray(d)) return { items: d, totalPages: 1 };
+  return { items: d.items || [], totalPages: d.total_pages || 1 };
+}
+
 export default function Overview() {
-  const [stats, setStats] = useState<OverviewStats | null>(null);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [activityPage, setActivityPage] = useState(1);
-  const [activityTotalPages, setActivityTotalPages] = useState(1);
-  const [network, setNetwork] = useState<NetworkInfo | null>(null);
 
-  const fetchAll = useCallback(() => {
-    fetch("/api/overview/stats").then((r) => r.json()).then(setStats).catch(() => {});
-    fetch(`/api/overview/activity?page=${activityPage}&limit=50`)
-      .then((r) => r.json())
-      .then((d: ActivityResponse | ActivityItem[]) => {
-        if (Array.isArray(d)) {
-          setActivity(d);
-          setActivityTotalPages(1);
-        } else {
-          setActivity(d.items || []);
-          setActivityTotalPages(d.total_pages || 1);
-        }
-      })
-      .catch(() => {});
-    fetch("/api/overview/network").then((r) => r.json()).then(setNetwork).catch(() => {});
-  }, [activityPage]);
+  const { data: stats } = useQuery({
+    queryKey: ["overview", "stats"],
+    queryFn: () => apiFetch<OverviewStats>("/api/overview/stats"),
+    refetchInterval: 10_000,
+  });
 
-  useEffect(() => {
-    fetchAll();
-    const id = setInterval(fetchAll, 10000);
-    return () => clearInterval(id);
-  }, [fetchAll]);
+  const { data: activityData } = useQuery({
+    queryKey: ["overview", "activity", activityPage],
+    queryFn: () =>
+      apiFetch<ActivityResponse | ActivityItem[]>(
+        `/api/overview/activity?page=${activityPage}&limit=50`,
+      ),
+    select: normalizeActivity,
+    refetchInterval: 10_000,
+  });
+
+  const activity = activityData?.items ?? [];
+  const activityTotalPages = activityData?.totalPages ?? 1;
+
+  const { data: network } = useQuery({
+    queryKey: ["overview", "network"],
+    queryFn: () => apiFetch<NetworkInfo>("/api/overview/network"),
+    refetchInterval: 10_000,
+  });
 
   const cards: { label: string; value: string | number; borderColor: string; icon: JSX.Element }[] = [
     {

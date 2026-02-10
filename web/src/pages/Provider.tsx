@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { UTCTimestamp } from "lightweight-charts";
 import { tw, colors } from "../design/tokens";
 import MetricCard from "../design/MetricCard";
@@ -7,6 +9,7 @@ import GpuBadge from "../design/GpuBadge";
 import { ChartCard } from "../design";
 import LWChart from "../design/LWChart";
 import EmptyState from "../design/EmptyState";
+import ConfirmDialog from "../design/ConfirmDialog";
 import { useWallet } from "../context/WalletContext";
 import { apiFetch } from "../api";
 import type { WalletSnapshot, WalletAchievements } from "../types";
@@ -68,61 +71,60 @@ const filterTabs: { key: FilterTab; label: string }[] = [
 
 export default function Provider() {
   const { address, connect } = useWallet();
-  const [workers, setWorkers] = useState<MyWorker[]>([]);
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [achievements, setAchievements] = useState<WalletAchievements | null>(null);
-  const [history, setHistory] = useState<WalletSnapshot[]>([]);
-  const [viewWindow, setViewWindow] = useState(7 * 86400); // default 7d
+  const queryClient = useQueryClient();
+
+  const [viewWindow, setViewWindow] = useState(7 * 86400);
   const [filter, setFilter] = useState<FilterTab>("ALL");
-  const [commanding, setCommanding] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    workerId: string;
+    targetState: "AVAILABLE" | "SELF_MINING";
+  } | null>(null);
 
-  const fetchData = useCallback(() => {
-    if (!address) return;
-    apiFetch<{ items: MyWorker[] }>("/api/provider/workers")
-      .then((d) => setWorkers(d.items || []))
-      .catch(() => {});
-    apiFetch<Dashboard>("/api/provider/dashboard")
-      .then((d) => setDashboard(d))
-      .catch(() => {});
-  }, [address]);
+  const { data: workersData } = useQuery({
+    queryKey: ["provider", "workers", address],
+    queryFn: () => apiFetch<{ items: MyWorker[] }>("/api/provider/workers"),
+    refetchInterval: 10_000,
+    enabled: !!address,
+  });
+  const workers = workersData?.items ?? [];
 
-  const fetchHistory = useCallback(() => {
-    if (!address) return;
-    apiFetch<{ data: WalletSnapshot[] }>("/api/wallet/history?period=30d")
-      .then((d) => setHistory(d.data || []))
-      .catch(() => setHistory([]));
-    apiFetch<WalletAchievements>("/api/wallet/achievements")
-      .then((d) => setAchievements(d))
-      .catch(() => {});
-  }, [address]);
+  const { data: dashboard } = useQuery({
+    queryKey: ["provider", "dashboard", address],
+    queryFn: () => apiFetch<Dashboard>("/api/provider/dashboard"),
+    refetchInterval: 10_000,
+    enabled: !!address,
+  });
 
-  const commandWorker = useCallback(
-    async (workerId: string, targetState: "AVAILABLE" | "SELF_MINING") => {
-      setCommanding(workerId);
-      try {
-        await apiFetch(`/api/wallet/workers/${workerId}/command`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: "update_config", params: { state: targetState } }),
-        });
-        fetchData();
-      } catch { /* silent */ }
-      setCommanding(null);
+  const { data: historyData } = useQuery({
+    queryKey: ["provider", "history", address],
+    queryFn: () => apiFetch<{ data: WalletSnapshot[] }>("/api/wallet/history?period=30d"),
+    enabled: !!address,
+  });
+  const history = historyData?.data ?? [];
+
+  const { data: achievements } = useQuery({
+    queryKey: ["provider", "achievements", address],
+    queryFn: () => apiFetch<WalletAchievements>("/api/wallet/achievements"),
+    enabled: !!address,
+  });
+
+  const commandMutation = useMutation({
+    mutationFn: ({ workerId, targetState }: { workerId: string; targetState: string }) =>
+      apiFetch(`/api/wallet/workers/${workerId}/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "update_config", params: { state: targetState } }),
+      }),
+    onSuccess: () => {
+      toast.success("Worker state updated");
+      queryClient.invalidateQueries({ queryKey: ["provider", "workers"] });
     },
-    [fetchData],
-  );
+  });
 
   const filteredWorkers = useMemo(
     () => (filter === "ALL" ? workers : workers.filter((w) => w.state === filter)),
     [workers, filter],
   );
-
-  useEffect(() => {
-    fetchData();
-    fetchHistory();
-    const id = setInterval(fetchData, 10000);
-    return () => clearInterval(id);
-  }, [fetchData, fetchHistory]);
 
   if (!address) {
     return (
@@ -201,7 +203,7 @@ export default function Provider() {
         </div>
       </div>
 
-      {/* History Chart — TradingView Lightweight Charts */}
+      {/* History Chart */}
       <ChartCard
         title="Hashrate History"
         action={
@@ -324,19 +326,19 @@ export default function Provider() {
                       <span className={`text-xs font-medium ${tw.textTertiary}`}>Leased</span>
                     ) : w.state === "AVAILABLE" ? (
                       <button
-                        disabled={commanding === w.worker_id}
-                        onClick={() => commandWorker(w.worker_id, "SELF_MINING")}
+                        disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                        onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
                         className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
                       >
-                        {commanding === w.worker_id ? "..." : "Unlist"}
+                        {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "Unlist"}
                       </button>
                     ) : (
                       <button
-                        disabled={commanding === w.worker_id}
-                        onClick={() => commandWorker(w.worker_id, "AVAILABLE")}
+                        disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                        onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
                         className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
                       >
-                        {commanding === w.worker_id ? "..." : "List"}
+                        {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "List"}
                       </button>
                     )}
                     <span className={`text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
@@ -349,6 +351,21 @@ export default function Provider() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
+        title={confirmAction?.targetState === "AVAILABLE" ? "List Worker" : "Unlist Worker"}
+        description={confirmAction?.targetState === "AVAILABLE"
+          ? `List worker ${confirmAction.workerId} on the marketplace? It will be available for rent.`
+          : `Unlist worker ${confirmAction?.workerId} from the marketplace? It will resume self-mining.`}
+        confirmLabel={confirmAction?.targetState === "AVAILABLE" ? "List" : "Unlist"}
+        variant={confirmAction?.targetState === "AVAILABLE" ? "primary" : "danger"}
+        onConfirm={() => {
+          if (confirmAction) commandMutation.mutate(confirmAction);
+          setConfirmAction(null);
+        }}
+      />
     </div>
   );
 }

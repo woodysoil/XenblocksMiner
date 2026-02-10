@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "../api";
 import { tw, colors } from "../design/tokens";
 import GpuBadge from "../design/GpuBadge";
 import HashText from "../design/HashText";
@@ -38,53 +40,39 @@ function Stars({ score }: { score: number }) {
 const PAGE_SIZE = 18;
 
 export default function Marketplace() {
-  const [providers, setProviders] = useState<ProviderListing[]>([]);
-  const [gpuTypes, setGpuTypes] = useState<string[]>(["all"]);
-  const [totalPages, setTotalPages] = useState(1);
   const [gpuFilter, setGpuFilter] = useState("all");
   const [sort, setSort] = useState("price_asc");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [rentalsOpen, setRentalsOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const isFilterChange = useRef(false);
+  const [rentalsOpen, setRentalsOpen] = useState(false);
+  const [gpuTypes, setGpuTypes] = useState<string[]>(["all"]);
 
-  const fetchProviders = useCallback((p: number, sortBy: string, gpu: string, q: string) => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: String(p),
-      limit: String(PAGE_SIZE),
-      sort_by: sortBy,
-    });
-    if (gpu !== "all") params.set("gpu_type", gpu);
-    if (q) params.set("search", q);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["marketplace", page, sort, gpuFilter, search],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+        sort_by: sort,
+      });
+      if (gpuFilter !== "all") params.set("gpu_type", gpuFilter);
+      if (search) params.set("search", search);
+      return apiFetch<{ items: ProviderListing[]; total_pages: number; gpu_types?: string[] }>(
+        `/api/marketplace?${params}`,
+      );
+    },
+  });
 
-    fetch(`/api/marketplace?${params}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setProviders(d.items || []);
-        setTotalPages(d.total_pages || 1);
-        if (d.gpu_types) setGpuTypes(["all", ...d.gpu_types]);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const providers = data?.items ?? [];
+  const totalPages = data?.total_pages ?? 1;
 
   useEffect(() => {
-    fetchProviders(page, sort, gpuFilter, search);
-  }, [page, sort, gpuFilter, search, fetchProviders]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    if (isFilterChange.current) {
-      setPage(1);
-      isFilterChange.current = false;
-    }
-  }, [gpuFilter, sort, search]);
+    if (data?.gpu_types) setGpuTypes(["all", ...data.gpu_types]);
+  }, [data?.gpu_types]);
 
   const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
-    isFilterChange.current = true;
     setter(value);
+    setPage(1);
   };
 
   const isAvailable = (state: string) => state === "IDLE" || state === "AVAILABLE";
