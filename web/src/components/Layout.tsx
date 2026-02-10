@@ -46,6 +46,26 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    to: "/renter",
+    label: "Renter",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="2" y="4" width="16" height="12" rx="2" />
+        <path d="M2 8h16" />
+      </svg>
+    ),
+  },
+  {
+    to: "/account",
+    label: "Account",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="10" cy="7" r="4" />
+        <path d="M3 18c0-3.3 3.1-6 7-6s7 2.7 7 6" />
+      </svg>
+    ),
+  },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -53,6 +73,8 @@ const pageTitles: Record<string, string> = {
   "/monitoring": "Monitoring",
   "/marketplace": "Marketplace",
   "/provider": "Provider",
+  "/renter": "Renter",
+  "/account": "Account",
 };
 
 export default function Layout() {

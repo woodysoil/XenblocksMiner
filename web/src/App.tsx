@@ -6,6 +6,8 @@ import Overview from "./pages/Overview";
 import Monitoring from "./pages/Monitoring";
 import Marketplace from "./pages/Marketplace";
 import Provider from "./pages/Provider";
+import Renter from "./pages/Renter";
+import Account from "./pages/Account";
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
               <Route path="monitoring" element={<Monitoring />} />
               <Route path="marketplace" element={<Marketplace />} />
               <Route path="provider" element={<Provider />} />
+              <Route path="renter" element={<Renter />} />
+              <Route path="account" element={<Account />} />
             </Route>
           </Routes>
         </DashboardProvider>

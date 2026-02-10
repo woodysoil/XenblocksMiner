@@ -15,13 +15,19 @@ async def monitoring_fleet(
     request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
+    eth_address: Optional[str] = Query(default=None, max_length=128),
 ):
     srv = get_server(request)
     all_items = await srv.monitoring.get_fleet_overview()
+    if eth_address:
+        addr = eth_address.lower()
+        all_items = [w for w in all_items if w.get("eth_address", "").lower() == addr]
+    all_items.sort(key=lambda w: w.get("hashrate", 0), reverse=(sort == "desc"))
     total = len(all_items)
     start = (page - 1) * limit
     items = all_items[start:start + limit]
-    total_pages = (total + limit - 1) // limit
+    total_pages = max(1, (total + limit - 1) // limit)
     return {"items": items, "total": total, "page": page, "limit": limit, "total_pages": total_pages}
 
 

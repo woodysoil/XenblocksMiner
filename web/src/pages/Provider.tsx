@@ -46,11 +46,25 @@ function formatUptime(sec: number): string {
   return `${Math.floor(sec / 60)}m`;
 }
 
-const stateToStatus: Record<string, "idle" | "available" | "leased"> = {
-  SELF_MINING: "idle",
+const stateToStatus: Record<string, "mining" | "available" | "leased"> = {
+  SELF_MINING: "mining",
   AVAILABLE: "available",
   LEASED: "leased",
 };
+
+const stateToLabel: Record<string, string> = {
+  SELF_MINING: "Mining",
+  AVAILABLE: "Listed",
+  LEASED: "Leased",
+};
+
+type FilterTab = "ALL" | "SELF_MINING" | "AVAILABLE" | "LEASED";
+const filterTabs: { key: FilterTab; label: string }[] = [
+  { key: "ALL", label: "All" },
+  { key: "SELF_MINING", label: "Mining" },
+  { key: "AVAILABLE", label: "Listed" },
+  { key: "LEASED", label: "Leased" },
+];
 
 export default function Provider() {
   const { address, connect } = useWallet();
@@ -58,6 +72,9 @@ export default function Provider() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [achievements, setAchievements] = useState<WalletAchievements | null>(null);
   const [history, setHistory] = useState<WalletSnapshot[]>([]);
+  const [viewWindow, setViewWindow] = useState(7 * 86400); // default 7d
+  const [filter, setFilter] = useState<FilterTab>("ALL");
+  const [commanding, setCommanding] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     if (!address) return;
@@ -78,6 +95,27 @@ export default function Provider() {
       .then((d) => setAchievements(d))
       .catch(() => {});
   }, [address]);
+
+  const commandWorker = useCallback(
+    async (workerId: string, targetState: "AVAILABLE" | "SELF_MINING") => {
+      setCommanding(workerId);
+      try {
+        await apiFetch(`/api/wallet/workers/${workerId}/command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: "update_config", params: { state: targetState } }),
+        });
+        fetchData();
+      } catch { /* silent */ }
+      setCommanding(null);
+    },
+    [fetchData],
+  );
+
+  const filteredWorkers = useMemo(
+    () => (filter === "ALL" ? workers : workers.filter((w) => w.state === filter)),
+    [workers, filter],
+  );
 
   useEffect(() => {
     fetchData();
@@ -164,7 +202,31 @@ export default function Provider() {
       </div>
 
       {/* History Chart — TradingView Lightweight Charts */}
-      <ChartCard title="Hashrate History">
+      <ChartCard
+        title="Hashrate History"
+        action={
+          <div className="flex gap-1">
+            {([
+              { label: "24h", sec: 86400 },
+              { label: "7d", sec: 7 * 86400 },
+              { label: "30d", sec: 30 * 86400 },
+              { label: "All", sec: 0 },
+            ] as const).map((p) => (
+              <button
+                key={p.label}
+                onClick={() => setViewWindow(p.sec)}
+                className={`px-2 py-1 text-xs rounded ${
+                  viewWindow === p.sec
+                    ? "bg-[#22d1ee]/20 text-[#22d1ee]"
+                    : "text-[#848e9c] hover:text-[#eaecef]"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        }
+      >
         {chartData.length === 0 ? (
           <div className="h-[260px] flex items-center justify-center">
             <span className={`text-sm ${tw.textSecondary}`}>
@@ -172,7 +234,7 @@ export default function Provider() {
             </span>
           </div>
         ) : (
-          <LWChart data={chartData} height={260} formatValue={formatHashrate} />
+          <LWChart data={chartData} height={260} formatValue={formatHashrate} visibleWindow={viewWindow} />
         )}
       </ChartCard>
 
@@ -204,15 +266,37 @@ export default function Provider() {
       {/* My Workers */}
       <div>
         <h3 className={`${tw.sectionTitle} mb-3`}>My Workers ({workers.length})</h3>
-        {workers.length === 0 ? (
-          <EmptyState title="No workers found" description="Make sure your miners are registered with this wallet address." />
+        {/* Filter tabs */}
+        <div className="flex gap-1 mb-4">
+          {filterTabs.map((t) => {
+            const count = t.key === "ALL" ? workers.length : workers.filter((w) => w.state === t.key).length;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setFilter(t.key)}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                  filter === t.key
+                    ? "bg-[#22d1ee]/15 text-[#22d1ee] border border-[#22d1ee]/30"
+                    : "text-[#848e9c] border border-[#2a3441] hover:text-[#eaecef] hover:border-[#3d4f65]"
+                }`}
+              >
+                {t.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+        {filteredWorkers.length === 0 ? (
+          <EmptyState
+            title={filter === "ALL" ? "No workers found" : `No ${filterTabs.find((t) => t.key === filter)?.label.toLowerCase()} workers`}
+            description={filter === "ALL" ? "Make sure your miners are registered with this wallet address." : "Try a different filter."}
+          />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {workers.map((w) => (
+            {filteredWorkers.map((w) => (
               <div key={w.worker_id} className={`${tw.card} p-5`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className={`font-mono text-sm font-medium ${tw.textPrimary}`}>{w.worker_id}</span>
-                  <StatusBadge status={stateToStatus[w.state] || "idle"} size="sm" />
+                  <StatusBadge status={stateToStatus[w.state] || "idle"} label={stateToLabel[w.state]} size="sm" />
                 </div>
                 <div className="mb-3">
                   <GpuBadge name={w.gpu_name || "GPU"} memory={w.memory_gb || 0} />
@@ -235,9 +319,30 @@ export default function Provider() {
                   <span className="text-xs font-mono" style={{ color: colors.warning.DEFAULT }}>
                     {w.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
                   </span>
-                  <span className={`text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
-                    {w.online ? "Online" : "Offline"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {w.state === "LEASED" ? (
+                      <span className={`text-xs font-medium ${tw.textTertiary}`}>Leased</span>
+                    ) : w.state === "AVAILABLE" ? (
+                      <button
+                        disabled={commanding === w.worker_id}
+                        onClick={() => commandWorker(w.worker_id, "SELF_MINING")}
+                        className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
+                      >
+                        {commanding === w.worker_id ? "..." : "Unlist"}
+                      </button>
+                    ) : (
+                      <button
+                        disabled={commanding === w.worker_id}
+                        onClick={() => commandWorker(w.worker_id, "AVAILABLE")}
+                        className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
+                      >
+                        {commanding === w.worker_id ? "..." : "List"}
+                      </button>
+                    )}
+                    <span className={`text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
+                      {w.online ? "Online" : "Offline"}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}

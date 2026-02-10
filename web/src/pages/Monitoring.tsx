@@ -3,9 +3,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useDashboard } from "../context/DashboardContext";
-import { useWallet } from "../context/WalletContext";
 import { tw, colors, chartTheme } from "../design/tokens";
-import { Pill, StatusBadge, ChartCard } from "../design";
+import { StatusBadge, ChartCard } from "../design";
 import Pagination from "../components/Pagination";
 import type { Worker, Block, HashratePoint } from "../types";
 
@@ -52,9 +51,7 @@ const PAGE_SIZE = 20;
 
 export default function Monitoring() {
   const { workers: wsWorkers, stats, recentBlocks } = useDashboard();
-  const { address } = useWallet();
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [myOnly, setMyOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [fleetWorkers, setFleetWorkers] = useState<Worker[]>([]);
@@ -89,9 +86,6 @@ export default function Monitoring() {
       limit: String(PAGE_SIZE),
       sort: sortDir,
     });
-    if (myOnly && address) {
-      params.set("eth_address", address);
-    }
     fetch(`/api/monitoring/fleet?${params}`)
       .then((r) => r.json())
       .then((res: { items: Worker[]; total_pages: number }) => {
@@ -100,7 +94,7 @@ export default function Monitoring() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [page, sortDir, myOnly, address]);
+  }, [page, sortDir]);
 
   useEffect(() => {
     fetchChart();
@@ -131,10 +125,10 @@ export default function Monitoring() {
     );
   }, [wsWorkers]);
 
-  // Reset page when filters change
+  // Reset page when sort changes
   useEffect(() => {
     setPage(1);
-  }, [sortDir, myOnly]);
+  }, [sortDir]);
 
   const maxHashrate = useMemo(
     () => Math.max(...fleetWorkers.map((w) => w.hashrate), 1),
@@ -147,39 +141,16 @@ export default function Monitoring() {
     return String(Math.round(v));
   };
 
-  const gpuSummary = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const w of fleetWorkers) {
-      if (!w.gpus?.length) continue;
-      for (const g of w.gpus) {
-        const short = (g.name || "GPU").replace(/^NVIDIA\s+/, "").replace(/GeForce\s+/, "");
-        counts.set(short, (counts.get(short) || 0) + 1);
-      }
-    }
-    return [...counts.entries()].map(([name, n]) => `${n}x ${name}`).join(", ") || `${stats.active_gpus} GPU`;
-  }, [fleetWorkers, stats.active_gpus]);
-
   return (
     <div className="space-y-6">
-      {/* Stat pills */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill label="Online" value={stats.online} color="success" />
-        <Pill label="Offline" value={stats.offline} color="danger" />
-        <Pill label="Hashrate" value={formatHashrate(stats.total_hashrate)} color="accent" />
-        <Pill label="GPUs" value={gpuSummary} />
-        <Pill label="Blocks/hr" value={stats.blocks_last_hour} />
-        {address && (
-          <button
-            onClick={() => setMyOnly((v) => !v)}
-            className={`ml-auto px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              myOnly
-                ? "bg-[#22d1ee]/20 border border-[#22d1ee]/50 text-[#22d1ee]"
-                : "bg-[#1f2835] border border-[#2a3441] text-[#848e9c] hover:text-[#eaecef]"
-            }`}
-          >
-            My Miners
-          </button>
-        )}
+      {/* Platform Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <MiniStat label="Workers" value={`${stats.online}/${stats.online + stats.offline}`} sub="online" color={colors.success.DEFAULT} />
+        <MiniStat label="Total GPUs" value={stats.total_gpus} color={colors.accent.DEFAULT} />
+        <MiniStat label="Active GPUs" value={stats.active_gpus} color={colors.info.DEFAULT} />
+        <MiniStat label="Hashrate" value={formatHashrate(stats.total_hashrate)} color={colors.accent.DEFAULT} />
+        <MiniStat label="Total Blocks" value={stats.total_blocks} color={colors.warning.DEFAULT} />
+        <MiniStat label="Blocks/hr" value={stats.blocks_last_hour} color={colors.success.DEFAULT} />
       </div>
 
       {/* Main grid */}
@@ -194,6 +165,7 @@ export default function Monitoring() {
               <thead>
                 <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
                   <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Address</th>
                   <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
                   <th
                     className={`${tw.tableHeader} px-4 py-3 text-left cursor-pointer select-none hover:text-[#eaecef]`}
@@ -210,14 +182,14 @@ export default function Monitoring() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-[#848e9c] text-sm">
+                    <td colSpan={7} className="py-12 text-center text-[#848e9c] text-sm">
                       Loading...
                     </td>
                   </tr>
                 ) : fleetWorkers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-[#848e9c] text-sm">
-                      {myOnly ? "No miners match your wallet address" : "No workers connected"}
+                    <td colSpan={7} className="py-12 text-center text-[#848e9c] text-sm">
+                      No workers connected
                     </td>
                   </tr>
                 ) : (
@@ -232,6 +204,11 @@ export default function Monitoring() {
                       <tr key={w.worker_id} className={tw.tableRow}>
                         <td className={`${tw.tableCell} font-mono text-xs`}>
                           {w.worker_id}
+                        </td>
+                        <td className={`${tw.tableCell} font-mono text-xs text-[#848e9c]`}>
+                          {w.eth_address
+                            ? `${w.eth_address.slice(0, 5)}...${w.eth_address.slice(-4)}`
+                            : "\u2014"}
                         </td>
                         <td className={tw.tableCell}>
                           <span className="bg-[#1f2835] px-2 py-0.5 rounded text-xs font-mono text-[#848e9c]">
@@ -362,6 +339,20 @@ function BlockRow({ block: b, isNew }: { block: Block; isNew?: boolean }) {
           <span className="text-xs px-2 py-0.5 rounded bg-[#1f2835] text-[#848e9c]">self</span>
         )}
         <span className="text-[#5e6673] w-14 text-right">{timeAgo(b.timestamp)}</span>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className={`${tw.card} px-4 py-3`}>
+      <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>{label}</span>
+      <div className="flex items-baseline gap-1.5 mt-0.5">
+        <span className="text-lg font-bold" style={color ? { color } : undefined}>
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </span>
+        {sub && <span className={`text-xs ${tw.textTertiary}`}>{sub}</span>}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ type Status = 'online' | 'offline' | 'mining' | 'leased' | 'available' | 'idle' 
 interface StatusBadgeProps {
   status: Status;
   size?: 'sm' | 'md';
+  label?: string;
 }
 
 const cfg: Record<Status, { color: string; label: string; pulse?: boolean }> = {
@@ -17,7 +18,7 @@ const cfg: Record<Status, { color: string; label: string; pulse?: boolean }> = {
   error:     { color: colors.danger.DEFAULT,  label: 'Error' },
 };
 
-export default function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
+export default function StatusBadge({ status, size = 'md', label: labelOverride }: StatusBadgeProps) {
   const { color, label, pulse } = cfg[status];
   const dot = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
   const text = size === 'sm' ? 'text-xs' : 'text-sm';
@@ -28,7 +29,7 @@ export default function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
         className={`${dot} rounded-full ${pulse ? 'animate-pulse' : ''}`}
         style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}50` }}
       />
-      {label}
+      {labelOverride ?? label}
     </span>
   );
 }

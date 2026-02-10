@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import {
   createChart,
   AreaSeries,
   ColorType,
   CrosshairMode,
   type IChartApi,
+  type ISeriesApi,
+  type SeriesType,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { colors } from "./tokens";
@@ -18,16 +20,24 @@ interface LWChartProps {
   data: LWDataPoint[];
   height?: number;
   formatValue?: (v: number) => string;
+  /** Default visible window in seconds. 0 = show all. */
+  visibleWindow?: number;
 }
 
-export default function LWChart({ data, height = 260, formatValue }: LWChartProps) {
+export default function LWChart({ data, height = 260, formatValue, visibleWindow = 0 }: LWChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
 
-  useEffect(() => {
+  const stableFormatter = useRef(formatValue);
+  stableFormatter.current = formatValue;
+
+  const ensureChart = useCallback(() => {
+    if (chartRef.current) return chartRef.current;
     const el = containerRef.current;
-    if (!el) return;
+    if (!el || el.clientWidth === 0) return null;
 
+    const fmt = stableFormatter.current;
     const chart = createChart(el, {
       width: el.clientWidth,
       height,
@@ -49,11 +59,10 @@ export default function LWChart({ data, height = 260, formatValue }: LWChartProp
       rightPriceScale: {
         borderColor: colors.border.default,
       },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
+      crosshair: { mode: CrosshairMode.Normal },
       localization: {
-        ...(formatValue ? { priceFormatter: formatValue } : {}),
+        locale: "en-US",
+        ...(fmt ? { priceFormatter: fmt } : {}),
       },
     });
 
@@ -66,24 +75,60 @@ export default function LWChart({ data, height = 260, formatValue }: LWChartProp
       crosshairMarkerBorderWidth: 1,
       crosshairMarkerBorderColor: colors.accent.DEFAULT,
       crosshairMarkerBackgroundColor: colors.bg.surface1,
-      ...(formatValue ? { priceFormat: { type: "custom" as const, formatter: formatValue } } : {}),
+      ...(fmt ? { priceFormat: { type: "custom" as const, formatter: fmt } } : {}),
     });
 
-    series.setData(data);
-    chart.timeScale().fitContent();
     chartRef.current = chart;
+    seriesRef.current = series;
 
     const ro = new ResizeObserver(([entry]) => {
-      chart.applyOptions({ width: entry.contentRect.width });
+      if (chartRef.current) {
+        chartRef.current.applyOptions({ width: entry.contentRect.width });
+      }
     });
     ro.observe(el);
+    (chart as any).__ro = ro;
 
+    return chart;
+  }, [height]);
+
+  useEffect(() => {
     return () => {
-      ro.disconnect();
-      chart.remove();
-      chartRef.current = null;
+      if (chartRef.current) {
+        const ro = (chartRef.current as any).__ro as ResizeObserver | undefined;
+        ro?.disconnect();
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
     };
-  }, [data, height, formatValue]);
+  }, []);
+
+  // Data sync
+  useEffect(() => {
+    if (!data.length) return;
+    const chart = ensureChart();
+    if (!chart || !seriesRef.current) return;
+
+    seriesRef.current.setData(data);
+    applyVisibleWindow(chart, data, visibleWindow);
+  }, [data, ensureChart, visibleWindow]);
 
   return <div ref={containerRef} />;
+}
+
+function applyVisibleWindow(chart: IChartApi, data: LWDataPoint[], windowSec: number) {
+  if (!data.length) return;
+  const last = data[data.length - 1].time as number;
+  const first = data[0].time as number;
+  const span = last - first;
+
+  if (windowSec <= 0 || span <= windowSec) {
+    chart.timeScale().fitContent();
+  } else {
+    chart.timeScale().setVisibleRange({
+      from: (last - windowSec) as UTCTimestamp,
+      to: last as UTCTimestamp,
+    });
+  }
 }

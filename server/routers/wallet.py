@@ -160,12 +160,29 @@ async def send_worker_command(
     command = body.get("command")
     params = body.get("params", {})
 
-    if command not in ("restart", "stop", "start", "update_config"):
+    allowed = {"restart", "stop", "start", "update_config", "list", "unlist"}
+    if command not in allowed:
         raise HTTPException(status_code=400, detail="Invalid command")
+
+    valid_states = {"SELF_MINING", "AVAILABLE", "LEASED"}
+
+    # Resolve list/unlist aliases to state changes
+    if command == "list":
+        params["state"] = "AVAILABLE"
+    elif command == "unlist":
+        params["state"] = "SELF_MINING"
+
+    # Persist state to DB when applicable
+    new_state = params.get("state") if command in ("update_config", "list", "unlist") else None
+    if new_state:
+        if new_state not in valid_states:
+            raise HTTPException(status_code=400, detail=f"Invalid state: {new_state}")
+        await srv.storage.workers.update_state(worker_id, new_state)
 
     # Send command via MQTT
     if srv.broker:
-        await srv.broker.publish_control(worker_id, {"command": command, **params})
+        mqtt_command = "update_config" if command in ("list", "unlist") else command
+        await srv.broker.publish_control(worker_id, {"command": mqtt_command, **params})
         return {"status": "sent", "worker_id": worker_id, "command": command}
 
     raise HTTPException(status_code=503, detail="Control service unavailable")
