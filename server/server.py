@@ -46,6 +46,7 @@ from server.reputation import ReputationEngine
 from server.routers import register_all_routers
 from server.settlement import SettlementEngine
 from server.storage import StorageManager
+from server.wallet_snapshot import WalletSnapshotService
 from server.watcher import BlockWatcher
 from server.ws import WSManager
 
@@ -104,6 +105,7 @@ class PlatformServer:
         self._enable_chain = enable_chain
         self.ws_manager: Optional[WSManager] = None
         self.monitoring: Optional[MonitoringService] = None
+        self.wallet_snapshot: Optional[WalletSnapshotService] = None
 
         # FastAPI app
         self.app = FastAPI(title="XenMiner Mock Platform", version="0.3.0")
@@ -150,6 +152,7 @@ class PlatformServer:
         self.monitoring = MonitoringService(
             self.storage.workers, self.storage.blocks, self.storage.snapshots,
         )
+        self.wallet_snapshot = WalletSnapshotService(self.storage, interval_sec=3600)
 
         logger.info("Services initialized (db=%s)", self.db_path)
 
@@ -239,6 +242,7 @@ class PlatformServer:
 
         self._watchdog_task = asyncio.create_task(self._lease_watchdog())
         self._monitoring_task = asyncio.create_task(self._monitoring_loop())
+        await self.wallet_snapshot.start()
 
         config = uvicorn.Config(
             self.app,
@@ -261,6 +265,8 @@ class PlatformServer:
             tasks.append(self._monitoring_task)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if self.wallet_snapshot:
+            await self.wallet_snapshot.stop()
         await self.broker.stop()
         if self.storage:
             await self.storage.close()

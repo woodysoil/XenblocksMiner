@@ -59,3 +59,35 @@ export interface WSMessage {
   data: any;
   ts: number;
 }
+
+export interface WalletSnapshot {
+  timestamp: number;
+  hashrate: number;
+  online_workers: number;
+  total_workers: number;
+  blocks: number;
+  cumulative_blocks: number;
+  earnings: number;
+}
+
+export interface WalletAchievements {
+  address: string;
+  current_hashrate: number;
+  online_workers: number;
+  total_workers: number;
+  total_blocks: number;
+  peak_hashrate: number;
+  total_earnings: number;
+  mining_days: number;
+  first_seen: number | null;
+}
+
+export interface WalletStats {
+  address: string;
+  online_workers: number;
+  total_workers: number;
+  total_hashrate: number;
+  total_gpus: number;
+  total_blocks: number;
+  total_earnings: number;
+}

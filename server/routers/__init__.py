@@ -10,6 +10,7 @@ from server.routers import (
     provider,
     account,
     admin,
+    wallet,
     ws as ws_router,
 )
 
@@ -22,4 +23,5 @@ def register_all_routers(app: FastAPI):
     app.include_router(provider.router)
     app.include_router(account.router)
     app.include_router(admin.router)
+    app.include_router(wallet.router)
     ws_router.register(app)

@@ -6,13 +6,15 @@ interface MetricCardProps {
   value: string | number;
   delta?: string;
   icon?: ReactNode;
-  variant?: 'default' | 'accent' | 'success' | 'danger';
+  variant?: 'default' | 'accent' | 'success' | 'danger' | 'info' | 'warning';
 }
 
 const variantBorder: Record<string, string> = {
   accent: `border-t-2 border-t-[${colors.accent.DEFAULT}]`,
   success: `border-t-2 border-t-[${colors.success.DEFAULT}]`,
   danger: `border-t-2 border-t-[${colors.danger.DEFAULT}]`,
+  info: `border-t-2 border-t-[${colors.info.DEFAULT}]`,
+  warning: `border-t-2 border-t-[${colors.warning.DEFAULT}]`,
 };
 
 export default function MetricCard({ label, value, delta, icon, variant = 'default' }: MetricCardProps) {
