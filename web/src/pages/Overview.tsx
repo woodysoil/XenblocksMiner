@@ -182,7 +182,7 @@ export default function Overview() {
               <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>{c.label}</span>
               {c.icon}
             </div>
-            <div className={`text-2xl font-bold ${tw.textPrimary} mt-2`}>{c.value}</div>
+            <div className={`text-2xl font-bold ${tw.textPrimary} mt-3 tabular-nums`}>{c.value}</div>
           </div>
         ))}
       </div>
@@ -204,14 +204,19 @@ export default function Overview() {
               activity.map((a, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 py-2.5 border-b border-[#1f2835] text-sm"
+                  className="flex items-center gap-3 py-2.5 border-b border-[#1f2835] text-sm relative"
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: eventDotColor[a.type] || colors.text.tertiary }}
-                  />
+                  <div className="relative shrink-0 flex items-center justify-center w-2.5">
+                    {i < activity.length - 1 && (
+                      <div className="absolute top-3 bottom-[-13px] left-1/2 -translate-x-1/2 w-px bg-[#1f2835]" />
+                    )}
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0 relative z-10"
+                      style={{ backgroundColor: eventDotColor[a.type] || colors.text.tertiary }}
+                    />
+                  </div>
                   <span className={`flex-1 truncate ${tw.textPrimary}`}>{eventLabel(a)}</span>
-                  <span className={`text-xs ${tw.textTertiary} shrink-0`}>{timeAgo(a.timestamp)}</span>
+                  <span className={`text-xs ${tw.textTertiary} tabular-nums shrink-0 w-16 text-right`}>{timeAgo(a.timestamp)}</span>
                 </div>
               ))
             )}
@@ -230,11 +235,11 @@ export default function Overview() {
             <div
               key={item.label}
               className={`flex justify-between items-center py-3 ${
-                i < networkItems.length - 1 ? "border-b border-[#1f2835]" : ""
+                i < networkItems.length - 1 ? "border-b border-[#1f2835]/60" : ""
               }`}
             >
-              <span className="text-xs text-[#5e6673]">{item.label}</span>
-              <span className="text-sm text-[#eaecef] font-medium">{item.value}</span>
+              <span className={`text-xs ${tw.textTertiary}`}>{item.label}</span>
+              <span className={`text-sm ${tw.textPrimary} font-medium tabular-nums`}>{item.value}</span>
             </div>
           ))}
         </div>

@@ -10,11 +10,19 @@ import { StatusBadge, ChartCard } from "../design";
 import Pagination from "../components/Pagination";
 import type { Worker, Block, HashratePoint } from "../types";
 
-function timeAgo(ts: number): string {
+function timeAgo(ts: number): { text: string; sec: number } {
   const sec = Math.floor(Date.now() / 1000 - ts);
-  if (sec < 60) return `${sec}s ago`;
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  return `${Math.floor(sec / 3600)}h ago`;
+  let text: string;
+  if (sec < 60) text = `${sec}s ago`;
+  else if (sec < 3600) text = `${Math.floor(sec / 60)}m ago`;
+  else text = `${Math.floor(sec / 3600)}h ago`;
+  return { text, sec };
+}
+
+function lastSeenColor(sec: number): string {
+  if (sec < 300) return "text-[#0ecb81]";   // <5m  green
+  if (sec < 1800) return "text-[#f0b90b]";  // <30m yellow
+  return "text-[#f6465d]";                   // >30m red
 }
 
 function formatHashrate(h: number): string {
@@ -137,7 +145,7 @@ export default function Monitoring() {
             <h3 className={`text-sm font-semibold ${tw.textPrimary}`}>Worker Fleet</h3>
           </div>
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
                   <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
@@ -176,12 +184,13 @@ export default function Monitoring() {
                       : w.state === "LEASED"
                         ? "leased"
                         : "online";
+                    const seen = timeAgo(w.last_heartbeat);
                     return (
                       <tr key={w.worker_id} className={tw.tableRow}>
                         <td className={`${tw.tableCell} font-mono text-xs`}>
-                          {w.worker_id}
+                          <span className="block truncate max-w-[120px]">{w.worker_id}</span>
                         </td>
-                        <td className={`${tw.tableCell} font-mono text-xs text-[#848e9c]`}>
+                        <td className={`${tw.tableCell} font-mono text-xs text-[#6b7785]`}>
                           {w.eth_address
                             ? `${w.eth_address.slice(0, 5)}...${w.eth_address.slice(-4)}`
                             : "\u2014"}
@@ -193,12 +202,12 @@ export default function Monitoring() {
                         </td>
                         <td className={tw.tableCell}>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-[#22d1ee] w-20">
+                            <span className="font-mono text-xs tabular-nums text-[#22d1ee] w-20">
                               {w.online ? formatHashrate(w.hashrate) : "\u2014"}
                             </span>
-                            <div className="flex-1 h-1.5 bg-[rgba(34,209,238,0.1)] rounded-full overflow-hidden max-w-[120px]">
+                            <div className="flex-1 h-2 bg-[rgba(34,209,238,0.08)] rounded-full overflow-hidden max-w-[120px]">
                               <div
-                                className="h-full rounded-full bg-[rgba(34,209,238,0.5)]"
+                                className="h-full rounded-full bg-[rgba(34,209,238,0.5)] shadow-[0_0_6px_rgba(34,209,238,0.35)]"
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
@@ -207,9 +216,9 @@ export default function Monitoring() {
                         <td className={tw.tableCell}>
                           <StatusBadge status={status} size="sm" />
                         </td>
-                        <td className={tw.tableCell}>{w.self_blocks_found}</td>
-                        <td className={`${tw.tableCell} text-[#5e6673] text-xs`}>
-                          {timeAgo(w.last_heartbeat)}
+                        <td className={`${tw.tableCell} tabular-nums`}>{w.self_blocks_found}</td>
+                        <td className={`${tw.tableCell} text-xs tabular-nums ${lastSeenColor(seen.sec)}`}>
+                          {seen.text}
                         </td>
                       </tr>
                     );
@@ -306,15 +315,15 @@ function BlockRow({ block: b, isNew }: { block: Block; isNew?: boolean }) {
         isNew ? "animate-[blockFlash_1s_ease-out]" : ""
       }`}
     >
-      <span className="font-mono truncate text-[#eaecef]">{b.hash.slice(0, 16)}{"\u2026"}</span>
+      <span className="font-mono truncate text-[#848e9c]">{b.hash.slice(0, 16)}{"\u2026"}</span>
       <div className="flex items-center gap-2 shrink-0">
         <span className="font-mono text-[#848e9c]">{b.worker_id}</span>
         {b.lease_id ? (
           <span className={tw.badgeInfo}>leased</span>
         ) : (
-          <span className="text-xs px-2 py-0.5 rounded bg-[#1f2835] text-[#848e9c]">self</span>
+          <span className={tw.badgeSuccess}>self</span>
         )}
-        <span className="text-[#5e6673] w-14 text-right">{timeAgo(b.timestamp)}</span>
+        <span className="text-[#5e6673] tabular-nums w-14 text-right">{timeAgo(b.timestamp).text}</span>
       </div>
     </div>
   );
@@ -322,10 +331,13 @@ function BlockRow({ block: b, isNew }: { block: Block; isNew?: boolean }) {
 
 function MiniStat({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
   return (
-    <div className={`${tw.card} px-4 py-3`}>
+    <div
+      className={`${tw.card} px-4 py-3`}
+      style={color ? { borderLeftWidth: 2, borderLeftColor: color } : undefined}
+    >
       <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>{label}</span>
       <div className="flex items-baseline gap-1.5 mt-0.5">
-        <span className="text-lg font-bold" style={color ? { color } : undefined}>
+        <span className="text-lg font-bold tabular-nums" style={color ? { color } : undefined}>
           {typeof value === "number" ? value.toLocaleString() : value}
         </span>
         {sub && <span className={`text-xs ${tw.textTertiary}`}>{sub}</span>}

@@ -8,3 +8,4 @@ export { default as HashText } from './HashText';
 export { default as ChartCard } from './ChartCard';
 export { default as EmptyState } from './EmptyState';
 export { default as Pill } from './Pill';
+export { default as Skeleton } from './Skeleton';

@@ -11,16 +11,16 @@ interface ChartCardProps {
 export default function ChartCard({ title, subtitle, action, children }: ChartCardProps) {
   return (
     <div className={tw.card}>
-      <div className="flex justify-between items-center px-5 pt-4 pb-2">
-        <div>
+      <div className="flex justify-between items-start px-5 pt-5 pb-3">
+        <div className="min-w-0">
           <h3 className={`text-sm font-semibold ${tw.textPrimary}`}>{title}</h3>
           {subtitle && (
             <p className={`text-xs ${tw.textTertiary} mt-0.5`}>{subtitle}</p>
           )}
         </div>
-        {action && <div>{action}</div>}
+        {action && <div className="ml-4 shrink-0">{action}</div>}
       </div>
-      <div className="px-2 pb-4">{children}</div>
+      <div className="px-3 pb-4">{children}</div>
     </div>
   );
 }

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
-/* Custom scrollbar */
+/* ── Smooth scrolling ──────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Custom scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -9,17 +14,33 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a3441;
-  border-radius: 3px;
+  background: rgba(42, 52, 65, 0.5);
+  border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a4451;
+  background: rgba(34, 209, 238, 0.35);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 * {
   scrollbar-width: thin;
   scrollbar-color: #2a3441 transparent;
 }
 
+/* ── Selection ─────────────────────────────────────────────── */
+::selection {
+  background: rgba(34, 209, 238, 0.3);
+  color: #eaecef;
+}
+
+/* ── Focus-visible ─────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #22d1ee;
+  outline-offset: 2px;
+}
+
+/* ── Animations ────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -28,4 +49,22 @@
 @keyframes blockFlash {
   0% { border-color: #22d1ee; background-color: rgba(34,209,238,0.06); }
   100% { border-color: transparent; background-color: transparent; }
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-page-enter {
+  animation: pageEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Global card transitions ──────────────────────────────── */
+[class*="border"][class*="rounded-[10px]"] {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* ── Tabular nums for financial data ──────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

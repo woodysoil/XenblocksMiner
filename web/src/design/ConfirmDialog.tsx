@@ -24,7 +24,7 @@ export default function ConfirmDialog({
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md rounded-lg bg-[#141820] border border-[#2a3441] p-6 shadow-xl">
+        <AlertDialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md rounded-lg bg-[#141820] border border-[#2a3441] p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <AlertDialog.Title className={`text-base font-semibold ${tw.textPrimary}`}>
             {title}
           </AlertDialog.Title>
@@ -32,9 +32,9 @@ export default function ConfirmDialog({
             {description}
           </AlertDialog.Description>
           <div className="mt-6 flex justify-end gap-3">
-            <AlertDialog.Cancel className={tw.btnSecondary}>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Cancel className={`${tw.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d4f65]`}>Cancel</AlertDialog.Cancel>
             <AlertDialog.Action
-              className={variant === "danger" ? tw.btnDanger : tw.btnPrimary}
+              className={`${variant === "danger" ? tw.btnDanger : tw.btnPrimary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#22d1ee]`}
               onClick={onConfirm}
             >
               {confirmLabel}

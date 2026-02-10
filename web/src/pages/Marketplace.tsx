@@ -27,7 +27,7 @@ function formatHashrate(h: number): string {
 function Stars({ score }: { score: number }) {
   const n = Math.min(Math.max(Math.round(score), 0), 5);
   return (
-    <span className="text-xs tracking-wide">
+    <span className="inline-flex items-center gap-0.5 text-xs">
       {Array.from({ length: 5 }, (_, i) => (
         <span key={i} style={{ color: i < n ? colors.warning.DEFAULT : colors.border.default }}>
           {i < n ? "★" : "☆"}
@@ -83,7 +83,7 @@ export default function Marketplace() {
       <div className={`${tw.card} overflow-hidden`}>
         <button
           onClick={() => setRentalsOpen(!rentalsOpen)}
-          className={`w-full flex items-center justify-between px-5 py-3 ${tw.textPrimary} text-sm font-medium hover:bg-[#1a2029] transition-colors`}
+          className={`w-full flex items-center justify-between px-5 py-3 ${tw.textPrimary} text-sm font-medium hover:bg-[#1a2029]/80 active:bg-[#1f2835] transition-colors rounded-[10px]`}
         >
           <span>Active Rentals (0)</span>
           <svg
@@ -107,25 +107,31 @@ export default function Marketplace() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className={`text-xl font-semibold ${tw.textPrimary}`}>Hashpower Marketplace</h2>
         <div className="flex flex-wrap gap-3 items-center">
-          <select value={gpuFilter} onChange={(e) => handleFilterChange(setGpuFilter, e.target.value)} className={tw.input}>
+          <select value={gpuFilter} onChange={(e) => handleFilterChange(setGpuFilter, e.target.value)} className={`${tw.input} appearance-none pr-8 bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%23848e9c%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M7%2010l5%205%205-5z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat`}>
             {gpuTypes.map((g) => (
               <option key={g} value={g}>
                 {g === "all" ? "All GPUs" : g}
               </option>
             ))}
           </select>
-          <select value={sort} onChange={(e) => handleFilterChange(setSort, e.target.value)} className={tw.input}>
+          <select value={sort} onChange={(e) => handleFilterChange(setSort, e.target.value)} className={`${tw.input} appearance-none pr-8 bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%23848e9c%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M7%2010l5%205%205-5z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat`}>
             <option value="price_asc">Price: Low → High</option>
             <option value="hashrate_desc">Hashrate: High → Low</option>
             <option value="reputation">Reputation</option>
           </select>
-          <input
-            type="text"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => handleFilterChange(setSearch, e.target.value)}
-            className={tw.input}
-          />
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5e6673] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => handleFilterChange(setSearch, e.target.value)}
+              className={`${tw.input} pl-9`}
+            />
+          </div>
         </div>
       </div>
 
@@ -149,7 +155,7 @@ export default function Marketplace() {
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {providers.map((p) => (
-              <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group`}>
+              <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group hover:-translate-y-0.5 hover:shadow-lg transition-all duration-150`}>
                 <div className="flex items-center justify-between">
                   <HashText text={p.worker_id} chars={12} copyable />
                   <Stars score={p.reputation || 0} />
@@ -161,35 +167,38 @@ export default function Marketplace() {
 
                 <div className="grid grid-cols-3 gap-3 mt-4">
                   <div>
-                    <p className={`text-sm font-semibold ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
+                    <p className={`text-sm font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
                     <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: colors.warning.DEFAULT }}>
+                    <p className="text-sm font-semibold tabular-nums" style={{ color: colors.warning.DEFAULT }}>
                       {p.price_per_min.toFixed(4)}
                     </p>
                     <p className={`text-xs ${tw.textTertiary}`}>/min</p>
                   </div>
                   <div>
-                    <p className={`text-sm ${tw.textPrimary}`}>{p.blocks_mined}</p>
+                    <p className={`text-sm tabular-nums ${tw.textPrimary}`}>{p.blocks_mined}</p>
                     <p className={`text-xs ${tw.textTertiary}`}>mined</p>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-[#1f2835] flex items-center justify-between">
                   <span className="inline-flex items-center gap-1.5 text-xs">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
-                        boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
-                      }}
-                    />
+                    <span className="relative flex h-2 w-2">
+                      {isAvailable(p.state) && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: colors.success.DEFAULT }} />}
+                      <span
+                        className="relative inline-flex h-2 w-2 rounded-full"
+                        style={{
+                          backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
+                          boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
+                        }}
+                      />
+                    </span>
                     <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
                       {isAvailable(p.state) ? "Available" : "Self-mining"}
                     </span>
                   </span>
-                  <button className={`${tw.btnPrimary} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                  <button className={`${tw.btnPrimary} sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
                     Rent
                   </button>
                 </div>

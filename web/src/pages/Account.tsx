@@ -42,7 +42,10 @@ export default function Account() {
         <p className={`text-sm ${tw.textSecondary}`}>No API keys generated</p>
       </div>
 
-      <button onClick={disconnect} className={tw.btnDanger}>
+      <button
+        onClick={disconnect}
+        className={`${tw.btnDanger} hover:shadow-[0_0_12px_rgba(246,70,93,0.2)] transition-all duration-200`}
+      >
         Disconnect Wallet
       </button>
     </div>

@@ -173,7 +173,7 @@ export default function Provider() {
               `Peak Hashrate: ${formatHashrate(peakHashrate)}\n` +
               `Mining Days: ${miningDays}\n\n` +
               `#XenBlocks #Mining`;
-            navigator.clipboard.writeText(text);
+            navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard!"));
           }}
           className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#1f2835] border border-[#2a3441] text-sm text-[#848e9c] hover:text-[#eaecef] transition-colors"
         >
@@ -187,17 +187,16 @@ export default function Provider() {
       </div>
 
       {/* Achievement Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard label="Total Blocks" value={totalBlocks.toLocaleString()} variant="accent" />
         <MetricCard label="Peak Hashrate" value={formatHashrate(peakHashrate)} variant="info" />
         <MetricCard label="Total Earned" value={`${totalEarned.toFixed(2)} XNM`} variant="success" />
         <MetricCard label="Mining Days" value={miningDays.toFixed(0)} variant="warning" />
         <div
-          className={`${tw.card} ${tw.cardHover} p-5 border-t-2`}
-          style={{ borderTopColor: colors.text.tertiary }}
+          className={`${tw.card} ${tw.cardHover} p-5 border-t-2 border-t-[#5e6673]`}
         >
           <span className={`text-xs ${tw.textTertiary} uppercase tracking-wider`}>Workers</span>
-          <div className={`text-2xl font-bold ${tw.textPrimary} mt-1`}>
+          <div className={`text-2xl font-bold ${tw.textPrimary} mt-1 tabular-nums`}>
             {workers.filter(w => w.online).length}/{workers.length}
           </div>
         </div>
@@ -245,7 +244,7 @@ export default function Provider() {
         <div className="px-5 py-4">
           <div className="flex items-center justify-between mb-2">
             <span className={`text-sm font-medium ${tw.textPrimary}`}>Current Hashrate</span>
-            <span className="text-lg font-bold" style={{ color: colors.accent.DEFAULT }}>
+            <span className="text-lg font-bold tabular-nums" style={{ color: colors.accent.DEFAULT }}>
               {formatHashrate(avgHashrate)}
             </span>
           </div>
@@ -255,6 +254,7 @@ export default function Provider() {
               style={{
                 width: peakHashrate > 0 ? `${Math.min((avgHashrate / peakHashrate) * 100, 100)}%` : "0%",
                 background: `linear-gradient(90deg, ${colors.accent.DEFAULT}, ${colors.info.DEFAULT})`,
+                boxShadow: avgHashrate > 0 ? `0 0 8px ${colors.accent.glow}, 4px 0 12px ${colors.info.DEFAULT}40` : undefined,
               }}
             />
           </div>
@@ -269,20 +269,31 @@ export default function Provider() {
       <div>
         <h3 className={`${tw.sectionTitle} mb-3`}>My Workers ({workers.length})</h3>
         {/* Filter tabs */}
-        <div className="flex gap-1 mb-4">
+        <div className="flex flex-wrap gap-1 mb-4 border-b border-[#1f2835] pb-px">
           {filterTabs.map((t) => {
             const count = t.key === "ALL" ? workers.length : workers.filter((w) => w.state === t.key).length;
+            const active = filter === t.key;
             return (
               <button
                 key={t.key}
                 onClick={() => setFilter(t.key)}
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
-                  filter === t.key
-                    ? "bg-[#22d1ee]/15 text-[#22d1ee] border border-[#22d1ee]/30"
-                    : "text-[#848e9c] border border-[#2a3441] hover:text-[#eaecef] hover:border-[#3d4f65]"
+                className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "text-[#22d1ee]"
+                    : "text-[#848e9c] hover:text-[#eaecef]"
                 }`}
               >
-                {t.label} ({count})
+                {t.label}
+                <span className={`ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] leading-none tabular-nums ${
+                  active
+                    ? "bg-[rgba(34,209,238,0.15)] text-[#22d1ee]"
+                    : "bg-[#1a2029] text-[#5e6673]"
+                }`}>
+                  {count}
+                </span>
+                {active && (
+                  <span className="absolute bottom-0 left-1 right-1 h-0.5 rounded-full bg-[#22d1ee] shadow-[0_0_6px_rgba(34,209,238,0.4)]" />
+                )}
               </button>
             );
           })}
@@ -295,9 +306,9 @@ export default function Provider() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredWorkers.map((w) => (
-              <div key={w.worker_id} className={`${tw.card} p-5`}>
+              <div key={w.worker_id} className={`${tw.card} ${tw.cardHover} p-5`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`font-mono text-sm font-medium ${tw.textPrimary}`}>{w.worker_id}</span>
+                  <span className={`font-mono text-sm font-medium ${tw.textPrimary} truncate max-w-[180px]`} title={w.worker_id}>{w.worker_id}</span>
                   <StatusBadge status={stateToStatus[w.state] || "idle"} label={stateToLabel[w.state]} size="sm" />
                 </div>
                 <div className="mb-3">
@@ -306,19 +317,19 @@ export default function Provider() {
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div>
                     <p className={`text-xs ${tw.textTertiary}`}>Hashrate</p>
-                    <p className={`font-mono font-semibold ${tw.textPrimary}`}>{formatHashrate(w.hashrate)}</p>
+                    <p className={`font-mono font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(w.hashrate)}</p>
                   </div>
                   <div>
                     <p className={`text-xs ${tw.textTertiary}`}>Blocks</p>
-                    <p className={`font-mono ${tw.textPrimary}`}>{w.self_blocks_found}</p>
+                    <p className={`font-mono tabular-nums ${tw.textPrimary}`}>{w.self_blocks_found}</p>
                   </div>
                   <div>
                     <p className={`text-xs ${tw.textTertiary}`}>Uptime</p>
-                    <p className={tw.textPrimary}>{formatUptime(w.total_online_sec)}</p>
+                    <p className={`tabular-nums ${tw.textPrimary}`}>{formatUptime(w.total_online_sec)}</p>
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-[#1f2835] flex items-center justify-between">
-                  <span className="text-xs font-mono" style={{ color: colors.warning.DEFAULT }}>
+                  <span className="text-xs font-mono tabular-nums" style={{ color: colors.warning.DEFAULT }}>
                     {w.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
                   </span>
                   <div className="flex items-center gap-3">
@@ -328,20 +339,26 @@ export default function Provider() {
                       <button
                         disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
                         onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
-                        className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
                       >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
                         {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "Unlist"}
                       </button>
                     ) : (
                       <button
                         disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
                         onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
-                        className="px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
                       >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
                         {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "List"}
                       </button>
                     )}
-                    <span className={`text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
+                      <span className="relative flex h-2 w-2">
+                        {w.online && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#0ecb81] opacity-75" />}
+                        <span className={`relative inline-flex h-2 w-2 rounded-full ${w.online ? "bg-[#0ecb81]" : "bg-[#f6465d]"}`} />
+                      </span>
                       {w.online ? "Online" : "Offline"}
                     </span>
                   </div>

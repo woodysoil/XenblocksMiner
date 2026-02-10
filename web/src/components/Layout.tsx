@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useDashboard } from "../context/DashboardContext";
 import { useWallet } from "../context/WalletContext";
 
-const navItems = [
+const publicNav = [
   {
     to: "/",
     label: "Overview",
@@ -35,6 +36,9 @@ const navItems = [
       </svg>
     ),
   },
+];
+
+const walletNav = [
   {
     to: "/provider",
     label: "Provider",
@@ -77,18 +81,56 @@ const pageTitles: Record<string, string> = {
   "/account": "Account",
 };
 
+function SideNavLink({ to, label, icon, end, onClick }: { to: string; label: string; icon: React.ReactNode; end?: boolean; onClick?: () => void }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onClick}
+      className={({ isActive }) =>
+        `group relative flex items-center gap-3 h-10 px-4 mx-2 rounded-md text-sm transition-all duration-200 ${
+          isActive
+            ? "bg-[#22d1ee]/8 text-[#22d1ee] font-medium"
+            : "text-[#848e9c] hover:text-[#eaecef] hover:bg-[#1a2029]"
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-[#22d1ee] rounded-r-full" />
+          )}
+          <span className="w-5 h-5 shrink-0 flex items-center justify-center">{icon}</span>
+          <span>{label}</span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
 export default function Layout() {
   const { connected } = useDashboard();
   const { address, connecting, connect, disconnect } = useWallet();
   const location = useLocation();
   const title = pageTitles[location.pathname] || "XenBlocks";
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const truncAddr = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
     <div className="flex min-h-screen bg-[#0b0e11]">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="fixed top-0 left-0 bottom-0 w-56 bg-[#141820] border-r border-[#2a3441] flex flex-col z-20">
+      <aside className={`fixed top-0 left-0 bottom-0 w-56 bg-[#141820] border-r border-[#2a3441] flex flex-col z-40 transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
         {/* Logo */}
         <div className="h-16 px-5 flex items-center gap-3">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -103,28 +145,39 @@ export default function Layout() {
           <span className="text-[15px] font-bold tracking-tight text-[#eaecef]">
             XenBlocks
           </span>
+          {/* Mobile close button */}
+          <button
+            onClick={closeSidebar}
+            className="ml-auto md:hidden text-[#848e9c] hover:text-[#eaecef] transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
         </div>
         <div className="h-px bg-[#1f2835] mx-4" />
 
-        {/* Nav */}
-        <nav className="flex-1 mt-4 space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-3 h-10 px-4 mx-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? "bg-[#1f2835] text-[#22d1ee] font-medium"
-                    : "text-[#848e9c] hover:text-[#eaecef] hover:bg-[#1a2029]"
-                }`
-              }
-            >
-              {item.icon}
-              {item.label}
-            </NavLink>
-          ))}
+        {/* Nav — Public */}
+        <nav className="flex-1 mt-4 flex flex-col overflow-y-auto">
+          <div className="space-y-1">
+            {publicNav.map((item) => (
+              <SideNavLink key={item.to} {...item} end={item.to === "/"} onClick={closeSidebar} />
+            ))}
+          </div>
+
+          {/* Separator */}
+          <div className="mx-4 my-3 flex items-center gap-2">
+            <div className="flex-1 h-px bg-[#1f2835]" />
+            <span className="text-[10px] uppercase tracking-widest text-[#5e6673] select-none">Wallet</span>
+            <div className="flex-1 h-px bg-[#1f2835]" />
+          </div>
+
+          {/* Nav — Wallet */}
+          <div className="space-y-1">
+            {walletNav.map((item) => (
+              <SideNavLink key={item.to} {...item} onClick={closeSidebar} />
+            ))}
+          </div>
         </nav>
 
         {/* Bottom */}
@@ -149,20 +202,31 @@ export default function Layout() {
       </aside>
 
       {/* Main */}
-      <div className="ml-56 flex-1 flex flex-col min-h-screen bg-[#0b0e11]">
+      <div className="md:ml-56 flex-1 flex flex-col min-h-screen bg-[#0b0e11]">
         {/* Top bar */}
-        <header className="h-14 bg-[#141820] border-b border-[#2a3441] flex items-center justify-between px-6 shrink-0">
-          <h1 className="text-sm font-semibold text-[#eaecef]">{title}</h1>
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-10 h-14 bg-[#141820]/80 backdrop-blur-md border-b border-[#2a3441] flex items-center justify-between px-4 sm:px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden text-[#848e9c] hover:text-[#eaecef] transition-colors -ml-1"
+            >
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M4 6h14M4 11h14M4 16h14" />
+              </svg>
+            </button>
+            <h1 className="text-sm font-semibold text-[#eaecef]">{title}</h1>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4">
             <input
               type="text"
               placeholder="Search..."
-              className="bg-[#0b0e11] border border-[#2a3441] rounded-md px-3 py-1.5 text-xs text-[#eaecef] placeholder-[#5e6673] focus:border-[#22d1ee] focus:outline-none w-48 transition-colors"
+              className="hidden sm:block bg-[#0b0e11] border border-[#2a3441] rounded-md px-3 py-1.5 text-xs text-[#eaecef] placeholder-[#5e6673] focus:border-[#22d1ee] focus:outline-none w-48 transition-colors"
             />
             {address ? (
               <button
                 onClick={disconnect}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#1f2835] border border-[#2a3441] text-xs font-mono text-[#22d1ee] hover:border-[#22d1ee] transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#1f2835] border border-[#2a3441] text-xs font-mono text-[#22d1ee] hover:border-[#22d1ee] hover:shadow-[0_0_12px_rgba(34,209,238,0.15)] transition-all duration-200"
               >
                 <span className="w-2 h-2 rounded-full bg-[#0ecb81]" />
                 {truncAddr}
@@ -171,7 +235,7 @@ export default function Layout() {
               <button
                 onClick={connect}
                 disabled={connecting}
-                className="px-3 py-1.5 rounded-md bg-[#22d1ee]/10 border border-[#22d1ee]/30 text-xs font-medium text-[#22d1ee] hover:bg-[#22d1ee]/20 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 rounded-md bg-[#22d1ee]/10 border border-[#22d1ee]/30 text-xs font-medium text-[#22d1ee] hover:bg-[#22d1ee]/20 hover:shadow-[0_0_12px_rgba(34,209,238,0.15)] transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
               >
                 {connecting ? "Connecting..." : "Connect Wallet"}
               </button>
@@ -186,8 +250,10 @@ export default function Layout() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-6">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div key={location.pathname} className="animate-page-enter">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -40,7 +40,7 @@ export default function Renter() {
       </div>
 
       <div className={`${tw.card} p-6`}>
-        <p className={`text-sm ${tw.textSecondary} text-center`}>
+        <p className={`text-sm ${tw.textSecondary} text-center py-4`}>
           No active leases — browse the Marketplace to rent hashpower
         </p>
       </div>
@@ -58,8 +58,8 @@ export default function Renter() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={4} className="py-8">
+              <tr className="hover:bg-[#1a2029] transition-colors">
+                <td colSpan={4} className="py-10">
                   <p className={`text-sm ${tw.textTertiary} text-center`}>No lease history</p>
                 </td>
               </tr>
