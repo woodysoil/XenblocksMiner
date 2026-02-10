@@ -530,7 +530,8 @@ int main(int argc, const char *const *argv)
             ("platform-mode", "enable hashpower marketplace platform mode")
             ("mqtt-broker", po::value<std::string>(), "MQTT broker URI for platform mode (e.g. tcp://broker:1883)")
             ("worker-id", po::value<std::string>(), "override worker ID for platform registration")
-            ("testBlockPattern", po::value<std::string>(), "override block detection pattern for testing (default: XEN11)");
+            ("testBlockPattern", po::value<std::string>(), "override block detection pattern for testing (default: XEN11)")
+            ("batchSize", po::value<int>(), "limit GPU batch size (reduces VRAM usage)");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -548,6 +549,11 @@ int main(int argc, const char *const *argv)
         if(vm.count("testBlockPattern")){
             globalTestBlockPattern = vm["testBlockPattern"].as<std::string>();
             std::cout << "Test block pattern override: " << globalTestBlockPattern << std::endl;
+        }
+
+        if(vm.count("batchSize")){
+            globalMaxBatchSize = vm["batchSize"].as<int>();
+            std::cout << "Max batch size override: " << globalMaxBatchSize << std::endl;
         }
 
         // Preload configuration from local file
@@ -708,6 +714,20 @@ int main(int argc, const char *const *argv)
     Logger logger("log", 1024 * 1024);
     SubmitCallback submitCallback = [&logger](const std::string &hexsalt, const std::string &key, const std::string &hashed_pure, const size_t attempts, const float hashrate) {
 
+        // Report block to platform via MQTT (always, regardless of test mode)
+        if (globalPlatformManager && globalPlatformManager->isRunning()) {
+            int diff_for_verify = 40404;
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                diff_for_verify = globalDifficulty;
+            }
+            Argon2idHasher verifyHasher(1, diff_for_verify, 1, hexsalt, HASH_LENGTH);
+            std::string verified_hash = verifyHasher.generateHash(key);
+            if (verified_hash.find(hashed_pure) != std::string::npos) {
+                globalPlatformManager->onBlockFound(verified_hash, key, "0x" + hexsalt, attempts, hashrate);
+            }
+        }
+
         std::function<void()> task = [&logger, hexsalt, key, hashed_pure, attempts, hashrate]() {
             int difficulty = 40404;
             {
@@ -721,11 +741,6 @@ int main(int argc, const char *const *argv)
             if(hashed_data.find(hashed_pure) == std::string::npos) {
                 // std::cout << "Hashed data does not match" << std::endl;
                 return;
-            }
-
-            // Report block to platform if in platform mode
-            if (globalPlatformManager && globalPlatformManager->isRunning()) {
-                globalPlatformManager->onBlockFound(hashed_data, key, "0x" + hexsalt, attempts, hashrate);
             }
 
             std::ostringstream hashrateStream;
@@ -816,11 +831,11 @@ int main(int argc, const char *const *argv)
             }
         };
 
-        if (!isTestFixedDiff || globalPlatformMode) {
+        if (!isTestFixedDiff) {
             std::lock_guard<std::mutex> lock(mtx_submit);
             taskQueue.push(std::move(task));
         } else {
-            std::cout << "Block was found but skipped due to running in test mode." << std::endl;
+            std::cout << "Block found (test mode, RPC skipped)." << std::endl;
         }
         cv.notify_one();
     };
