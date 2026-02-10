@@ -6,6 +6,9 @@ import GpuBadge from "../design/GpuBadge";
 import HashText from "../design/HashText";
 import EmptyState from "../design/EmptyState";
 import Pagination from "../components/Pagination";
+import ViewToggle from "../design/ViewToggle";
+import type { ViewMode } from "../design/ViewToggle";
+import { usePersistedState } from "../hooks/usePersistedState";
 
 interface ProviderListing {
   worker_id: string;
@@ -40,6 +43,7 @@ function Stars({ score }: { score: number }) {
 const PAGE_SIZE = 18;
 
 export default function Marketplace() {
+  const [viewMode, setViewMode] = usePersistedState<ViewMode>("marketplace-view", "grid");
   const [gpuFilter, setGpuFilter] = useState("all");
   const [sort, setSort] = useState("price_asc");
   const [search, setSearch] = useState("");
@@ -132,6 +136,7 @@ export default function Marketplace() {
               className={`${tw.input} pl-9`}
             />
           </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
       </div>
 
@@ -153,58 +158,108 @@ export default function Marketplace() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {providers.map((p) => (
-              <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group hover:-translate-y-0.5 hover:shadow-lg transition-all duration-150`}>
-                <div className="flex items-center justify-between">
-                  <HashText text={p.worker_id} chars={12} copyable />
-                  <Stars score={p.reputation || 0} />
-                </div>
-
-                <div className="mt-3">
-                  <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
-                </div>
-
-                <div className="grid grid-cols-3 gap-3 mt-4">
-                  <div>
-                    <p className={`text-sm font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
-                    <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
+          {viewMode === "grid" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {providers.map((p) => (
+                <div key={p.worker_id} className={`${tw.card} ${tw.cardHover} p-5 group hover:-translate-y-0.5 hover:shadow-lg transition-all duration-150`}>
+                  <div className="flex items-center justify-between">
+                    <HashText text={p.worker_id} chars={12} copyable />
+                    <Stars score={p.reputation || 0} />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold tabular-nums" style={{ color: colors.warning.DEFAULT }}>
-                      {p.price_per_min.toFixed(4)}
-                    </p>
-                    <p className={`text-xs ${tw.textTertiary}`}>/min</p>
-                  </div>
-                  <div>
-                    <p className={`text-sm tabular-nums ${tw.textPrimary}`}>{p.blocks_mined}</p>
-                    <p className={`text-xs ${tw.textTertiary}`}>mined</p>
-                  </div>
-                </div>
 
-                <div className="mt-4 pt-4 border-t border-[#1f2835] flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-xs">
-                    <span className="relative flex h-2 w-2">
-                      {isAvailable(p.state) && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: colors.success.DEFAULT }} />}
-                      <span
-                        className="relative inline-flex h-2 w-2 rounded-full"
-                        style={{
-                          backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
-                          boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
-                        }}
-                      />
+                  <div className="mt-3">
+                    <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    <div>
+                      <p className={`text-sm font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(p.hashrate)}</p>
+                      <p className={`text-xs ${tw.textTertiary}`}>H/s</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold tabular-nums" style={{ color: colors.warning.DEFAULT }}>
+                        {p.price_per_min.toFixed(4)}
+                      </p>
+                      <p className={`text-xs ${tw.textTertiary}`}>/min</p>
+                    </div>
+                    <div>
+                      <p className={`text-sm tabular-nums ${tw.textPrimary}`}>{p.blocks_mined}</p>
+                      <p className={`text-xs ${tw.textTertiary}`}>mined</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-[#1f2835] flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs">
+                      <span className="relative flex h-2 w-2">
+                        {isAvailable(p.state) && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: colors.success.DEFAULT }} />}
+                        <span
+                          className="relative inline-flex h-2 w-2 rounded-full"
+                          style={{
+                            backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary,
+                            boxShadow: isAvailable(p.state) ? `0 0 6px ${colors.success.DEFAULT}50` : undefined,
+                          }}
+                        />
+                      </span>
+                      <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
+                        {isAvailable(p.state) ? "Available" : "Self-mining"}
+                      </span>
                     </span>
-                    <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
-                      {isAvailable(p.state) ? "Available" : "Self-mining"}
-                    </span>
-                  </span>
-                  <button className={`${tw.btnPrimary} sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
-                    Rent
-                  </button>
+                    <button className={`${tw.btnPrimary} sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
+                      Rent
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className={`${tw.card} overflow-x-auto`}>
+              <table className="w-full text-sm min-w-[700px]">
+                <thead>
+                  <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Rating</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {providers.map((p) => (
+                    <tr key={p.worker_id} className={tw.tableRow}>
+                      <td className={`${tw.tableCell} font-mono text-xs`}>
+                        <HashText text={p.worker_id} chars={12} copyable />
+                      </td>
+                      <td className={tw.tableCell}>
+                        <GpuBadge name={p.gpu_count > 1 ? `${p.gpu_count}x ${p.gpu_name || "GPU"}` : p.gpu_name || "GPU"} />
+                      </td>
+                      <td className={`${tw.tableCell} font-mono tabular-nums`}>
+                        {formatHashrate(p.hashrate)} <span className={tw.textTertiary}>H/s</span>
+                      </td>
+                      <td className={`${tw.tableCell} font-mono tabular-nums`} style={{ color: colors.warning.DEFAULT }}>
+                        {p.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
+                      </td>
+                      <td className={`${tw.tableCell} tabular-nums`}>{p.blocks_mined}</td>
+                      <td className={tw.tableCell}><Stars score={p.reputation || 0} /></td>
+                      <td className={tw.tableCell}>
+                        <span className="inline-flex items-center gap-1.5 text-xs">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }} />
+                          <span style={{ color: isAvailable(p.state) ? colors.success.DEFAULT : colors.text.tertiary }}>
+                            {isAvailable(p.state) ? "Available" : "Self-mining"}
+                          </span>
+                        </span>
+                      </td>
+                      <td className={tw.tableCell}>
+                        <button className={tw.btnPrimary + " text-xs px-3 py-1"}>Rent</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}

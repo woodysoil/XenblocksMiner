@@ -10,6 +10,9 @@ import { ChartCard } from "../design";
 import LWChart from "../design/LWChart";
 import EmptyState from "../design/EmptyState";
 import ConfirmDialog from "../design/ConfirmDialog";
+import ViewToggle from "../design/ViewToggle";
+import type { ViewMode } from "../design/ViewToggle";
+import { usePersistedState } from "../hooks/usePersistedState";
 import { useWallet } from "../context/WalletContext";
 import { apiFetch } from "../api";
 import type { WalletSnapshot, WalletAchievements } from "../types";
@@ -79,6 +82,7 @@ export default function Provider() {
     workerId: string;
     targetState: "AVAILABLE" | "SELF_MINING";
   } | null>(null);
+  const [viewMode, setViewMode] = usePersistedState<ViewMode>("provider-workers-view", "grid");
 
   const { data: workersData } = useQuery({
     queryKey: ["provider", "workers", address],
@@ -266,8 +270,11 @@ export default function Provider() {
       </div>
 
       {/* My Workers */}
-      <div>
-        <h3 className={`${tw.sectionTitle} mb-3`}>My Workers ({workers.length})</h3>
+      <div className="min-h-[400px]">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className={tw.sectionTitle}>My Workers ({workers.length})</h3>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </div>
         {/* Filter tabs */}
         <div className="flex flex-wrap gap-1 mb-4 border-b border-[#1f2835] pb-px">
           {filterTabs.map((t) => {
@@ -303,7 +310,7 @@ export default function Provider() {
             title={filter === "ALL" ? "No workers found" : `No ${filterTabs.find((t) => t.key === filter)?.label.toLowerCase()} workers`}
             description={filter === "ALL" ? "Make sure your miners are registered with this wallet address." : "Try a different filter."}
           />
-        ) : (
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredWorkers.map((w) => (
               <div key={w.worker_id} className={`${tw.card} ${tw.cardHover} p-5`}>
@@ -365,6 +372,63 @@ export default function Provider() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className={`${tw.card} overflow-x-auto`}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredWorkers.map((w) => (
+                  <tr key={w.worker_id} className={tw.tableRow}>
+                    <td className={`${tw.tableCell} font-mono text-xs`}>
+                      <span className="truncate max-w-[120px] block" title={w.worker_id}>{w.worker_id}</span>
+                    </td>
+                    <td className={tw.tableCell}>
+                      <GpuBadge name={w.gpu_name || "GPU"} memory={w.memory_gb || 0} />
+                    </td>
+                    <td className={`${tw.tableCell} font-mono tabular-nums`}>{formatHashrate(w.hashrate)}</td>
+                    <td className={`${tw.tableCell} tabular-nums`}>{w.self_blocks_found}</td>
+                    <td className={tw.tableCell}>
+                      <StatusBadge status={stateToStatus[w.state] || "idle"} label={stateToLabel[w.state]} size="sm" />
+                    </td>
+                    <td className={`${tw.tableCell} font-mono tabular-nums`}>
+                      {w.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
+                    </td>
+                    <td className={tw.tableCell}>
+                      {w.state === "LEASED" ? (
+                        <span className={`text-xs ${tw.textTertiary}`}>Leased</span>
+                      ) : w.state === "AVAILABLE" ? (
+                        <button
+                          disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                          onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
+                          className="px-2 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
+                        >
+                          Unlist
+                        </button>
+                      ) : (
+                        <button
+                          disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                          onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
+                          className="px-2 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
+                        >
+                          List
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

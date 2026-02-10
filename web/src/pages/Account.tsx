@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { toast } from "sonner";
 import { tw } from "../design/tokens";
 import EmptyState from "../design/EmptyState";
 import { useWallet } from "../context/WalletContext";
@@ -34,7 +36,22 @@ export default function Account() {
 
       <div className={`${tw.card} p-5`}>
         <h3 className={`text-xs ${tw.textTertiary} uppercase tracking-wider mb-2`}>Wallet</h3>
-        <p className={`font-mono text-sm ${tw.textPrimary} break-all`}>{address}</p>
+        <div className="flex items-center gap-3">
+          <p className={`font-mono text-sm ${tw.textPrimary} break-all flex-1`}>{address}</p>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(address);
+              toast.success("Address copied");
+            }}
+            className="shrink-0 p-2 rounded-md text-[#848e9c] hover:text-[#22d1ee] hover:bg-[#1f2835] transition-colors"
+            title="Copy address"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className={`${tw.card} p-5`}>
