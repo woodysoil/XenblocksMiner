@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <vector>
 #else
 #error "OS not supported"
 #endif
