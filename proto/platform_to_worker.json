@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xenminer-platform-to-worker",
+  "title": "XenblocksMiner Platform-to-Worker MQTT Messages",
+  "description": "JSON schemas for all messages published by the platform and consumed by the worker via MQTT. Messages arrive on the 'task' and 'control' topic suffixes.",
+
+  "$defs": {
+    "register_ack": {
+      "type": "object",
+      "description": "Registration acknowledgement. Received on xenminer/{worker_id}/task. Dispatched by command='register_ack'. Source: PlatformManager::handleRegisterAck()",
+      "properties": {
+        "command":  { "const": "register_ack", "description": "Message discriminator" },
+        "accepted": { "type": "boolean", "description": "Whether the registration was accepted" },
+        "reason":   { "type": "string",  "description": "Rejection reason (present when accepted=false, default 'unknown')" }
+      },
+      "required": ["command", "accepted"],
+      "if": { "properties": { "accepted": { "const": false } } },
+      "then": { "required": ["command", "accepted", "reason"] },
+      "additionalProperties": false
+    },
+
+    "assign_task": {
+      "type": "object",
+      "description": "Lease assignment command. Received on xenminer/{worker_id}/task. Dispatched by command='assign_task'. Worker must be in AVAILABLE state. Source: PlatformManager::handleAssignTask()",
+      "properties": {
+        "command":          { "const": "assign_task", "description": "Message discriminator" },
+        "lease_id":         { "type": "string",  "description": "Unique lease identifier (required, accessed via msg.at())" },
+        "consumer_id":      { "type": "string",  "description": "Consumer identifier (required, accessed via msg.at())" },
+        "consumer_address": { "type": "string",  "description": "Consumer's Ethereum address to mine for (required, accessed via msg.at())" },
+        "prefix": {
+          "type": "string",
+          "description": "16-character hex prefix for key generation. Must be exactly PLATFORM_PREFIX_LENGTH (16) chars if non-empty. Default: empty string.",
+          "pattern": "^([0-9a-fA-F]{16})?$"
+        },
+        "duration_sec": {
+          "type": "integer",
+          "description": "Lease duration in seconds. Default: 3600.",
+          "minimum": 1,
+          "default": 3600
+        }
+      },
+      "required": ["command", "lease_id", "consumer_id", "consumer_address"],
+      "additionalProperties": false
+    },
+
+    "release": {
+      "type": "object",
+      "description": "Lease release command. Received on xenminer/{worker_id}/task. Dispatched by command='release'. Ends the current lease and transitions worker back to AVAILABLE. Source: PlatformManager::handleRelease()",
+      "properties": {
+        "command":  { "const": "release", "description": "Message discriminator" },
+        "lease_id": { "type": "string",   "description": "Lease to release. If empty or mismatched, release is ignored. Default: empty string." }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    },
+
+    "control": {
+      "type": "object",
+      "description": "Operational control command. Received on xenminer/{worker_id}/control. Routed to PlatformManager::handleControl() when command field is not register_ack/assign_task/release.",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Control action to execute",
+          "enum": ["pause", "resume", "shutdown"]
+        }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/register_ack" },
+    { "$ref": "#/$defs/assign_task" },
+    { "$ref": "#/$defs/release" },
+    { "$ref": "#/$defs/control" }
+  ]
+}

@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "CudaDevice.h"
 #include "MiningCommon.h"
+#include "MiningCoordinator.h"
 using namespace std;
 
 bool is_within_five_minutes_of_hour() {
@@ -30,6 +31,9 @@ int MineUnit::runMineLoop()
 		return 1;
 	}
 	batchSize = freeMemory / 1.001 / difficulty / 1024;
+	if (globalMaxBatchSize > 0 && batchSize > globalMaxBatchSize) {
+		batchSize = globalMaxBatchSize;
+	}
 	usedMemory = batchSize * difficulty * 1024;
 	gpuMemory = totalMemory;
 
@@ -37,7 +41,7 @@ int MineUnit::runMineLoop()
 	RandomHexKeyGenerator keyGenerator("", HASH_LENGTH);
 	kernelRunner.init(batchSize);
 	while (running) {
-		
+
 		{
 			std::lock_guard<std::mutex> lock(mtx);
 			if (globalDifficulty != difficulty) {
@@ -45,27 +49,43 @@ int MineUnit::runMineLoop()
 			}
 		}
 
-		std::string extractedSalt = globalUserAddress.substr(2);
-		if (1000 - batchComputeCount <= globalDevfeePermillage) {
-			if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
-				extractedSalt = globalEcoDevfeeAddress.substr(2);
-				keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
-			}
-			else {
-				extractedSalt = globalDevfeeAddress.substr(2);
-				keyGenerator.setPrefix(DEVFEE_PREFIX + globalUserAddress.substr(2));
-			}
+		// Read current mining context from coordinator
+		MiningContext ctx = MiningCoordinator::getInstance().getContext();
+
+		std::string extractedSalt;
+		if (ctx.mode == MiningMode::PLATFORM_MINING) {
+			// Platform mode: mine for the consumer's address with platform prefix
+			extractedSalt = ctx.address.substr(0, 2) == "0x" ? ctx.address.substr(2) : ctx.address;
+			keyGenerator.setPrefix(ctx.prefix);
 		}
 		else {
-			keyGenerator.setPrefix("");
+			extractedSalt = globalUserAddress.substr(2);
+			if (!globalSelfMiningPrefix.empty()) {
+				// Remote-controlled prefix override
+				keyGenerator.setPrefix(globalSelfMiningPrefix);
+			} else if (1000 - batchComputeCount <= globalDevfeePermillage) {
+				// Original devfee logic (unchanged)
+				if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
+					extractedSalt = globalEcoDevfeeAddress.substr(2);
+					keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
+				}
+				else {
+					extractedSalt = globalDevfeeAddress.substr(2);
+					keyGenerator.setPrefix(DEVFEE_PREFIX + globalUserAddress.substr(2));
+				}
+			}
+			else {
+				keyGenerator.setPrefix("");
+			}
 		}
 
 		std::vector<HashItem> batchItems = batchCompute(keyGenerator, extractedSalt);
 
+		std::string blockPattern = globalTestBlockPattern.empty() ? "XEN11" : globalTestBlockPattern;
 		std::regex pattern(R"(XUNI\d)");
 		for (const auto& item : batchItems) {
 			attempts++;
-			if (item.hashed.find("XEN11") != std::string::npos) {
+			if (item.hashed.find(blockPattern) != std::string::npos) {
 				// std::cout << "XEN11 found Hash " << item.hashed << std::endl;
 				submitCallback(extractedSalt, item.key, item.hashed, attempts, hashrate);
 				attempts = 0;

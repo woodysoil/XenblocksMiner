@@ -1,0 +1,8 @@
+{
+  "_description": "Lease release from platform - ends the current lease",
+  "_topic": "xenminer/abc123def456/task",
+  "_source": "PlatformManager::handleRelease()",
+
+  "command": "release",
+  "lease_id": "lease-550e8400-e29b-41d4-a716-446655440000"
+}

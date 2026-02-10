@@ -1,0 +1,9 @@
+{
+  "_description": "Status update without lease (e.g. going offline)",
+  "_topic": "xenminer/abc123def456/status",
+  "_source": "WorkerReporter::sendStatusUpdate()",
+
+  "worker_id": "abc123def456",
+  "state": "offline",
+  "timestamp": 1700010000
+}

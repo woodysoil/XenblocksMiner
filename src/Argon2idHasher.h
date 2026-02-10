@@ -3,6 +3,7 @@
 #ifndef ARGON2ID_HASHER_H
 #define ARGON2ID_HASHER_H
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

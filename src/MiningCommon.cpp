@@ -23,3 +23,5 @@ std::atomic<long> globalHashCount = 0;
 std::chrono::system_clock::time_point start_time = std::chrono::system_clock::now();
 
 std::string globalRpcLink = "http://xenblocks.io";
+std::string globalSelfMiningPrefix;
+std::size_t globalMaxBatchSize = 0; // 0 = auto (use all free GPU memory)

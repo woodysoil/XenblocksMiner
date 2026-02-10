@@ -1,3 +1,11 @@
 **/build/
 **/vcpkg_installed/
 log*
+__pycache__/
+*.pyc
+data/
+node_modules/
+web/dist/
+*.tsbuildinfo
+test-logs/
+.claude/

@@ -32,7 +32,7 @@ public:
         std::stringstream ss;
 
         if (prefix.length() >= total_length) {
-            std::cout << "Wraning: Prefix is longer than total length. Returning prefix." << std::endl;
+            std::cout << "Warning: Prefix is longer than total length. Returning prefix." << std::endl;
             ss << prefix.substr(0, total_length);
         }
         else {

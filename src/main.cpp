@@ -27,6 +27,8 @@
 #include "SHA256Hasher.h"
 #include "RandomHexKeyGenerator.h"
 #include "MachineIDGetter.h"
+#include "MiningCoordinator.h"
+#include "PlatformManager.h"
 #include <crow.h>
 #include <set>
 
@@ -40,6 +42,11 @@
 using namespace std;
 namespace po = boost::program_options;
 std::string globalCustomName = "";
+bool globalPlatformMode = false;
+std::string globalMqttBroker = "";
+std::string globalWorkerId = "";
+std::unique_ptr<PlatformManager> globalPlatformManager;
+std::string globalTestBlockPattern = "";
 
 #ifdef _WIN32
 BOOL ctrlHandler(DWORD fdwCtrlType) {
@@ -326,6 +333,9 @@ std::queue<std::function<void()>> taskQueue;
 void interruptSignalHandler(int signum)
 {
     running = false;
+    if (globalPlatformManager) {
+        globalPlatformManager->stop();
+    }
     cv.notify_all();
     app.stop();
 }
@@ -416,7 +426,7 @@ nlohmann::json inline getStatData() {
     result["normalBlocks"] = globalNormalBlockCount.load();
     result["superBlocks"] = globalSuperBlockCount.load();
     result["rejectedBlocks"] = globalFailedBlockCount.load();
-    result["version"] = "1.4.0";
+    result["version"] = "2.0.0";
     if (!globalCustomName.empty()) {
         result["customName"] = globalCustomName;
     }
@@ -516,7 +526,12 @@ int main(int argc, const char *const *argv)
             ("saveConfig", "update configuration file with console inputs")
             ("testFixedDiff", po::value<int>(), "run in test mode with a fixed difficulty")
             ("rpcLink", po::value<std::string>(), "set rpc link")
-            ("customName", po::value<std::string>(), "set custom name");
+            ("customName", po::value<std::string>(), "set custom name")
+            ("platform-mode", "enable hashpower marketplace platform mode")
+            ("mqtt-broker", po::value<std::string>(), "MQTT broker URI for platform mode (e.g. tcp://broker:1883)")
+            ("worker-id", po::value<std::string>(), "override worker ID for platform registration")
+            ("testBlockPattern", po::value<std::string>(), "override block detection pattern for testing (default: XEN11)")
+            ("batchSize", po::value<int>(), "limit GPU batch size (reduces VRAM usage)");
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);
@@ -529,6 +544,16 @@ int main(int argc, const char *const *argv)
         if(vm.count("testFixedDiff")){
             isTestFixedDiff = true;
             globalDifficulty = vm["testFixedDiff"].as<int>();
+        }
+
+        if(vm.count("testBlockPattern")){
+            globalTestBlockPattern = vm["testBlockPattern"].as<std::string>();
+            std::cout << "Test block pattern override: " << globalTestBlockPattern << std::endl;
+        }
+
+        if(vm.count("batchSize")){
+            globalMaxBatchSize = vm["batchSize"].as<int>();
+            std::cout << "Max batch size override: " << globalMaxBatchSize << std::endl;
         }
 
         // Preload configuration from local file
@@ -622,6 +647,21 @@ int main(int argc, const char *const *argv)
             globalCustomName = vm["customName"].as<std::string>();
         }
 
+        if (vm.count("platform-mode")) {
+            globalPlatformMode = true;
+        }
+        if (vm.count("mqtt-broker")) {
+            globalMqttBroker = vm["mqtt-broker"].as<std::string>();
+        }
+        if (vm.count("worker-id")) {
+            globalWorkerId = vm["worker-id"].as<std::string>();
+        }
+
+        if (globalPlatformMode && globalMqttBroker.empty()) {
+            std::cerr << "Platform mode requires --mqtt-broker to be set." << std::endl;
+            return -1;
+        }
+
         std::cout << "RPC Link: " << globalRpcLink << std::endl;
 
         std::cout << GREEN << "Logged in as " << globalUserAddress 
@@ -651,6 +691,9 @@ int main(int argc, const char *const *argv)
         oss_usedDevices << *iter << ",";
     }
     machineId = getMachineId(oss_usedDevices.str());
+    if (!globalWorkerId.empty()) {
+        machineId = globalWorkerId;
+    }
     std::cout << "Machine ID: " << machineId << std::endl;
 
     if (!isTestFixedDiff) {
@@ -671,6 +714,20 @@ int main(int argc, const char *const *argv)
     Logger logger("log", 1024 * 1024);
     SubmitCallback submitCallback = [&logger](const std::string &hexsalt, const std::string &key, const std::string &hashed_pure, const size_t attempts, const float hashrate) {
 
+        // Report block to platform via MQTT (always, regardless of test mode)
+        if (globalPlatformManager && globalPlatformManager->isRunning()) {
+            int diff_for_verify = 40404;
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                diff_for_verify = globalDifficulty;
+            }
+            Argon2idHasher verifyHasher(1, diff_for_verify, 1, hexsalt, HASH_LENGTH);
+            std::string verified_hash = verifyHasher.generateHash(key);
+            if (verified_hash.find(hashed_pure) != std::string::npos) {
+                globalPlatformManager->onBlockFound(verified_hash, key, "0x" + hexsalt, attempts, hashrate);
+            }
+        }
+
         std::function<void()> task = [&logger, hexsalt, key, hashed_pure, attempts, hashrate]() {
             int difficulty = 40404;
             {
@@ -685,6 +742,7 @@ int main(int argc, const char *const *argv)
                 // std::cout << "Hashed data does not match" << std::endl;
                 return;
             }
+
             std::ostringstream hashrateStream;
             hashrateStream << std::fixed << std::setprecision(2) << hashrate;
             std::string address = "0x" + hexsalt;
@@ -777,7 +835,7 @@ int main(int argc, const char *const *argv)
             std::lock_guard<std::mutex> lock(mtx_submit);
             taskQueue.push(std::move(task));
         } else {
-            std::cout << "Block was found but skipped due to running in test mode." << std::endl;
+            std::cout << "Block found (test mode, RPC skipped)." << std::endl;
         }
         cv.notify_one();
     };
@@ -865,12 +923,65 @@ int main(int argc, const char *const *argv)
         t.detach();
     }
 
+    // Initialize Platform Manager for hashpower marketplace mode
+    if (globalPlatformMode) {
+        std::vector<gpuInfo> gpuList;
+        for (auto idx : usedDevices) {
+            gpuInfo gi;
+            gi.index = static_cast<int>(idx);
+            gi.name = devices[idx].getName();
+            size_t freeMem, totalMem;
+            cudaSetDevice(idx);
+            cudaMemGetInfo(&freeMem, &totalMem);
+            gi.memory = static_cast<int>(std::round(static_cast<float>(totalMem) / (1024 * 1024 * 1024)));
+            gi.busId = devices[idx].getPicBusId();
+            gi.usingMemory = 0;
+            gi.temperature = 0;
+            gi.hashrate = 0;
+            gi.hashCount = 0;
+            gpuList.push_back(gi);
+        }
+
+        globalPlatformManager = std::make_unique<PlatformManager>(
+            globalMqttBroker, globalUserAddress, gpuList);
+
+        if (!globalPlatformManager->start()) {
+            std::cerr << RED << "Failed to start PlatformManager. Continuing in self-mining mode." << RESET << std::endl;
+            globalPlatformManager.reset();
+        } else {
+            std::cout << GREEN << "Platform mode enabled. Broker: " << globalMqttBroker << RESET << std::endl;
+        }
+    }
+
     app.loglevel(crow::LogLevel::Warning);
     app.signal_clear();
     CROW_ROUTE(app, "/stats")
     ([](){
         auto stats = getGpuStatsJson();
         return stats;
+    });
+    CROW_ROUTE(app, "/platform/status")
+    ([](){
+        nlohmann::json result;
+        result["platform_mode"] = globalPlatformMode;
+        auto ctx = MiningCoordinator::getInstance().getContext();
+        result["mining_mode"] = ctx.mode == MiningMode::PLATFORM_MINING ? "platform" : "self";
+        if (globalPlatformManager) {
+            result["platform_state"] = platformStateToString(globalPlatformManager->getState());
+            result["running"] = globalPlatformManager->isRunning();
+            auto lease = globalPlatformManager->getLeaseManager().getLease();
+            if (lease.has_value()) {
+                result["lease_id"] = lease->lease_id;
+                result["consumer_id"] = lease->consumer_id;
+                result["consumer_address"] = lease->consumer_address;
+                result["blocks_found"] = lease->blocks_found;
+                result["remaining_sec"] = globalPlatformManager->getLeaseManager().remainingSeconds();
+            }
+        } else {
+            result["platform_state"] = "disabled";
+            result["running"] = false;
+        }
+        return result.dump();
     });
     std::thread serverThread(startServer);
     serverThread.detach();
@@ -882,6 +993,12 @@ int main(int argc, const char *const *argv)
     while (running)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    // Clean shutdown of platform manager
+    if (globalPlatformManager) {
+        globalPlatformManager->stop();
+        globalPlatformManager.reset();
     }
 
     std::cout << std::endl;
