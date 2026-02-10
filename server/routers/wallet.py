@@ -26,31 +26,26 @@ async def _get_wallet_address(srv, authorization: str) -> str:
 @router.get("/api/wallet/history")
 async def wallet_history(
     request: Request,
-    period: str = Query(default="24h", regex="^(24h|7d|30d)$"),
+    period: str = Query(default="30d", pattern="^(24h|7d|30d)$"),
     authorization: str = Header(default=""),
 ):
-    """Get historical snapshots for the connected wallet."""
+    """Get historical snapshots for the connected wallet (always hourly)."""
     srv = get_server(request)
     address = await _get_wallet_address(srv, authorization)
 
-    # Map period to hours and interval type
-    period_map = {
-        "24h": (24, "hourly"),
-        "7d": (168, "hourly"),
-        "30d": (720, "daily"),
-    }
-    hours, interval_type = period_map.get(period, (24, "hourly"))
+    hours_map = {"24h": 24, "7d": 168, "30d": 720}
+    hours = hours_map.get(period, 720)
 
     snapshots = await srv.storage.wallet_snapshots.query(
         eth_address=address,
         hours=hours,
-        interval_type=interval_type,
+        interval_type="hourly",
     )
 
     return {
         "address": address,
         "period": period,
-        "interval": interval_type,
+        "count": len(snapshots),
         "data": snapshots,
     }
 

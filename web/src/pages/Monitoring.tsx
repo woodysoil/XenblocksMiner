@@ -74,7 +74,7 @@ export default function Monitoring() {
           [...buckets.entries()]
             .sort((a, b) => a[0] - b[0])
             .map(([ts, hr]) => ({
-              time: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              time: new Date(ts * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
               hashrate: hr,
             })),
         );

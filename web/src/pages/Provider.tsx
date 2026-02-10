@@ -1,13 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
-import { tw, colors, chartTheme } from "../design/tokens";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import type { UTCTimestamp } from "lightweight-charts";
+import { tw, colors } from "../design/tokens";
 import MetricCard from "../design/MetricCard";
 import StatusBadge from "../design/StatusBadge";
 import GpuBadge from "../design/GpuBadge";
-import HashText from "../design/HashText";
 import { ChartCard } from "../design";
+import LWChart from "../design/LWChart";
 import EmptyState from "../design/EmptyState";
 import { useWallet } from "../context/WalletContext";
 import { apiFetch } from "../api";
@@ -54,15 +52,12 @@ const stateToStatus: Record<string, "idle" | "available" | "leased"> = {
   LEASED: "leased",
 };
 
-type Period = "24h" | "7d" | "30d";
-
 export default function Provider() {
   const { address, connect } = useWallet();
   const [workers, setWorkers] = useState<MyWorker[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [achievements, setAchievements] = useState<WalletAchievements | null>(null);
   const [history, setHistory] = useState<WalletSnapshot[]>([]);
-  const [period, setPeriod] = useState<Period>("24h");
 
   const fetchData = useCallback(() => {
     if (!address) return;
@@ -76,13 +71,13 @@ export default function Provider() {
 
   const fetchHistory = useCallback(() => {
     if (!address) return;
-    apiFetch<{ data: WalletSnapshot[] }>(`/api/wallet/history?period=${period}`)
+    apiFetch<{ data: WalletSnapshot[] }>("/api/wallet/history?period=30d")
       .then((d) => setHistory(d.data || []))
       .catch(() => setHistory([]));
     apiFetch<WalletAchievements>("/api/wallet/achievements")
       .then((d) => setAchievements(d))
       .catch(() => {});
-  }, [address, period]);
+  }, [address]);
 
   useEffect(() => {
     fetchData();
@@ -121,17 +116,10 @@ export default function Provider() {
   const peakHashrate = achievements?.peak_hashrate ?? 0;
   const miningDays = achievements?.mining_days ?? 0;
 
-  const chartData = history.map((h) => ({
-    time: new Date(h.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    hashrate: h.hashrate,
-    blocks: h.cumulative_blocks,
-  }));
-
-  const formatY = (v: number) => {
-    if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
-    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
-    return String(Math.round(v));
-  };
+  const chartData = useMemo(
+    () => history.map((h) => ({ time: h.timestamp as UTCTimestamp, value: h.hashrate })),
+    [history],
+  );
 
   return (
     <div className="space-y-6">
@@ -175,67 +163,16 @@ export default function Provider() {
         </div>
       </div>
 
-      {/* History Chart */}
-      <ChartCard
-        title="Hashrate History"
-        action={
-          <div className="flex gap-1">
-            {(["24h", "7d", "30d"] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-2 py-1 text-xs rounded ${
-                  period === p
-                    ? "bg-[#22d1ee]/20 text-[#22d1ee]"
-                    : "text-[#848e9c] hover:text-[#eaecef]"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        }
-      >
+      {/* History Chart — TradingView Lightweight Charts */}
+      <ChartCard title="Hashrate History">
         {chartData.length === 0 ? (
-          <div className="h-48 flex items-center justify-center">
+          <div className="h-[260px] flex items-center justify-center">
             <span className={`text-sm ${tw.textSecondary}`}>
-              {history.length === 0 ? "No history data yet — snapshots are taken hourly" : "Loading..."}
+              No history data yet — snapshots are taken hourly
             </span>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={192}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="hrGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="rgba(34,209,238,0.25)" />
-                  <stop offset="95%" stopColor="rgba(34,209,238,0)" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke={chartTheme.grid.stroke} strokeDasharray={chartTheme.grid.strokeDasharray} />
-              <XAxis
-                dataKey="time"
-                tick={{ fill: chartTheme.axis.fill, fontSize: chartTheme.axis.fontSize }}
-                stroke={chartTheme.axis.stroke}
-              />
-              <YAxis
-                tickFormatter={formatY}
-                tick={{ fill: chartTheme.axis.fill, fontSize: chartTheme.axis.fontSize }}
-                stroke={chartTheme.axis.stroke}
-                width={50}
-              />
-              <Tooltip
-                contentStyle={chartTheme.tooltip.contentStyle}
-                formatter={(v: number) => [formatHashrate(v), "Hashrate"]}
-              />
-              <Area
-                type="monotone"
-                dataKey="hashrate"
-                stroke={colors.accent.DEFAULT}
-                fill="url(#hrGrad)"
-                strokeWidth={2}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <LWChart data={chartData} height={260} formatValue={formatHashrate} />
         )}
       </ChartCard>
 
