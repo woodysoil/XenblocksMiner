@@ -6,6 +6,7 @@ Uses a simple per-second pricing model. Backed by SettlementRepo and AccountRepo
 """
 
 import logging
+import time
 from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
@@ -34,52 +35,70 @@ class SettlementEngine:
         await self.accounts.create_account(PLATFORM_ACCOUNT_ID, "consumer", balance=0.0)
 
     async def settle_lease(self, lease: dict) -> Optional[dict]:
-        """Calculate and execute settlement for a completed lease."""
+        """Calculate and execute settlement in a single IMMEDIATE transaction.
+
+        All balance changes and transaction records commit atomically —
+        no partial state on crash or concurrent access.
+        """
         duration = lease["elapsed_sec"]
-        # Use lease-specific pricing if available, fallback to global rate
         rate = lease.get("price_per_sec", RATE_PER_SECOND)
         total_cost = duration * rate
-
         provider_payment = total_cost * PROVIDER_SHARE
         platform_fee = total_cost * PLATFORM_SHARE
-
-        # Debit consumer, credit provider + platform
-        consumer_acct = await self.accounts.get_account(lease["consumer_id"])
-        if consumer_acct is None:
-            logger.error("Consumer account %s not found for settlement", lease["consumer_id"])
-            return None
-
-        if consumer_acct["balance"] < total_cost:
-            logger.warning(
-                "Consumer %s insufficient balance (%.4f < %.4f) for lease %s",
-                lease["consumer_id"], consumer_acct["balance"], total_cost, lease["lease_id"],
-            )
-            total_cost = consumer_acct["balance"]
-            provider_payment = total_cost * PROVIDER_SHARE
-            platform_fee = total_cost * PLATFORM_SHARE
+        db = self.accounts._repo._db
 
         try:
-            # Debit consumer
-            consumer_acct = await self.accounts.get_account(lease["consumer_id"])
-            new_consumer_balance = consumer_acct["balance"] - total_cost
-            await self.accounts._repo.update_balance(lease["consumer_id"], new_consumer_balance)
+            await db.execute("BEGIN IMMEDIATE")
 
-            # Credit provider
-            provider_acct = await self.accounts.get_or_create_provider(lease["worker_id"], "")
-            new_provider_balance = provider_acct["balance"] + provider_payment
-            await self.accounts._repo.update_balance(lease["worker_id"], new_provider_balance)
+            # Read consumer balance inside transaction
+            async with db.execute(
+                "SELECT balance FROM accounts WHERE account_id = ?",
+                (lease["consumer_id"],),
+            ) as cur:
+                row = await cur.fetchone()
+            if row is None:
+                await db.execute("ROLLBACK")
+                logger.error("Consumer account %s not found", lease["consumer_id"])
+                return None
 
-            # Credit platform
-            platform_acct = await self.accounts.get_account(PLATFORM_ACCOUNT_ID)
-            if platform_acct:
-                new_platform_balance = platform_acct["balance"] + platform_fee
-                await self.accounts._repo.update_balance(PLATFORM_ACCOUNT_ID, new_platform_balance)
+            if row[0] < total_cost:
+                logger.warning(
+                    "Consumer %s insufficient balance (%.4f < %.4f) for lease %s",
+                    lease["consumer_id"], row[0], total_cost, lease["lease_id"],
+                )
+                total_cost = max(row[0], 0.0)
+                provider_payment = total_cost * PROVIDER_SHARE
+                platform_fee = total_cost * PLATFORM_SHARE
 
-            # Record transactions
-            await self.accounts._repo._record_tx(lease["consumer_id"], "lease_charge", total_cost, lease["lease_id"])
-            await self.accounts._repo._record_tx(lease["worker_id"], "provider_payout", provider_payment, lease["lease_id"])
-            await self.accounts._repo._record_tx(PLATFORM_ACCOUNT_ID, "platform_fee", platform_fee, lease["lease_id"])
+            now = time.time()
+            await db.execute(
+                "UPDATE accounts SET balance = balance - ?, updated_at = ? WHERE account_id = ?",
+                (total_cost, now, lease["consumer_id"]),
+            )
+            await db.execute(
+                "UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE account_id = ?",
+                (provider_payment, now, lease["worker_id"]),
+            )
+            await db.execute(
+                "UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE account_id = ?",
+                (platform_fee, now, PLATFORM_ACCOUNT_ID),
+            )
+            for acct_id, tx_type, amount in [
+                (lease["consumer_id"], "lease_charge", total_cost),
+                (lease["worker_id"], "provider_payout", provider_payment),
+                (PLATFORM_ACCOUNT_ID, "platform_fee", platform_fee),
+            ]:
+                await db.execute(
+                    "INSERT INTO transactions (account_id, type, amount, reference_id, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (acct_id, tx_type, amount, lease["lease_id"], now),
+                )
+            await db.commit()
         except Exception:
+            try:
+                await db.execute("ROLLBACK")
+            except Exception:
+                pass
             logger.exception("Settlement failed for lease %s", lease["lease_id"])
             return None
 

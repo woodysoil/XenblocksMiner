@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { tw } from "./tokens";
 
@@ -6,7 +7,9 @@ interface ConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
+  children?: ReactNode;
   confirmLabel?: string;
+  confirmDisabled?: boolean;
   variant?: "danger" | "primary";
   onConfirm: () => void;
 }
@@ -16,7 +19,9 @@ export default function ConfirmDialog({
   onOpenChange,
   title,
   description,
+  children,
   confirmLabel = "Confirm",
+  confirmDisabled = false,
   variant = "primary",
   onConfirm,
 }: ConfirmDialogProps) {
@@ -31,11 +36,13 @@ export default function ConfirmDialog({
           <AlertDialog.Description className={`mt-2 text-sm ${tw.textSecondary}`}>
             {description}
           </AlertDialog.Description>
+          {children}
           <div className="mt-6 flex justify-end gap-3">
             <AlertDialog.Cancel className={`${tw.btnSecondary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3d4f65]`}>Cancel</AlertDialog.Cancel>
             <AlertDialog.Action
               className={`${variant === "danger" ? tw.btnDanger : tw.btnPrimary} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#22d1ee]`}
               onClick={onConfirm}
+              disabled={confirmDisabled}
             >
               {confirmLabel}
             </AlertDialog.Action>

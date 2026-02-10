@@ -72,6 +72,8 @@ class AuthService:
     # -------------------------------------------------------------------
 
     def generate_nonce(self, address: str) -> str:
+        if len(self._nonces) > 1000:
+            self._cleanup_expired_nonces()
         nonce = secrets.token_hex(16)
         self._nonces[address.lower()] = (nonce, time.time() + NONCE_TTL)
         return nonce
@@ -101,6 +103,13 @@ class AuthService:
         # Consume nonce
         self._nonces.pop(addr_lower, None)
         return True
+
+    def _cleanup_expired_nonces(self):
+        """Remove expired nonces to prevent unbounded memory growth."""
+        now = time.time()
+        expired = [a for a, (_, exp) in self._nonces.items() if now > exp]
+        for a in expired:
+            del self._nonces[a]
 
     def issue_jwt(self, address: str, role: str, account_id: str) -> str:
         if pyjwt is None:

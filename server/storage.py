@@ -31,7 +31,7 @@ logger = logging.getLogger("storage")
 # Schema version & migrations
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -172,6 +172,8 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_worker_ts ON hashrate_snapshots(worker_
 CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON hashrate_snapshots(timestamp);
 CREATE INDEX IF NOT EXISTS idx_wallet_snapshots_addr_time ON wallet_snapshots(eth_address, timestamp);
 CREATE INDEX IF NOT EXISTS idx_wallet_snapshots_addr_type ON wallet_snapshots(eth_address, interval_type);
+CREATE INDEX IF NOT EXISTS idx_workers_state ON workers(state);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leases_worker_active ON leases(worker_id) WHERE state = 'active';
 """
 
 
@@ -314,20 +316,17 @@ class AccountRepo:
         return acct
 
     async def transfer(self, from_id: str, to_id: str, amount: float, ref: str = ""):
-        """Atomic transfer between two accounts within a transaction."""
-        from_acct = await self.get(from_id)
-        to_acct = await self.get(to_id)
-        if from_acct is None:
-            raise KeyError(f"Account {from_id} not found")
-        if to_acct is None:
-            raise KeyError(f"Account {to_id} not found")
-        if from_acct["balance"] < amount:
-            raise ValueError(f"Insufficient balance in {from_id}")
+        """Atomic transfer with balance guard in SQL WHERE clause."""
+        if amount <= 0:
+            raise ValueError("Transfer amount must be positive")
         now = time.time()
-        await self._db.execute(
-            "UPDATE accounts SET balance = balance - ?, updated_at = ? WHERE account_id = ?",
-            (amount, now, from_id),
+        cursor = await self._db.execute(
+            "UPDATE accounts SET balance = balance - ?, updated_at = ? "
+            "WHERE account_id = ? AND balance >= ?",
+            (amount, now, from_id, amount),
         )
+        if cursor.rowcount == 0:
+            raise ValueError(f"Insufficient balance or account {from_id} not found")
         await self._db.execute(
             "UPDATE accounts SET balance = balance + ?, updated_at = ? WHERE account_id = ?",
             (amount, now, to_id),
@@ -693,6 +692,53 @@ class LeaseRepo:
                 row = await cursor.fetchone()
         else:
             async with self._db.execute("SELECT COUNT(*) FROM leases") as cursor:
+                row = await cursor.fetchone()
+        return row[0] if row else 0
+
+    async def list_for_consumer(
+        self, consumer_id: str, state: Optional[str] = None,
+        limit: int = 50, offset: int = 0,
+    ) -> List[dict]:
+        """List leases for a specific consumer."""
+        cols = ("lease_id, worker_id, consumer_id, consumer_address, prefix, duration_sec, "
+                "price_per_sec, state, created_at, ended_at, blocks_found, "
+                "total_hashrate_samples, hashrate_count")
+        query = f"SELECT {cols} FROM leases WHERE consumer_id = ?"
+        params: tuple = (consumer_id,)
+        if state:
+            query += " AND state = ?"
+            params += (state,)
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params += (limit, offset)
+        results = []
+        async with self._db.execute(query, params) as cursor:
+            async for row in cursor:
+                created_at, ended_at = row[8], row[9]
+                hrc = row[12]
+                elapsed = (ended_at or time.time()) - created_at
+                avg_hr = (row[11] / hrc) if hrc > 0 else 0.0
+                results.append({
+                    "lease_id": row[0], "worker_id": row[1],
+                    "consumer_id": row[2], "consumer_address": row[3],
+                    "prefix": row[4], "duration_sec": row[5],
+                    "price_per_sec": row[6], "state": row[7],
+                    "created_at": created_at, "ended_at": ended_at,
+                    "blocks_found": row[10], "avg_hashrate": avg_hr,
+                    "elapsed_sec": elapsed,
+                })
+        return results
+
+    async def count_for_consumer(self, consumer_id: str, state: Optional[str] = None) -> int:
+        if state:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM leases WHERE consumer_id = ? AND state = ?",
+                (consumer_id, state),
+            ) as cursor:
+                row = await cursor.fetchone()
+        else:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM leases WHERE consumer_id = ?", (consumer_id,)
+            ) as cursor:
                 row = await cursor.fetchone()
         return row[0] if row else 0
 
@@ -1395,6 +1441,18 @@ class StorageManager:
                     )
                 except Exception:
                     logger.exception("V9 migration failed")
+
+            # V11 migration: worker state index + unique active lease per worker
+            if current_version < 11:
+                for idx_sql in [
+                    "CREATE INDEX IF NOT EXISTS idx_workers_state ON workers(state)",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_leases_worker_active "
+                    "ON leases(worker_id) WHERE state = 'active'",
+                ]:
+                    try:
+                        await self._db.execute(idx_sql)
+                    except Exception:
+                        logger.exception("V11 migration index failed: %s", idx_sql)
 
             await self._db.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",

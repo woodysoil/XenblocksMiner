@@ -5,8 +5,8 @@ from pydantic import BaseModel
 
 
 class RentRequest(BaseModel):
-    consumer_id: str
-    consumer_address: str
+    consumer_id: str = ""
+    consumer_address: str = ""
     duration_sec: int = 3600
     worker_id: Optional[str] = None
 

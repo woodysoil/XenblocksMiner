@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
+import { toast } from "sonner";
+import { useWallet } from "../context/WalletContext";
 import { tw, colors } from "../design/tokens";
 import { Skeleton } from "../design";
 import GpuBadge from "../design/GpuBadge";
 import HashText from "../design/HashText";
 import EmptyState from "../design/EmptyState";
+import ConfirmDialog from "../design/ConfirmDialog";
 import Pagination from "../components/Pagination";
 import ViewToggle from "../design/ViewToggle";
 import type { ViewMode } from "../design/ViewToggle";
@@ -36,9 +39,18 @@ function Stars({ score }: { score: number }) {
   );
 }
 
+const DURATION_OPTIONS = [
+  { label: "1 hour", sec: 3600 },
+  { label: "6 hours", sec: 21600 },
+  { label: "24 hours", sec: 86400 },
+] as const;
+
 const PAGE_SIZE = 18;
 
 export default function Marketplace() {
+  const { address, connect } = useWallet();
+  const queryClient = useQueryClient();
+
   const [viewMode, setViewMode] = usePersistedState<ViewMode>("marketplace-view", "grid");
   const [gpuFilter, setGpuFilter] = useState("all");
   const [sort, setSort] = useState("price_asc");
@@ -46,6 +58,9 @@ export default function Marketplace() {
   const [page, setPage] = useState(1);
   const [rentalsOpen, setRentalsOpen] = useState(false);
   const [gpuTypes, setGpuTypes] = useState<string[]>(["all"]);
+
+  const [rentTarget, setRentTarget] = useState<ProviderListing | null>(null);
+  const [rentDuration, setRentDuration] = useState<number>(DURATION_OPTIONS[0].sec);
 
   const { data, isLoading: loading } = useQuery({
     queryKey: ["marketplace", page, sort, gpuFilter, search],
@@ -69,6 +84,29 @@ export default function Marketplace() {
   useEffect(() => {
     if (data?.gpu_types) setGpuTypes(["all", ...data.gpu_types]);
   }, [data?.gpu_types]);
+
+  const rentMutation = useMutation({
+    mutationFn: (body: { worker_id: string; duration_sec: number }) =>
+      apiFetch("/api/rent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      toast.success("Rental started");
+      queryClient.invalidateQueries({ queryKey: ["marketplace"] });
+      setRentTarget(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Rental failed");
+    },
+  });
+
+  const openRentDialog = (p: ProviderListing) => {
+    if (!address) { connect(); return; }
+    setRentDuration(DURATION_OPTIONS[0].sec);
+    setRentTarget(p);
+  };
 
   const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, value: T) => {
     setter(value);
@@ -237,7 +275,11 @@ export default function Marketplace() {
                         {isAvailable(p.state) ? "Available" : "Self-mining"}
                       </span>
                     </span>
-                    <button className={`${tw.btnPrimary} sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
+                    <button
+                      disabled={!isAvailable(p.state)}
+                      onClick={() => openRentDialog(p)}
+                      className={`${tw.btnPrimary} sm:opacity-0 sm:group-hover:opacity-100 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
                       Rent
                     </button>
                   </div>
@@ -285,7 +327,13 @@ export default function Marketplace() {
                         </span>
                       </td>
                       <td className={tw.tableCell}>
-                        <button className={tw.btnPrimary + " text-xs px-3 py-1"}>Rent</button>
+                        <button
+                          disabled={!isAvailable(p.state)}
+                          onClick={() => openRentDialog(p)}
+                          className={tw.btnPrimary + " text-xs px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"}
+                        >
+                          Rent
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -296,6 +344,51 @@ export default function Marketplace() {
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
+
+      {/* Rent confirmation dialog */}
+      <ConfirmDialog
+        open={!!rentTarget}
+        onOpenChange={(open) => { if (!open) setRentTarget(null); }}
+        title="Rent Hashpower"
+        description={
+          rentTarget
+            ? `Worker ${rentTarget.worker_id.slice(0, 12)}... — ${rentTarget.gpu_name || "GPU"} @ ${formatHashrateCompact(rentTarget.hashrate)} H/s`
+            : ""
+        }
+        confirmLabel={rentMutation.isPending ? "Renting..." : "Confirm Rent"}
+        confirmDisabled={rentMutation.isPending}
+        onConfirm={() => {
+          if (rentTarget) rentMutation.mutate({ worker_id: rentTarget.worker_id, duration_sec: rentDuration });
+        }}
+      >
+        <div className="mt-4 space-y-3">
+          <label className={`block text-xs font-medium ${tw.textSecondary}`}>Duration</label>
+          <div className="flex gap-2">
+            {DURATION_OPTIONS.map((opt) => (
+              <button
+                key={opt.sec}
+                type="button"
+                onClick={() => setRentDuration(opt.sec)}
+                className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                  rentDuration === opt.sec
+                    ? "bg-[#22d1ee]/15 border-[#22d1ee] text-[#22d1ee]"
+                    : "border-[#2a3441] text-[#848e9c] hover:border-[#3d4f65]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {rentTarget && (
+            <p className={`text-sm tabular-nums ${tw.textPrimary}`}>
+              Estimated cost:{" "}
+              <span style={{ color: colors.warning.DEFAULT }}>
+                {(rentTarget.price_per_min * (rentDuration / 60)).toFixed(4)}
+              </span>
+            </p>
+          )}
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }
