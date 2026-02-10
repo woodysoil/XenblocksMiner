@@ -27,8 +27,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 try:
-    from fastapi import FastAPI, Header, HTTPException
-    from pydantic import BaseModel
+    from fastapi import FastAPI
     import uvicorn
 except ImportError:
     print("ERROR: FastAPI and uvicorn are required. Install with:")
@@ -41,11 +40,14 @@ from server.broker import MQTTBroker
 from server.chain_simulator import ChainSimulator
 from server.dashboard import register_dashboard
 from server.matcher import MatchingEngine
+from server.monitoring import MonitoringService
 from server.pricing import PricingEngine
 from server.reputation import ReputationEngine
+from server.routers import register_all_routers
 from server.settlement import SettlementEngine
 from server.storage import StorageManager
 from server.watcher import BlockWatcher
+from server.ws import WSManager
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -56,54 +58,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("server")
-
-# ---------------------------------------------------------------------------
-# Pydantic models for REST API
-# ---------------------------------------------------------------------------
-
-class RentRequest(BaseModel):
-    """Request body for renting hashpower from a worker."""
-
-    consumer_id: str
-    consumer_address: str
-    duration_sec: int = 3600
-    worker_id: Optional[str] = None
-
-class StopRequest(BaseModel):
-    """Request body for stopping an active lease."""
-
-    lease_id: str
-
-class DepositRequest(BaseModel):
-    """Request body for depositing funds into an account."""
-
-    amount: float
-
-class PricingRequest(BaseModel):
-    """Request body for setting worker pricing parameters."""
-
-    price_per_min: float
-    min_duration_sec: int = 60
-    max_duration_sec: int = 86400
-
-class ControlRequest(BaseModel):
-    """Request body for sending a control command to a worker."""
-
-    action: str = "set_config"
-    config: dict = {}
-
-class RegisterRequest(BaseModel):
-    """Request body for registering a new account."""
-
-    account_id: str
-    role: str  # "provider" or "consumer"
-    eth_address: str = ""
-    balance: float = 0.0
-
-class LoginRequest(BaseModel):
-    """Request body for logging in to an existing account."""
-
-    account_id: str
 
 # ---------------------------------------------------------------------------
 # MQTT topic parser
@@ -142,19 +96,13 @@ class PlatformServer:
         self.matcher: Optional[MatchingEngine] = None
         self.watcher: Optional[BlockWatcher] = None
         self.settlement: Optional[SettlementEngine] = None
-
-        # Pricing engine
         self.pricing: Optional[PricingEngine] = None
-
-        # Reputation engine
         self.reputation: Optional[ReputationEngine] = None
-
-        # Auth service
         self.auth: Optional[AuthService] = None
-
-        # Chain simulator (embedded, provides /difficulty, /verify, etc.)
         self.chain: Optional[ChainSimulator] = None
         self._enable_chain = enable_chain
+        self.ws_manager: Optional[WSManager] = None
+        self.monitoring: Optional[MonitoringService] = None
 
         # FastAPI app
         self.app = FastAPI(title="XenMiner Mock Platform", version="0.3.0")
@@ -172,7 +120,6 @@ class PlatformServer:
 
     async def _init_services(self):
         """Initialize storage and wire up services (must be called in async context)."""
-        # Ensure data directory exists
         db_dir = os.path.dirname(self.db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
@@ -198,6 +145,11 @@ class PlatformServer:
         self.auth = AuthService(self.storage.accounts)
         await ensure_api_keys_for_defaults(self.auth)
 
+        self.ws_manager = WSManager(self.storage.workers, self.storage.blocks)
+        self.monitoring = MonitoringService(
+            self.storage.workers, self.storage.blocks, self.storage.snapshots,
+        )
+
         logger.info("Services initialized (db=%s)", self.db_path)
 
     # -------------------------------------------------------------------
@@ -213,10 +165,22 @@ class PlatformServer:
             await self.matcher.register_worker(payload)
         elif msg_type == "heartbeat":
             await self.matcher.update_heartbeat(payload)
+            if self.ws_manager:
+                await self.ws_manager.broadcast("heartbeat", {
+                    "worker_id": payload.get("worker_id", ""),
+                    "hashrate": payload.get("hashrate", 0.0),
+                    "active_gpus": payload.get("active_gpus", 0),
+                })
         elif msg_type == "status":
             await self.matcher.update_worker_state(payload)
         elif msg_type == "block":
             await self.watcher.handle_block_found(payload, worker_id)
+            if self.ws_manager:
+                await self.ws_manager.broadcast("block", {
+                    "worker_id": worker_id,
+                    "hash": payload.get("hash", ""),
+                    "lease_id": payload.get("lease_id", ""),
+                })
         else:
             logger.debug("Unhandled topic: %s", topic)
 
@@ -235,357 +199,31 @@ class PlatformServer:
                 logger.exception("Error in lease watchdog")
             await asyncio.sleep(5)
 
+    async def _monitoring_loop(self):
+        """Periodic monitoring: snapshot hashrates, check health, cleanup."""
+        tick = 0
+        while True:
+            try:
+                if tick % 30 == 0 and self.monitoring:
+                    await self.monitoring.record_hashrate_snapshot()
+                if tick % 60 == 0 and self.monitoring and self.ws_manager:
+                    unhealthy = await self.monitoring.check_worker_health()
+                    if unhealthy:
+                        await self.ws_manager.broadcast("health", unhealthy)
+                if tick % 3600 == 0 and self.monitoring:
+                    await self.monitoring.cleanup_old_snapshots()
+            except Exception:
+                logger.exception("Error in monitoring loop")
+            await asyncio.sleep(1)
+            tick += 1
+
     # -------------------------------------------------------------------
-    # FastAPI routes
+    # Route registration (delegated to modular routers)
     # -------------------------------------------------------------------
 
     def _register_routes(self):
-        app = self.app
-
-        # --- Auth helper: optional auth (returns None if no key) ---
-        async def optional_account(x_api_key: str = Header(default="")) -> Optional[dict]:
-            if self.auth is None or not x_api_key:
-                return None
-            return await self.auth.resolve_account(x_api_key)
-
-        # --- Public endpoints (no auth required) ---
-
-        @app.get("/")
-        async def root():
-            return {
-                "service": "XenMiner Mock Platform",
-                "mqtt_port": self.mqtt_port,
-                "api_port": self.api_port,
-                "connected_workers": len(self.broker.connected_client_ids),
-                "uptime": "running",
-            }
-
-        @app.get("/api/workers")
-        async def list_workers():
-            workers = await self.matcher.get_available_workers()
-            for w in workers:
-                rep = await self.reputation.get_score(w["worker_id"])
-                w["reputation"] = rep
-            return workers
-
-        @app.get("/api/marketplace")
-        async def browse_marketplace(
-            sort_by: str = "price",
-            gpu_type: Optional[str] = None,
-            min_hashrate: Optional[float] = None,
-            max_price: Optional[float] = None,
-            min_gpus: Optional[int] = None,
-            available_only: bool = True,
-        ):
-            return await self.pricing.browse_marketplace(
-                sort_by=sort_by,
-                gpu_type=gpu_type,
-                min_hashrate=min_hashrate,
-                max_price=max_price,
-                min_gpus=min_gpus,
-                available_only=available_only,
-            )
-
-        @app.get("/api/marketplace/estimate")
-        async def estimate_cost(
-            duration_sec: int,
-            worker_id: Optional[str] = None,
-            min_hashrate: Optional[float] = None,
-        ):
-            result = await self.pricing.estimate_cost(
-                duration_sec=duration_sec,
-                worker_id=worker_id,
-                min_hashrate=min_hashrate,
-            )
-            if "error" in result:
-                raise HTTPException(status_code=404, detail=result["error"])
-            return result
-
-        @app.get("/api/workers/{worker_id}/pricing")
-        async def get_worker_pricing(worker_id: str):
-            result = await self.pricing.get_pricing(worker_id)
-            if result is None:
-                raise HTTPException(status_code=404, detail="Worker not found")
-            return result
-
-        @app.get("/api/workers/{worker_id}/pricing/suggest")
-        async def suggest_worker_pricing(worker_id: str):
-            result = await self.pricing.suggest_pricing(worker_id)
-            if result is None:
-                raise HTTPException(status_code=404, detail="Worker not found")
-            return result
-
-        @app.get("/api/workers/{worker_id}/reputation")
-        async def get_worker_reputation(worker_id: str):
-            result = await self.reputation.get_score(worker_id)
-            if result is None:
-                raise HTTPException(status_code=404, detail="Worker not found")
-            return result
-
-        @app.get("/api/leases")
-        async def list_leases(state: Optional[str] = None, limit: int = 50, offset: int = 0):
-            items = await self.matcher.list_leases(state=state, limit=limit, offset=offset)
-            total = await self.storage.leases.count(state=state)
-            return {"items": items, "total": total, "limit": limit, "offset": offset}
-
-        @app.get("/api/leases/{lease_id}")
-        async def get_lease(lease_id: str):
-            lease = await self.matcher.get_lease(lease_id)
-            if lease is None:
-                raise HTTPException(status_code=404, detail="Lease not found")
-            result = {
-                "lease_id": lease["lease_id"],
-                "worker_id": lease["worker_id"],
-                "consumer_id": lease["consumer_id"],
-                "consumer_address": lease["consumer_address"],
-                "prefix": lease["prefix"],
-                "duration_sec": lease["duration_sec"],
-                "state": lease["state"],
-                "created_at": lease["created_at"],
-                "ended_at": lease["ended_at"],
-                "blocks_found": lease["blocks_found"],
-                "avg_hashrate": lease["avg_hashrate"],
-                "elapsed_sec": lease["elapsed_sec"],
-            }
-            blocks = await self.watcher.get_blocks_for_lease(lease_id)
-            if blocks:
-                result["blocks"] = blocks
-            settlement = await self.settlement.get_settlement(lease_id)
-            if settlement:
-                result["settlement"] = settlement
-            return result
-
-        @app.get("/api/blocks")
-        async def list_blocks(lease_id: Optional[str] = None, limit: int = 50, offset: int = 0):
-            if lease_id:
-                return await self.watcher.get_blocks_for_lease(lease_id)
-            items = await self.watcher.get_all_blocks(limit=limit, offset=offset)
-            total = await self.storage.blocks.count()
-            return {"items": items, "total": total, "limit": limit, "offset": offset}
-
-        @app.get("/api/blocks/self-mined")
-        async def list_self_mined_blocks(worker_id: Optional[str] = None, limit: int = 50, offset: int = 0):
-            items = await self.watcher.get_self_mined_blocks(worker_id=worker_id, limit=limit, offset=offset)
-            total = await self.watcher.count_self_mined(worker_id=worker_id)
-            return {"items": items, "total": total, "limit": limit, "offset": offset}
-
-        @app.get("/api/status")
-        async def server_status():
-            return {
-                "mqtt_clients": self.broker.connected_client_ids,
-                "workers": await self.storage.workers.count(),
-                "active_leases": await self.storage.leases.count(state="active"),
-                "total_blocks": await self.storage.blocks.count(),
-                "self_mined_blocks": await self.storage.blocks.count_self_mined(),
-                "total_settlements": await self.storage.settlements.count(),
-            }
-
-        # --- Auth endpoints (no auth required) ---
-
-        @app.post("/api/auth/register")
-        async def auth_register(req: RegisterRequest):
-            try:
-                acct = await self.auth.register(
-                    account_id=req.account_id,
-                    role=req.role,
-                    eth_address=req.eth_address,
-                    balance=req.balance,
-                )
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-            except RuntimeError as e:
-                raise HTTPException(status_code=500, detail=str(e))
-            return {
-                "account_id": acct["account_id"],
-                "role": acct["role"],
-                "eth_address": acct["eth_address"],
-                "balance": acct["balance"],
-                "api_key": acct["api_key"],
-            }
-
-        @app.post("/api/auth/login")
-        async def auth_login(req: LoginRequest):
-            try:
-                acct = await self.auth.login(req.account_id)
-            except KeyError as e:
-                raise HTTPException(status_code=404, detail=str(e))
-            return {
-                "account_id": acct["account_id"],
-                "role": acct["role"],
-                "api_key": acct["api_key"],
-            }
-
-        @app.get("/api/auth/me")
-        async def auth_me(x_api_key: str = Header(default="")):
-            acct = await self.auth.resolve_account(x_api_key)
-            if acct is None:
-                raise HTTPException(status_code=401, detail="Invalid or missing API key")
-            return {
-                "account_id": acct["account_id"],
-                "role": acct["role"],
-                "eth_address": acct.get("eth_address", ""),
-                "balance": acct.get("balance", 0.0),
-            }
-
-        # --- Protected consumer endpoints ---
-
-        @app.post("/api/rent")
-        async def rent_hashpower(req: RentRequest, x_api_key: str = Header(default="")):
-            # Auth is optional for backward compatibility; if key is provided, validate
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] not in ("consumer", "admin"):
-                raise HTTPException(status_code=403, detail="Consumer account required to rent")
-            lease = await self.matcher.rent_hashpower(
-                consumer_id=req.consumer_id,
-                consumer_address=req.consumer_address,
-                duration_sec=req.duration_sec,
-                worker_id=req.worker_id,
-            )
-            if lease is None:
-                raise HTTPException(status_code=404, detail="No available workers")
-            return {
-                "lease_id": lease["lease_id"],
-                "worker_id": lease["worker_id"],
-                "prefix": lease["prefix"],
-                "duration_sec": lease["duration_sec"],
-                "consumer_id": lease["consumer_id"],
-                "consumer_address": lease["consumer_address"],
-                "created_at": lease["created_at"],
-            }
-
-        @app.post("/api/stop")
-        async def stop_lease(req: StopRequest, x_api_key: str = Header(default="")):
-            caller = await optional_account(x_api_key)
-            lease = await self.matcher.stop_lease(req.lease_id)
-            if lease is None:
-                raise HTTPException(status_code=404, detail="Lease not found or not active")
-            # If authenticated, verify ownership (consumer or admin)
-            if caller and caller["role"] != "admin":
-                if caller["role"] == "consumer" and caller["account_id"] != lease["consumer_id"]:
-                    raise HTTPException(status_code=403, detail="You can only stop your own leases")
-            record = await self.settlement.settle_lease(lease)
-            result = {
-                "lease_id": lease["lease_id"],
-                "state": lease["state"],
-                "blocks_found": lease["blocks_found"],
-            }
-            if record:
-                result["settlement"] = record
-            return result
-
-        # --- Protected provider endpoints ---
-
-        @app.put("/api/workers/{worker_id}/pricing")
-        async def set_worker_pricing(worker_id: str, req: PricingRequest, x_api_key: str = Header(default="")):
-            # Auth optional for backward compat; if present, check provider/admin
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] not in ("provider", "admin"):
-                raise HTTPException(status_code=403, detail="Provider account required")
-            if caller and caller["role"] == "provider" and caller["account_id"] != worker_id:
-                raise HTTPException(status_code=403, detail="You can only set pricing for your own worker")
-            try:
-                result = await self.pricing.set_pricing(
-                    worker_id=worker_id,
-                    price_per_min=req.price_per_min,
-                    min_duration_sec=req.min_duration_sec,
-                    max_duration_sec=req.max_duration_sec,
-                )
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-            if result is None:
-                raise HTTPException(status_code=404, detail="Worker not found")
-            return {
-                "worker_id": result["worker_id"],
-                "price_per_min": result["price_per_min"],
-                "min_duration_sec": result["min_duration_sec"],
-                "max_duration_sec": result["max_duration_sec"],
-            }
-
-        # --- Protected account endpoints ---
-
-        @app.get("/api/accounts/{account_id}/balance")
-        async def get_balance(account_id: str, x_api_key: str = Header(default="")):
-            # Optional auth: if key provided, verify it's the account owner or admin
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] != "admin" and caller["account_id"] != account_id:
-                raise HTTPException(status_code=403, detail="You can only view your own balance")
-            acct = await self.accounts.get_account(account_id)
-            if acct is None:
-                raise HTTPException(status_code=404, detail="Account not found")
-            return {
-                "account_id": acct["account_id"],
-                "role": acct["role"],
-                "balance": acct["balance"],
-                "eth_address": acct["eth_address"],
-            }
-
-        @app.post("/api/accounts/{account_id}/deposit")
-        async def deposit(account_id: str, req: DepositRequest, x_api_key: str = Header(default="")):
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] != "admin" and caller["account_id"] != account_id:
-                raise HTTPException(status_code=403, detail="You can only deposit to your own account")
-            try:
-                acct = await self.accounts.deposit(account_id, req.amount)
-            except KeyError:
-                raise HTTPException(status_code=404, detail="Account not found")
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-            return {
-                "account_id": acct["account_id"],
-                "balance": acct["balance"],
-            }
-
-        # --- Admin endpoints ---
-
-        @app.get("/api/accounts")
-        async def list_accounts(x_api_key: str = Header(default="")):
-            # Optional auth: if key provided, must be admin
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] != "admin":
-                raise HTTPException(status_code=403, detail="Admin access required")
-            accounts = await self.accounts.list_accounts()
-            # Strip api_key from response for security
-            sanitized = {}
-            for k, v in accounts.items():
-                sanitized[k] = {
-                    "account_id": v["account_id"],
-                    "role": v["role"],
-                    "eth_address": v["eth_address"],
-                    "balance": v["balance"],
-                }
-            return sanitized
-
-        @app.get("/api/settlements")
-        async def list_settlements(x_api_key: str = Header(default=""), limit: int = 50, offset: int = 0):
-            caller = await optional_account(x_api_key)
-            if caller and caller["role"] != "admin":
-                raise HTTPException(status_code=403, detail="Admin access required")
-            items = await self.settlement.list_settlements(limit=limit, offset=offset)
-            total = await self.storage.settlements.count()
-            return {"items": items, "total": total, "limit": limit, "offset": offset}
-
-        # --- Control endpoints (send commands to miners) ---
-
-        @app.post("/api/workers/{worker_id}/control")
-        async def send_control(worker_id: str, req: ControlRequest):
-            """Send a control command to a specific worker via MQTT."""
-            payload = {"action": req.action, "config": req.config}
-            await self.broker.publish(
-                f"xenminer/{worker_id}/control", payload
-            )
-            return {"status": "sent", "worker_id": worker_id, "action": req.action}
-
-        @app.post("/api/control/broadcast")
-        async def broadcast_control(req: ControlRequest):
-            """Send a control command to ALL connected workers."""
-            workers = await self.matcher.get_available_workers()
-            sent_to = []
-            for w in workers:
-                wid = w["worker_id"]
-                payload = {"action": req.action, "config": req.config}
-                await self.broker.publish(f"xenminer/{wid}/control", payload)
-                sent_to.append(wid)
-            return {"status": "sent", "workers": sent_to, "action": req.action}
+        self.app.state.server = self
+        register_all_routers(self.app)
 
     # -------------------------------------------------------------------
     # Run
@@ -593,17 +231,14 @@ class PlatformServer:
 
     async def start(self):
         """Start storage, broker, watchdog, and API server."""
-        # Initialize storage and services
         await self._init_services()
 
-        # Start MQTT broker
         await self.broker.start()
         logger.info("MQTT broker started on port %d", self.mqtt_port)
 
-        # Start watchdog
         self._watchdog_task = asyncio.create_task(self._lease_watchdog())
+        self._monitoring_task = asyncio.create_task(self._monitoring_loop())
 
-        # Start uvicorn
         config = uvicorn.Config(
             self.app,
             host="0.0.0.0",
@@ -616,11 +251,20 @@ class PlatformServer:
 
     async def stop(self):
         """Stop all services, broker, and the API server."""
-        self._watchdog_task.cancel()
+        tasks = []
+        if hasattr(self, "_watchdog_task") and self._watchdog_task is not None:
+            self._watchdog_task.cancel()
+            tasks.append(self._watchdog_task)
+        if hasattr(self, "_monitoring_task") and self._monitoring_task is not None:
+            self._monitoring_task.cancel()
+            tasks.append(self._monitoring_task)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         await self.broker.stop()
         if self.storage:
             await self.storage.close()
-        self._uvicorn_server.should_exit = True
+        if hasattr(self, "_uvicorn_server") and self._uvicorn_server is not None:
+            self._uvicorn_server.should_exit = True
 
 
 def main():

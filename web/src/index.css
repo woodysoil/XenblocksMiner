@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes blockFlash {
+  0% { border-color: #22d1ee; background-color: rgba(34,209,238,0.06); }
+  100% { border-color: transparent; background-color: transparent; }
+}

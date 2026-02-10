@@ -357,8 +357,9 @@ class TestCppWorkerLeaseFlow:
         assert stop_result.get("state") == "completed"
 
         # Check settlement
-        settlements = api_get("/api/settlements")
-        lease_settlements = [s for s in settlements if s.get("lease_id") == lease_id]
+        resp = api_get("/api/settlements")
+        items = resp["items"] if isinstance(resp, dict) and "items" in resp else resp
+        lease_settlements = [s for s in items if s.get("lease_id") == lease_id]
         assert len(lease_settlements) >= 1
 
         # Wait for worker recovery

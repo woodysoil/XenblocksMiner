@@ -31,7 +31,7 @@ logger = logging.getLogger("storage")
 # Schema version & migrations
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -133,6 +133,15 @@ CREATE TABLE IF NOT EXISTS transactions (
     FOREIGN KEY (account_id) REFERENCES accounts(account_id)
 );
 
+-- Hashrate time-series snapshots
+CREATE TABLE IF NOT EXISTS hashrate_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT NOT NULL,
+    hashrate REAL NOT NULL,
+    active_gpus INTEGER NOT NULL DEFAULT 0,
+    timestamp REAL NOT NULL
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_leases_state ON leases(state);
 CREATE INDEX IF NOT EXISTS idx_leases_worker ON leases(worker_id);
@@ -144,6 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_settlements_lease ON settlements(lease_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_api_key ON accounts(api_key);
 CREATE INDEX IF NOT EXISTS idx_blocks_created ON blocks(created_at);
 CREATE INDEX IF NOT EXISTS idx_blocks_self ON blocks(lease_id) WHERE lease_id = '';
+CREATE INDEX IF NOT EXISTS idx_snapshots_worker_ts ON hashrate_snapshots(worker_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON hashrate_snapshots(timestamp);
 """
 
 
@@ -794,6 +805,13 @@ class BlockRepo:
                 row = await cursor.fetchone()
         return row[0] if row else 0
 
+    async def count_since(self, since_ts: float) -> int:
+        async with self._db.execute(
+            "SELECT COUNT(*) FROM blocks WHERE created_at >= ?", (since_ts,)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row[0] if row else 0
+
 
 # ---------------------------------------------------------------------------
 # Repository: Settlements
@@ -940,6 +958,55 @@ class TransactionRepo:
 
 
 # ---------------------------------------------------------------------------
+# Repository: Hashrate Snapshots
+# ---------------------------------------------------------------------------
+
+class SnapshotRepo:
+
+    def __init__(self, db: aiosqlite.Connection):
+        self._db = db
+
+    async def insert_batch(self, rows: List[tuple]):
+        now = time.time()
+        await self._db.executemany(
+            "INSERT INTO hashrate_snapshots (worker_id, hashrate, active_gpus, timestamp) "
+            "VALUES (?, ?, ?, ?)",
+            [(wid, hr, gpus, now) for wid, hr, gpus in rows],
+        )
+        await self._db.commit()
+
+    async def query(self, worker_id: Optional[str] = None, hours: float = 1) -> List[dict]:
+        cutoff = time.time() - hours * 3600
+        if worker_id:
+            sql = ("SELECT worker_id, hashrate, active_gpus, timestamp "
+                   "FROM hashrate_snapshots WHERE worker_id = ? AND timestamp >= ? "
+                   "ORDER BY timestamp")
+            params: tuple = (worker_id, cutoff)
+        else:
+            sql = ("SELECT worker_id, hashrate, active_gpus, timestamp "
+                   "FROM hashrate_snapshots WHERE timestamp >= ? "
+                   "ORDER BY timestamp")
+            params = (cutoff,)
+        results = []
+        async with self._db.execute(sql, params) as cursor:
+            async for row in cursor:
+                results.append({
+                    "worker_id": row[0],
+                    "hashrate": row[1],
+                    "active_gpus": row[2],
+                    "timestamp": row[3],
+                })
+        return results
+
+    async def delete_older_than(self, hours: float = 24):
+        cutoff = time.time() - hours * 3600
+        await self._db.execute(
+            "DELETE FROM hashrate_snapshots WHERE timestamp < ?", (cutoff,)
+        )
+        await self._db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Storage Manager
 # ---------------------------------------------------------------------------
 
@@ -955,6 +1022,7 @@ class StorageManager:
         self.blocks: Optional[BlockRepo] = None
         self.settlements: Optional[SettlementRepo] = None
         self.transactions: Optional[TransactionRepo] = None
+        self.snapshots: Optional[SnapshotRepo] = None
 
     async def initialize(self):
         """Open database, create/migrate schema, instantiate repos."""
@@ -969,6 +1037,7 @@ class StorageManager:
         self.blocks = BlockRepo(self._db)
         self.settlements = SettlementRepo(self._db)
         self.transactions = TransactionRepo(self._db)
+        self.snapshots = SnapshotRepo(self._db)
 
         logger.info("Storage initialized: %s", self.db_path)
 
@@ -1104,6 +1173,29 @@ class StorageManager:
                         await self._db.execute(idx_sql)
                     except Exception:
                         pass
+
+            # V8 migration: add hashrate_snapshots table
+            if current_version < 8:
+                try:
+                    await self._db.execute(
+                        "CREATE TABLE IF NOT EXISTS hashrate_snapshots ("
+                        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                        "  worker_id TEXT NOT NULL,"
+                        "  hashrate REAL NOT NULL,"
+                        "  active_gpus INTEGER NOT NULL DEFAULT 0,"
+                        "  timestamp REAL NOT NULL"
+                        ")"
+                    )
+                    await self._db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_snapshots_worker_ts "
+                        "ON hashrate_snapshots(worker_id, timestamp)"
+                    )
+                    await self._db.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_snapshots_ts "
+                        "ON hashrate_snapshots(timestamp)"
+                    )
+                except Exception:
+                    logger.exception("V8 migration failed")
 
             await self._db.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
