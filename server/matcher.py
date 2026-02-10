@@ -236,9 +236,9 @@ class MatchingEngine:
         """Return the active lease for a worker, if any."""
         return await self._leases.get_active_lease_for_worker(worker_id)
 
-    async def list_leases(self, state: Optional[str] = None) -> List[dict]:
+    async def list_leases(self, state: Optional[str] = None, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
         """List leases, optionally filtered by state."""
-        leases = await self._leases.list_all(state=state)
+        leases = await self._leases.list_all(state=state, limit=limit, offset=offset)
         return [
             {
                 "lease_id": l["lease_id"],

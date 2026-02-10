@@ -144,9 +144,15 @@ class BlockWatcher:
         """Return all recorded blocks for a given lease."""
         return await self._blocks.get_for_lease(lease_id)
 
-    async def get_all_blocks(self) -> List[dict]:
+    async def get_all_blocks(self, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
         """Return all recorded blocks."""
-        return await self._blocks.get_all()
+        return await self._blocks.get_all(limit=limit, offset=offset)
+
+    async def get_self_mined_blocks(self, worker_id: Optional[str] = None, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
+        return await self._blocks.get_self_mined(worker_id=worker_id, limit=limit, offset=offset)
+
+    async def count_self_mined(self, worker_id: Optional[str] = None) -> int:
+        return await self._blocks.count_self_mined(worker_id=worker_id)
 
     async def total_blocks(self) -> int:
         """Return the total number of recorded blocks."""

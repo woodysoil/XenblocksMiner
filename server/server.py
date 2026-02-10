@@ -262,7 +262,11 @@ class PlatformServer:
 
         @app.get("/api/workers")
         async def list_workers():
-            return await self.matcher.get_available_workers()
+            workers = await self.matcher.get_available_workers()
+            for w in workers:
+                rep = await self.reputation.get_score(w["worker_id"])
+                w["reputation"] = rep
+            return workers
 
         @app.get("/api/marketplace")
         async def browse_marketplace(
@@ -319,8 +323,10 @@ class PlatformServer:
             return result
 
         @app.get("/api/leases")
-        async def list_leases(state: Optional[str] = None):
-            return await self.matcher.list_leases(state=state)
+        async def list_leases(state: Optional[str] = None, limit: int = 50, offset: int = 0):
+            items = await self.matcher.list_leases(state=state, limit=limit, offset=offset)
+            total = await self.storage.leases.count(state=state)
+            return {"items": items, "total": total, "limit": limit, "offset": offset}
 
         @app.get("/api/leases/{lease_id}")
         async def get_lease(lease_id: str):
@@ -350,30 +356,28 @@ class PlatformServer:
             return result
 
         @app.get("/api/blocks")
-        async def list_blocks(lease_id: Optional[str] = None):
+        async def list_blocks(lease_id: Optional[str] = None, limit: int = 50, offset: int = 0):
             if lease_id:
                 return await self.watcher.get_blocks_for_lease(lease_id)
-            return await self.watcher.get_all_blocks()
+            items = await self.watcher.get_all_blocks(limit=limit, offset=offset)
+            total = await self.storage.blocks.count()
+            return {"items": items, "total": total, "limit": limit, "offset": offset}
 
         @app.get("/api/blocks/self-mined")
-        async def list_self_mined_blocks(worker_id: Optional[str] = None):
-            all_blocks = await self.watcher.get_all_blocks()
-            self_blocks = [b for b in all_blocks if not b.get("lease_id")]
-            if worker_id:
-                self_blocks = [b for b in self_blocks if b.get("worker_id") == worker_id]
-            return self_blocks
+        async def list_self_mined_blocks(worker_id: Optional[str] = None, limit: int = 50, offset: int = 0):
+            items = await self.watcher.get_self_mined_blocks(worker_id=worker_id, limit=limit, offset=offset)
+            total = await self.watcher.count_self_mined(worker_id=worker_id)
+            return {"items": items, "total": total, "limit": limit, "offset": offset}
 
         @app.get("/api/status")
         async def server_status():
-            all_blocks = await self.watcher.get_all_blocks()
-            self_mined_count = sum(1 for b in all_blocks if not b.get("lease_id"))
             return {
                 "mqtt_clients": self.broker.connected_client_ids,
-                "workers": len(await self.matcher.get_available_workers()),
-                "active_leases": len(await self.matcher.list_leases(state="active")),
-                "total_blocks": await self.watcher.total_blocks(),
-                "self_mined_blocks": self_mined_count,
-                "total_settlements": len(await self.settlement.list_settlements()),
+                "workers": await self.storage.workers.count(),
+                "active_leases": await self.storage.leases.count(state="active"),
+                "total_blocks": await self.storage.blocks.count(),
+                "self_mined_blocks": await self.storage.blocks.count_self_mined(),
+                "total_settlements": await self.storage.settlements.count(),
             }
 
         # --- Auth endpoints (no auth required) ---
@@ -552,11 +556,13 @@ class PlatformServer:
             return sanitized
 
         @app.get("/api/settlements")
-        async def list_settlements(x_api_key: str = Header(default="")):
+        async def list_settlements(x_api_key: str = Header(default=""), limit: int = 50, offset: int = 0):
             caller = await optional_account(x_api_key)
             if caller and caller["role"] != "admin":
                 raise HTTPException(status_code=403, detail="Admin access required")
-            return await self.settlement.list_settlements()
+            items = await self.settlement.list_settlements(limit=limit, offset=offset)
+            total = await self.storage.settlements.count()
+            return {"items": items, "total": total, "limit": limit, "offset": offset}
 
         # --- Control endpoints (send commands to miners) ---
 

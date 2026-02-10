@@ -31,7 +31,7 @@ logger = logging.getLogger("storage")
 # Schema version & migrations
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 -- Schema version tracking
@@ -142,6 +142,8 @@ CREATE INDEX IF NOT EXISTS idx_blocks_worker ON blocks(worker_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_lease ON settlements(lease_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_api_key ON accounts(api_key);
+CREATE INDEX IF NOT EXISTS idx_blocks_created ON blocks(created_at);
+CREATE INDEX IF NOT EXISTS idx_blocks_self ON blocks(lease_id) WHERE lease_id = '';
 """
 
 
@@ -459,6 +461,11 @@ class WorkerRepo:
                 })
         return results
 
+    async def count(self) -> int:
+        async with self._db.execute("SELECT COUNT(*) FROM workers") as cursor:
+            row = await cursor.fetchone()
+        return row[0] if row else 0
+
     async def find_available(self, exclude_worker_ids: Optional[List[str]] = None) -> Optional[dict]:
         """Find the first available worker not in the exclusion list."""
         exclude = set(exclude_worker_ids or [])
@@ -587,20 +594,57 @@ class LeaseRepo:
                     results.append(lease)
         return results
 
-    async def list_all(self, state: Optional[str] = None) -> List[dict]:
+    async def list_all(self, state: Optional[str] = None, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
+        cols = ("lease_id, worker_id, consumer_id, consumer_address, prefix, duration_sec, "
+                "price_per_sec, state, created_at, ended_at, blocks_found, "
+                "total_hashrate_samples, hashrate_count")
         if state:
-            query = "SELECT lease_id FROM leases WHERE state = ? ORDER BY created_at DESC"
-            params = (state,)
+            query = f"SELECT {cols} FROM leases WHERE state = ? ORDER BY created_at DESC"
+            params: tuple = (state,)
         else:
-            query = "SELECT lease_id FROM leases ORDER BY created_at DESC"
+            query = f"SELECT {cols} FROM leases ORDER BY created_at DESC"
             params = ()
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = params + (limit, offset)
         results = []
         async with self._db.execute(query, params) as cursor:
             async for row in cursor:
-                lease = await self.get(row[0])
-                if lease:
-                    results.append(lease)
+                created_at = row[8]
+                ended_at = row[9]
+                hashrate_count = row[12]
+                total_hashrate_samples = row[11]
+                elapsed = (ended_at or time.time()) - created_at
+                avg_hashrate = (total_hashrate_samples / hashrate_count) if hashrate_count > 0 else 0.0
+                results.append({
+                    "lease_id": row[0],
+                    "worker_id": row[1],
+                    "consumer_id": row[2],
+                    "consumer_address": row[3],
+                    "prefix": row[4],
+                    "duration_sec": row[5],
+                    "price_per_sec": row[6],
+                    "state": row[7],
+                    "created_at": created_at,
+                    "ended_at": ended_at,
+                    "blocks_found": row[10],
+                    "total_hashrate_samples": total_hashrate_samples,
+                    "hashrate_count": hashrate_count,
+                    "avg_hashrate": avg_hashrate,
+                    "elapsed_sec": elapsed,
+                })
         return results
+
+    async def count(self, state: Optional[str] = None) -> int:
+        if state:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM leases WHERE state = ?", (state,)
+            ) as cursor:
+                row = await cursor.fetchone()
+        else:
+            async with self._db.execute("SELECT COUNT(*) FROM leases") as cursor:
+                row = await cursor.fetchone()
+        return row[0] if row else 0
 
 
 # ---------------------------------------------------------------------------
@@ -670,12 +714,46 @@ class BlockRepo:
                 })
         return results
 
-    async def get_all(self) -> List[dict]:
+    async def get_all(self, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
         results = []
-        async with self._db.execute(
-            "SELECT lease_id, worker_id, block_hash, key, account, attempts, hashrate, prefix_valid, chain_verified, chain_block_id, created_at "
-            "FROM blocks ORDER BY created_at"
-        ) as cursor:
+        query = ("SELECT lease_id, worker_id, block_hash, key, account, attempts, hashrate, "
+                 "prefix_valid, chain_verified, chain_block_id, created_at "
+                 "FROM blocks ORDER BY created_at DESC")
+        params: tuple = ()
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = (limit, offset)
+        async with self._db.execute(query, params) as cursor:
+            async for row in cursor:
+                results.append({
+                    "lease_id": row[0],
+                    "worker_id": row[1],
+                    "hash": row[2],
+                    "key": row[3],
+                    "account": row[4],
+                    "attempts": row[5],
+                    "hashrate": row[6],
+                    "prefix_valid": bool(row[7]),
+                    "chain_verified": bool(row[8]),
+                    "chain_block_id": row[9],
+                    "timestamp": row[10],
+                })
+        return results
+
+    async def get_self_mined(self, worker_id: Optional[str] = None, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
+        query = ("SELECT lease_id, worker_id, block_hash, key, account, attempts, hashrate, "
+                 "prefix_valid, chain_verified, chain_block_id, created_at "
+                 "FROM blocks WHERE lease_id = ''")
+        params: tuple = ()
+        if worker_id:
+            query += " AND worker_id = ?"
+            params = (worker_id,)
+        query += " ORDER BY created_at DESC"
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = params + (limit, offset)
+        results = []
+        async with self._db.execute(query, params) as cursor:
             async for row in cursor:
                 results.append({
                     "lease_id": row[0],
@@ -700,6 +778,19 @@ class BlockRepo:
                 row = await cursor.fetchone()
         else:
             async with self._db.execute("SELECT COUNT(*) FROM blocks") as cursor:
+                row = await cursor.fetchone()
+        return row[0] if row else 0
+
+    async def count_self_mined(self, worker_id: Optional[str] = None) -> int:
+        if worker_id:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM blocks WHERE lease_id = '' AND worker_id = ?", (worker_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+        else:
+            async with self._db.execute(
+                "SELECT COUNT(*) FROM blocks WHERE lease_id = ''"
+            ) as cursor:
                 row = await cursor.fetchone()
         return row[0] if row else 0
 
@@ -764,13 +855,16 @@ class SettlementRepo:
             "platform_fee": round(row[7], 4),
         }
 
-    async def list_all(self) -> List[dict]:
+    async def list_all(self, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
         results = []
-        async with self._db.execute(
-            "SELECT lease_id, consumer_id, worker_id, duration_sec, blocks_found, "
-            "total_cost, provider_payout, platform_fee, settled_at "
-            "FROM settlements ORDER BY settled_at DESC"
-        ) as cursor:
+        query = ("SELECT lease_id, consumer_id, worker_id, duration_sec, blocks_found, "
+                 "total_cost, provider_payout, platform_fee, settled_at "
+                 "FROM settlements ORDER BY settled_at DESC")
+        params: tuple = ()
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = (limit, offset)
+        async with self._db.execute(query, params) as cursor:
             async for row in cursor:
                 results.append({
                     "lease_id": row[0],
@@ -783,6 +877,11 @@ class SettlementRepo:
                     "platform_fee": round(row[7], 4),
                 })
         return results
+
+    async def count(self) -> int:
+        async with self._db.execute("SELECT COUNT(*) FROM settlements") as cursor:
+            row = await cursor.fetchone()
+        return row[0] if row else 0
 
 
 # ---------------------------------------------------------------------------
@@ -994,6 +1093,17 @@ class StorageManager:
                     )
                 except Exception:
                     logger.exception("V6 blocks table migration failed")
+
+            # V7 migration: add performance indexes for dashboard queries
+            if current_version < 7:
+                for idx_sql in [
+                    "CREATE INDEX IF NOT EXISTS idx_blocks_created ON blocks(created_at)",
+                    "CREATE INDEX IF NOT EXISTS idx_blocks_self ON blocks(lease_id) WHERE lease_id = ''",
+                ]:
+                    try:
+                        await self._db.execute(idx_sql)
+                    except Exception:
+                        pass
 
             await self._db.execute(
                 "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",

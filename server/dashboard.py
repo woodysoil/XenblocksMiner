@@ -137,6 +137,16 @@ _DASHBOARD_HTML = """\
 
   .truncate { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
   .text-muted { color: var(--text2); }
+  .pager {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 10px 0; font-size: 12px; color: var(--text2);
+  }
+  .pager button {
+    padding: 4px 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text); cursor: pointer; font-size: 12px;
+  }
+  .pager button:hover { border-color: var(--accent); }
+  .pager button:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -203,6 +213,7 @@ _DASHBOARD_HTML = """\
       </thead>
       <tbody id="tbody-leases"></tbody>
     </table>
+    <div class="pager" id="pager-leases"></div>
   </div>
 
   <!-- Blocks Panel -->
@@ -213,6 +224,7 @@ _DASHBOARD_HTML = """\
       </thead>
       <tbody id="tbody-blocks"></tbody>
     </table>
+    <div class="pager" id="pager-blocks"></div>
   </div>
 
   <!-- Accounts Panel -->
@@ -299,6 +311,10 @@ _DASHBOARD_HTML = """\
 
 <script>
 const API = '';  // same origin
+const PAGE_SIZE = 50;
+
+// ── Pagination state ──
+const pageState = { leases: 0, blocks: 0 };
 
 // ── Tab switching ──
 document.querySelectorAll('.tab').forEach(tab => {
@@ -342,6 +358,22 @@ function timeAgo(ts) {
   return Math.floor(diff/3600) + 'h ago';
 }
 
+function renderPager(el, key, total) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const cur = Math.floor(pageState[key] / PAGE_SIZE) + 1;
+  el.innerHTML =
+    `<button onclick="pagePrev('${key}')" ${cur <= 1 ? 'disabled' : ''}>&lt; Prev</button>` +
+    `<span>Page ${cur} of ${pages}</span>` +
+    `<button onclick="pageNext('${key}',${total})" ${cur >= pages ? 'disabled' : ''}>Next &gt;</button>`;
+}
+function pagePrev(key) {
+  pageState[key] = Math.max(0, pageState[key] - PAGE_SIZE);
+  refresh();
+}
+function pageNext(key, total) {
+  if (pageState[key] + PAGE_SIZE < total) { pageState[key] += PAGE_SIZE; refresh(); }
+}
+
 // ── Diffing helper: only replace innerHTML when content changed ──
 function updateHTML(el, html) {
   if (el._prevHTML !== html) { el.innerHTML = html; el._prevHTML = html; }
@@ -371,19 +403,13 @@ async function refresh() {
   // Only fetch data for the active panel + always refresh workers (for rent dropdown)
   const activePanel = document.querySelector('.panel.active')?.id || 'panel-workers';
 
-  // Workers (always needed for rent dropdown)
+  // Workers (always needed for rent dropdown) — reputation embedded in response
   const workers = await fetchJSON('/api/workers');
   if (workers) {
     const sel = document.getElementById('rent-worker');
     const prev = sel.value;
     const tbody = document.getElementById('tbody-workers');
-
-    // Fetch reputation for all workers in parallel
     const workerList = Array.isArray(workers) ? workers : [];
-    const repPromises = workerList.map(w => fetchJSON('/api/workers/' + w.worker_id + '/reputation'));
-    const reps = await Promise.all(repPromises);
-    const repMap = {};
-    reps.forEach((r, i) => { if (r) repMap[workerList[i].worker_id] = r; });
 
     let rowsHTML = '';
     let optHTML = '<option value="">(any available)</option>';
@@ -392,7 +418,7 @@ async function refresh() {
       const minD = w.min_duration_sec || 60;
       const maxD = w.max_duration_sec || 86400;
       const durRange = minD + '-' + maxD + 's';
-      const rep = repMap[w.worker_id];
+      const rep = w.reputation;
       const stars = rep ? renderStars(rep.stars, rep.score) : '<span class="text-muted">-</span>';
       rowsHTML += `<tr>
         <td>${w.worker_id}</td>
@@ -430,11 +456,11 @@ async function refresh() {
 
   // Leases - only fetch when visible
   if (activePanel === 'panel-leases') {
-    const leases = await fetchJSON('/api/leases');
-    if (leases) {
+    const data = await fetchJSON('/api/leases?limit=' + PAGE_SIZE + '&offset=' + pageState.leases);
+    if (data && data.items) {
       const tbody = document.getElementById('tbody-leases');
       let html = '';
-      (Array.isArray(leases) ? leases : []).forEach(l => {
+      data.items.forEach(l => {
         const action = l.state === 'active'
           ? `<button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="doStop('${l.lease_id}')">Stop</button>`
           : '';
@@ -451,16 +477,17 @@ async function refresh() {
         </tr>`;
       });
       updateHTML(tbody, html);
+      renderPager(document.getElementById('pager-leases'), 'leases', data.total);
     }
   }
 
   // Blocks - only fetch when visible
   if (activePanel === 'panel-blocks') {
-    const blocks = await fetchJSON('/api/blocks');
-    if (blocks) {
+    const data = await fetchJSON('/api/blocks?limit=' + PAGE_SIZE + '&offset=' + pageState.blocks);
+    if (data && data.items) {
       const tbody = document.getElementById('tbody-blocks');
       let html = '';
-      (Array.isArray(blocks) ? blocks : []).forEach(b => {
+      data.items.forEach(b => {
         const pfx = b.prefix_valid !== undefined
           ? (b.prefix_valid ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">No</span>')
           : '-';
@@ -479,6 +506,7 @@ async function refresh() {
         </tr>`;
       });
       updateHTML(tbody, html);
+      renderPager(document.getElementById('pager-blocks'), 'blocks', data.total);
     }
   }
 

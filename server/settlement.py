@@ -103,6 +103,6 @@ class SettlementEngine:
         """Retrieve the settlement record for a lease, if any."""
         return await self._settlements.get(lease_id)
 
-    async def list_settlements(self) -> List[dict]:
+    async def list_settlements(self, limit: Optional[int] = None, offset: int = 0) -> List[dict]:
         """Return all settlement records."""
-        return await self._settlements.list_all()
+        return await self._settlements.list_all(limit=limit, offset=offset)
