@@ -58,6 +58,79 @@ const filterTabs: { key: FilterTab; label: string }[] = [
   { key: "LEASED", label: "Leased" },
 ];
 
+function PriceEditForm({
+  workerId,
+  currentPrice,
+  onClose,
+}: {
+  workerId: string;
+  currentPrice: number;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [price, setPrice] = useState(currentPrice.toFixed(4));
+
+  const priceMutation = useMutation({
+    mutationFn: (price_per_min: number) =>
+      apiFetch(`/api/provider/workers/${workerId}/pricing`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price_per_min }),
+      }),
+    onSuccess: () => {
+      toast.success("Price updated");
+      queryClient.invalidateQueries({ queryKey: ["provider", "workers"] });
+      onClose();
+    },
+    onError: () => toast.error("Failed to update price"),
+  });
+
+  const handleSave = () => {
+    const val = parseFloat(price);
+    if (isNaN(val) || val < 0) {
+      toast.error("Invalid price");
+      return;
+    }
+    priceMutation.mutate(val);
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <input
+        type="number"
+        step="0.0001"
+        min="0"
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSave();
+          if (e.key === "Escape") onClose();
+        }}
+        autoFocus
+        className={`${tw.input} w-28 py-1 px-2 text-xs font-mono`}
+      />
+      <button
+        onClick={handleSave}
+        disabled={priceMutation.isPending}
+        className="px-2 py-1 text-xs rounded-md font-medium transition-colors disabled:opacity-50"
+        style={{ background: colors.accent.muted, color: colors.accent.DEFAULT }}
+      >
+        {priceMutation.isPending ? "..." : "Save"}
+      </button>
+      <button
+        onClick={onClose}
+        disabled={priceMutation.isPending}
+        className={`px-2 py-1 text-xs rounded-md font-medium ${tw.textTertiary} hover:${tw.textSecondary} transition-colors`}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export default function Provider() {
   const { address, connect } = useWallet();
   const queryClient = useQueryClient();
@@ -69,6 +142,7 @@ export default function Provider() {
     targetState: "AVAILABLE" | "SELF_MINING";
   } | null>(null);
   const [viewMode, setViewMode] = usePersistedState<ViewMode>("provider-workers-view", "grid");
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
 
   const { data: workersData, isLoading: workersLoading } = useQuery({
     queryKey: ["provider", "workers", address],
@@ -116,6 +190,11 @@ export default function Provider() {
     [workers, filter],
   );
 
+  const chartData = useMemo(
+    () => history.map((h) => ({ time: h.timestamp as UTCTimestamp, value: h.hashrate })),
+    [history],
+  );
+
   if (!address) {
     return (
       <EmptyState
@@ -146,11 +225,6 @@ export default function Provider() {
   const avgHashrate = dashboard?.avg_hashrate ?? 0;
   const peakHashrate = achievements?.peak_hashrate ?? 0;
   const miningDays = achievements?.mining_days ?? 0;
-
-  const chartData = useMemo(
-    () => history.map((h) => ({ time: h.timestamp as UTCTimestamp, value: h.hashrate })),
-    [history],
-  );
 
   return (
     <div className="space-y-6">
@@ -255,7 +329,7 @@ export default function Provider() {
             />
           </div>
           <div className="flex justify-between mt-1">
-            <span className={`text-xs ${tw.textTertiary}`}>0</span>
+            <span className={`text-xs ${tw.textTertiary}`}>0 H/s</span>
             <span className={`text-xs ${tw.textTertiary}`}>Peak: {formatHashrate(peakHashrate)}</span>
           </div>
         </div>
@@ -311,11 +385,12 @@ export default function Provider() {
                   <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
                     <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
                     <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
-                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
-                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
-                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
-                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
-                    <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Action</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Hashrate</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Blocks</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Uptime</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-center`}>Status</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Price</th>
+                    <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,11 +398,12 @@ export default function Provider() {
                     <tr key={i} className="border-b border-[#1f2835]">
                       <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-10" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-4 py-3"><Skeleton className="h-6 w-14 rounded-md" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-20 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-10 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-14 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full mx-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-6 w-14 rounded-md ml-auto" /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -342,62 +418,105 @@ export default function Provider() {
         ) : viewMode === "grid" ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredWorkers.map((w) => (
-              <div key={w.worker_id} className={`${tw.card} ${tw.cardHover} p-5`}>
+              <div
+                key={w.worker_id}
+                className={`${tw.card} ${tw.cardHover} p-5 relative`}
+                style={w.online ? {
+                  boxShadow: `0 0 12px ${colors.success.muted}, inset 0 0 12px ${colors.success.muted}`,
+                } : undefined}
+              >
+                {/* Header: worker id + status */}
                 <div className="flex items-center justify-between mb-2">
-                  <span className={`font-mono text-sm font-medium ${tw.textPrimary} truncate max-w-[180px]`} title={w.worker_id}>{w.worker_id}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      {w.online && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: colors.success.DEFAULT }} />}
+                      <span className={`relative inline-flex h-2 w-2 rounded-full`} style={{ background: w.online ? colors.success.DEFAULT : colors.danger.DEFAULT }} />
+                    </span>
+                    <span className={`font-mono text-sm font-medium ${tw.textPrimary} truncate`} title={w.worker_id}>{w.worker_id}</span>
+                  </div>
                   <StatusBadge status={stateToStatus[w.state] || "idle"} label={stateToLabel[w.state]} size="sm" />
                 </div>
+
+                {/* GPU */}
                 <div className="mb-3">
                   <GpuBadge name={w.gpu_name || "GPU"} memory={w.memory_gb || 0} />
                 </div>
+
+                {/* Price display */}
+                <div
+                  className="mb-3 py-2 px-3 rounded-md flex items-center justify-between"
+                  style={{ background: colors.warning.muted }}
+                >
+                  {editingPriceId === w.worker_id ? (
+                    <PriceEditForm
+                      workerId={w.worker_id}
+                      currentPrice={w.price_per_min}
+                      onClose={() => setEditingPriceId(null)}
+                    />
+                  ) : (
+                    <>
+                      <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: colors.warning.DEFAULT }}>
+                        {w.price_per_min.toFixed(4)} <span className={`text-xs font-normal ${tw.textTertiary}`}>XNB/min</span>
+                      </span>
+                      {w.state !== "LEASED" && (
+                        <button
+                          onClick={() => setEditingPriceId(w.worker_id)}
+                          className={`text-xs font-medium px-1.5 py-0.5 rounded transition-colors`}
+                          style={{ color: colors.text.secondary }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = colors.accent.DEFAULT)}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = colors.text.secondary)}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline -mt-px mr-0.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          Edit
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Metrics */}
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div>
-                    <p className={`text-xs ${tw.textTertiary}`}>Hashrate</p>
-                    <p className={`font-mono font-semibold tabular-nums ${tw.textPrimary}`}>{formatHashrate(w.hashrate)}</p>
+                    <p className={`text-xs ${tw.textTertiary} mb-0.5`}>Hashrate</p>
+                    <p className={`font-mono font-semibold tabular-nums`} style={{ color: w.online ? colors.accent.DEFAULT : colors.text.primary }}>
+                      {formatHashrate(w.hashrate)}
+                    </p>
                   </div>
                   <div>
-                    <p className={`text-xs ${tw.textTertiary}`}>Blocks</p>
+                    <p className={`text-xs ${tw.textTertiary} mb-0.5`}>Blocks</p>
                     <p className={`font-mono tabular-nums ${tw.textPrimary}`}>{w.self_blocks_found}</p>
                   </div>
                   <div>
-                    <p className={`text-xs ${tw.textTertiary}`}>Uptime</p>
+                    <p className={`text-xs ${tw.textTertiary} mb-0.5`}>Uptime</p>
                     <p className={`tabular-nums ${tw.textPrimary}`}>{formatUptime(w.total_online_sec)}</p>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-[#1f2835] flex items-center justify-between">
-                  <span className="text-xs font-mono tabular-nums" style={{ color: colors.warning.DEFAULT }}>
-                    {w.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
-                  </span>
-                  <div className="flex items-center gap-3">
-                    {w.state === "LEASED" ? (
-                      <span className={`text-xs font-medium ${tw.textTertiary}`}>Leased</span>
-                    ) : w.state === "AVAILABLE" ? (
-                      <button
-                        disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
-                        onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-                        {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "Unlist"}
-                      </button>
-                    ) : (
-                      <button
-                        disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
-                        onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                        {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "List"}
-                      </button>
-                    )}
-                    <span className={`inline-flex items-center gap-1.5 text-xs ${w.online ? "text-[#0ecb81]" : "text-[#f6465d]"}`}>
-                      <span className="relative flex h-2 w-2">
-                        {w.online && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#0ecb81] opacity-75" />}
-                        <span className={`relative inline-flex h-2 w-2 rounded-full ${w.online ? "bg-[#0ecb81]" : "bg-[#f6465d]"}`} />
-                      </span>
-                      {w.online ? "Online" : "Offline"}
-                    </span>
-                  </div>
+
+                {/* Actions */}
+                <div className="mt-3 pt-3 border-t border-[#1f2835] flex items-center justify-end gap-2">
+                  {w.state === "LEASED" ? (
+                    <span className={`text-xs font-medium ${tw.textTertiary}`}>Leased</span>
+                  ) : w.state === "AVAILABLE" ? (
+                    <button
+                      disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                      onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium disabled:opacity-50 transition-colors"
+                      style={{ background: colors.danger.muted, color: colors.danger.DEFAULT }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+                      {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "Unlist"}
+                    </button>
+                  ) : (
+                    <button
+                      disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
+                      onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md font-medium disabled:opacity-50 transition-colors"
+                      style={{ background: colors.success.muted, color: colors.success.DEFAULT }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                      {commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id ? "..." : "List"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -409,38 +528,77 @@ export default function Provider() {
                 <tr className={`${tw.surface2} border-b border-[#2a3441]`}>
                   <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Worker</th>
                   <th className={`${tw.tableHeader} px-4 py-3 text-left`}>GPU</th>
-                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Hashrate</th>
-                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Blocks</th>
-                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Status</th>
-                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Price</th>
-                  <th className={`${tw.tableHeader} px-4 py-3 text-left`}>Action</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Hashrate</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Blocks</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Uptime</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-center`}>Status</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Price</th>
+                  <th className={`${tw.tableHeader} px-4 py-3 text-right`}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredWorkers.map((w) => (
-                  <tr key={w.worker_id} className={tw.tableRow}>
+                  <tr
+                    key={w.worker_id}
+                    className={tw.tableRow}
+                    style={w.online ? { background: `${colors.success.DEFAULT}06` } : undefined}
+                  >
                     <td className={`${tw.tableCell} font-mono text-xs`}>
-                      <span className="truncate max-w-[120px] block" title={w.worker_id}>{w.worker_id}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={w.online ? tw.dotOnline : tw.dotOffline} />
+                        <span className="truncate max-w-[120px] block" title={w.worker_id}>{w.worker_id}</span>
+                      </div>
                     </td>
                     <td className={tw.tableCell}>
                       <GpuBadge name={w.gpu_name || "GPU"} memory={w.memory_gb || 0} />
                     </td>
-                    <td className={`${tw.tableCell} font-mono tabular-nums`}>{formatHashrate(w.hashrate)}</td>
-                    <td className={`${tw.tableCell} tabular-nums`}>{w.self_blocks_found}</td>
-                    <td className={tw.tableCell}>
+                    <td className={`${tw.tableCell} font-mono tabular-nums text-right`}>
+                      <span style={{ color: w.online ? colors.accent.DEFAULT : colors.text.primary }}>
+                        {formatHashrate(w.hashrate)}
+                      </span>
+                    </td>
+                    <td className={`${tw.tableCell} tabular-nums text-right`}>{w.self_blocks_found}</td>
+                    <td className={`${tw.tableCell} tabular-nums text-right`}>{formatUptime(w.total_online_sec)}</td>
+                    <td className={`${tw.tableCell} text-center`}>
                       <StatusBadge status={stateToStatus[w.state] || "idle"} label={stateToLabel[w.state]} size="sm" />
                     </td>
-                    <td className={`${tw.tableCell} font-mono tabular-nums`}>
-                      {w.price_per_min.toFixed(4)} <span className={tw.textTertiary}>/min</span>
+                    <td className={`${tw.tableCell} text-right`}>
+                      {editingPriceId === w.worker_id ? (
+                        <PriceEditForm
+                          workerId={w.worker_id}
+                          currentPrice={w.price_per_min}
+                          onClose={() => setEditingPriceId(null)}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="font-mono tabular-nums" style={{ color: colors.warning.DEFAULT }}>
+                            {w.price_per_min.toFixed(4)}
+                          </span>
+                          <span className={`text-xs ${tw.textTertiary}`}>/min</span>
+                          {w.state !== "LEASED" && (
+                            <button
+                              onClick={() => setEditingPriceId(w.worker_id)}
+                              className="ml-1 p-0.5 rounded transition-colors"
+                              style={{ color: colors.text.tertiary }}
+                              onMouseEnter={(e) => (e.currentTarget.style.color = colors.accent.DEFAULT)}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = colors.text.tertiary)}
+                              title="Edit price"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
-                    <td className={tw.tableCell}>
+                    <td className={`${tw.tableCell} text-right`}>
                       {w.state === "LEASED" ? (
                         <span className={`text-xs ${tw.textTertiary}`}>Leased</span>
                       ) : w.state === "AVAILABLE" ? (
                         <button
                           disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
                           onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "SELF_MINING" })}
-                          className="px-2 py-1 text-xs rounded-md font-medium bg-[rgba(246,70,93,0.12)] text-[#f6465d] hover:bg-[rgba(246,70,93,0.2)] disabled:opacity-50 transition-colors"
+                          className="px-2 py-1 text-xs rounded-md font-medium disabled:opacity-50 transition-colors"
+                          style={{ background: colors.danger.muted, color: colors.danger.DEFAULT }}
                         >
                           Unlist
                         </button>
@@ -448,7 +606,8 @@ export default function Provider() {
                         <button
                           disabled={commandMutation.isPending && commandMutation.variables?.workerId === w.worker_id}
                           onClick={() => setConfirmAction({ workerId: w.worker_id, targetState: "AVAILABLE" })}
-                          className="px-2 py-1 text-xs rounded-md font-medium bg-[rgba(14,203,129,0.12)] text-[#0ecb81] hover:bg-[rgba(14,203,129,0.2)] disabled:opacity-50 transition-colors"
+                          className="px-2 py-1 text-xs rounded-md font-medium disabled:opacity-50 transition-colors"
+                          style={{ background: colors.success.muted, color: colors.success.DEFAULT }}
                         >
                           List
                         </button>

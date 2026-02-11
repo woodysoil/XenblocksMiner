@@ -74,8 +74,20 @@ extern std::mutex globalGpuInfosMutex;
 using SubmitCallback = std::function<void(const std::string& hexsalt, const std::string& key, const std::string& hashed_pure, const size_t attempts, const float hashrate)>;
 using StatCallback = std::function<void(const gpuInfo gpuinfo)>;
 
-
-
+struct MinerConfig {
+	std::string userAddress;
+	std::string devfeeAddress;
+	std::string ecoDevfeeAddress;
+	std::atomic<int> devfeePermillage{0};
+	std::string rpcLink;
+	std::string testBlockPattern;
+	std::string selfMiningPrefix;
+	std::size_t maxBatchSize = 0;
+	std::string customName;
+	bool platformMode = false;
+	std::string mqttBroker;
+	std::string workerId;
+};
 
 const std::string RED = "\033[31m";
 const std::string GREEN = "\033[32m";

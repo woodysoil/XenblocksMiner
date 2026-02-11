@@ -1,11 +1,12 @@
 import { type ReactNode } from 'react';
 import { tw, colors } from './tokens';
 import Skeleton from './Skeleton';
+import StatDelta from './StatDelta';
 
 interface MetricCardProps {
   label: string;
   value: string | number;
-  delta?: string;
+  delta?: string | number;
   icon?: ReactNode;
   variant?: 'default' | 'accent' | 'success' | 'danger' | 'info' | 'warning';
   loading?: boolean;
@@ -28,8 +29,8 @@ const variantGlow: Record<string, string> = {
 };
 
 export default function MetricCard({ label, value, delta, icon, variant = 'default', loading }: MetricCardProps) {
-  const isPositive = delta?.startsWith('+');
-  const isNegative = delta?.startsWith('-');
+  const isPositive = typeof delta === 'string' && delta.startsWith('+');
+  const isNegative = typeof delta === 'string' && delta.startsWith('-');
 
   return (
     <div
@@ -56,15 +57,21 @@ export default function MetricCard({ label, value, delta, icon, variant = 'defau
           <div className={`text-2xl font-bold ${tw.textPrimary} mt-1`} style={{ fontVariantNumeric: 'tabular-nums' }}>
             {value}
           </div>
-          {delta && (
-            <span
-              className={`text-xs mt-1 inline-block ${
-                !isPositive && !isNegative ? tw.textSecondary : ''
-              }`}
-              style={isPositive ? { color: colors.success.DEFAULT } : isNegative ? { color: colors.danger.DEFAULT } : undefined}
-            >
-              {delta}
-            </span>
+          {delta !== undefined && (
+            typeof delta === 'number' ? (
+              <div className="mt-1">
+                <StatDelta value={delta} />
+              </div>
+            ) : (
+              <span
+                className={`text-xs mt-1 inline-block ${
+                  !isPositive && !isNegative ? tw.textSecondary : ''
+                }`}
+                style={isPositive ? { color: colors.success.DEFAULT } : isNegative ? { color: colors.danger.DEFAULT } : undefined}
+              >
+                {delta}
+              </span>
+            )
           )}
         </>
       )}

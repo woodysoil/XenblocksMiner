@@ -63,7 +63,7 @@ endif()
 
 list(APPEND LINK_LIBRARIES CUDA::nvml unofficial::argon2::libargon2 cryptopp::cryptopp cpr::cpr nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto Boost::program_options unofficial::secp256k1 unofficial::secp256k1_precomputed Crow::Crow PahoMqttCpp::paho-mqttpp3-static)
 
-set(SOURCE_FILES src/main.cpp src/AppConfig.cpp src/argon2params.cpp src/blake2b.cpp src/ConfigManager.cpp src/CudaDevice.cpp src/CudaBackend.cpp src/kernelrunner.cu src/MineUnit.cpp src/MiningCommon.cpp src/Logger.cpp src/MerkleTree.cpp src/SHA256Hasher.cpp src/EthereumAddressValidator.cpp src/Argon2idHasher.cpp src/HttpClient.cpp src/HttpResponse.cpp src/PowSubmitter.cpp src/EthereumSignatureValidator.cpp src/MachineIDGetter.cpp src/MiningCoordinator.cpp src/MqttClient.cpp src/WorkerReporter.cpp src/LeaseManager.cpp src/PlatformManager.cpp)
+set(SOURCE_FILES src/main.cpp src/ProcessMonitor.cpp src/DifficultyManager.cpp src/StatReporter.cpp src/LocalServer.cpp src/BlockSubmitter.cpp src/AppConfig.cpp src/argon2params.cpp src/blake2b.cpp src/ConfigManager.cpp src/CudaDevice.cpp src/CudaBackend.cpp src/kernelrunner.cu src/MineUnit.cpp src/MiningCommon.cpp src/Logger.cpp src/MerkleTree.cpp src/SHA256Hasher.cpp src/EthereumAddressValidator.cpp src/Argon2idHasher.cpp src/HttpClient.cpp src/HttpResponse.cpp src/PowSubmitter.cpp src/EthereumSignatureValidator.cpp src/MachineIDGetter.cpp src/MiningCoordinator.cpp src/MqttClient.cpp src/WorkerReporter.cpp src/LeaseManager.cpp src/PlatformManager.cpp)
 if(WIN32)
     add_executable(${PROJECT_NAME} ${SOURCE_FILES} res/version.rc)
 else()

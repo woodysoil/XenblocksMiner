@@ -6,6 +6,7 @@ import { queryClient } from "./lib/queryClient";
 import { DashboardProvider } from "./context/DashboardContext";
 import { WalletProvider } from "./context/WalletContext";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const Overview = lazy(() => import("./pages/Overview"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
@@ -21,27 +22,29 @@ export default function App() {
       <BrowserRouter>
         <WalletProvider>
           <DashboardProvider>
-            <Suspense
-              fallback={
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="animate-pulse text-[#5e6673] text-sm">
-                    Loading…
+            <ErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="animate-pulse text-[#5e6673] text-sm">
+                      Loading…
+                    </div>
                   </div>
-                </div>
-              }
-            >
-              <Routes>
-                <Route element={<Layout />}>
-                  <Route index element={<Overview />} />
-                  <Route path="monitoring" element={<Monitoring />} />
-                  <Route path="marketplace" element={<Marketplace />} />
-                  <Route path="provider" element={<Provider />} />
-                  <Route path="renter" element={<Renter />} />
-                  <Route path="account" element={<Account />} />
-                  <Route path="*" element={<NotFound />} />
-                </Route>
-              </Routes>
-            </Suspense>
+                }
+              >
+                <Routes>
+                  <Route element={<Layout />}>
+                    <Route index element={<ErrorBoundary><Overview /></ErrorBoundary>} />
+                    <Route path="monitoring" element={<ErrorBoundary><Monitoring /></ErrorBoundary>} />
+                    <Route path="marketplace" element={<ErrorBoundary><Marketplace /></ErrorBoundary>} />
+                    <Route path="provider" element={<ErrorBoundary><Provider /></ErrorBoundary>} />
+                    <Route path="renter" element={<ErrorBoundary><Renter /></ErrorBoundary>} />
+                    <Route path="account" element={<ErrorBoundary><Account /></ErrorBoundary>} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </DashboardProvider>
         </WalletProvider>
       </BrowserRouter>

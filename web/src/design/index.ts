@@ -6,3 +6,6 @@ export { default as HashText } from './HashText';
 export { default as ChartCard } from './ChartCard';
 export { default as EmptyState } from './EmptyState';
 export { default as Skeleton } from './Skeleton';
+export { default as ProgressBar } from './ProgressBar';
+export { default as Tooltip } from './Tooltip';
+export { default as StatDelta } from './StatDelta';
