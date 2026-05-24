@@ -177,21 +177,45 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 
     try {
         const auto setup_start = std::chrono::steady_clock::now();
-        const std::string salt = normalizeHex(request.salt_hex);
-        const std::string prefix = normalizeHex(request.key_prefix);
-        const std::string fixed_key = normalizeHex(request.key);
+        auto timed_setup_step = [&request](auto&& action) {
+            if (!request.detailed_timings) {
+                action();
+                return 0.0;
+            }
+            const auto step_start = std::chrono::steady_clock::now();
+            action();
+            return elapsedMillis(step_start, std::chrono::steady_clock::now());
+        };
+        std::string salt;
+        std::string prefix;
+        std::string fixed_key;
+        result.timings.setup_normalize_cpu_ms = timed_setup_step([&]() {
+            salt = normalizeHex(request.salt_hex);
+            prefix = normalizeHex(request.key_prefix);
+            fixed_key = normalizeHex(request.key);
+        });
         const bool single_key = !fixed_key.empty();
         const std::size_t attempts = single_key ? 1 : request.batch_size;
 
         auto& compute_backend = backend();
-        compute_backend.activate();
-        const auto device_info = compute_backend.getDeviceInfo();
+        result.timings.setup_activate_cpu_ms = timed_setup_step([&]() {
+            compute_backend.activate();
+        });
+        DeviceInfo device_info{};
+        result.timings.setup_device_info_cpu_ms = timed_setup_step([&]() {
+            device_info = compute_backend.getDeviceInfo();
+        });
         result.device_id = device_info.index;
 
-        Argon2Params params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
-                            kDefaultHashLength, salt, nullptr, 0, nullptr, 0,
-                            1, request.difficulty, 1);
-        ensureInitialized(compute_backend, params, attempts);
+        Argon2Params params;
+        result.timings.setup_params_cpu_ms = timed_setup_step([&]() {
+            params = Argon2Params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
+                                  kDefaultHashLength, salt, nullptr, 0, nullptr, 0,
+                                  1, request.difficulty, 1);
+        });
+        result.timings.setup_backend_init_cpu_ms = timed_setup_step([&]() {
+            ensureInitialized(compute_backend, params, attempts);
+        });
         result.timings.setup_ms = elapsedMillis(setup_start, std::chrono::steady_clock::now());
 
         const auto input_start = std::chrono::steady_clock::now();

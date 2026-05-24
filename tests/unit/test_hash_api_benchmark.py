@@ -460,6 +460,12 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     analysis = benchmark.timing_analysis(
         {
             "input_ms": 6.0,
+            "setup_ms": 5.5,
+            "setup_normalize_cpu_ms": 0.1,
+            "setup_activate_cpu_ms": 0.2,
+            "setup_device_info_cpu_ms": 0.3,
+            "setup_params_cpu_ms": 0.4,
+            "setup_backend_init_cpu_ms": 0.5,
             "first_block_ms": 5.0,
             "first_block_initial_hash_cpu_ms": 3.0,
             "first_block_digest_cpu_ms": 2.0,
@@ -479,6 +485,11 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert analysis["dominant_stage"] == "input_ms"
     assert "first_block_initial_hash_cpu_ms" not in analysis["stage_pct"]
     assert "first_block_digest_cpu_ms" not in analysis["stage_pct"]
+    assert "setup_normalize_cpu_ms" not in analysis["stage_pct"]
+    assert "setup_activate_cpu_ms" not in analysis["stage_pct"]
+    assert "setup_device_info_cpu_ms" not in analysis["stage_pct"]
+    assert "setup_params_cpu_ms" not in analysis["stage_pct"]
+    assert "setup_backend_init_cpu_ms" not in analysis["stage_pct"]
     assert "kernel_ms" not in analysis["stage_pct"]
     assert "host_to_device_ms" not in analysis["stage_pct"]
     assert "device_to_host_ms" not in analysis["stage_pct"]

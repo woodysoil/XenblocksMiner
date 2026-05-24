@@ -121,6 +121,11 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
 {
     target.validation_ms += source.validation_ms;
     target.setup_ms += source.setup_ms;
+    target.setup_normalize_cpu_ms += source.setup_normalize_cpu_ms;
+    target.setup_activate_cpu_ms += source.setup_activate_cpu_ms;
+    target.setup_device_info_cpu_ms += source.setup_device_info_cpu_ms;
+    target.setup_params_cpu_ms += source.setup_params_cpu_ms;
+    target.setup_backend_init_cpu_ms += source.setup_backend_init_cpu_ms;
     target.input_ms += source.input_ms;
     target.keygen_ms += source.keygen_ms;
     target.first_block_ms += source.first_block_ms;

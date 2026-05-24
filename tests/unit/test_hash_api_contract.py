@@ -97,6 +97,11 @@ def test_hash_api_result_exposes_machine_readable_timings():
     for field in [
         "validation_ms",
         "setup_ms",
+        "setup_normalize_cpu_ms",
+        "setup_activate_cpu_ms",
+        "setup_device_info_cpu_ms",
+        "setup_params_cpu_ms",
+        "setup_backend_init_cpu_ms",
         "input_ms",
         "keygen_ms",
         "first_block_ms",

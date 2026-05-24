@@ -38,6 +38,11 @@ struct HashApiMatch {
 struct HashApiTimings {
     double validation_ms = 0.0;
     double setup_ms = 0.0;
+    double setup_normalize_cpu_ms = 0.0;
+    double setup_activate_cpu_ms = 0.0;
+    double setup_device_info_cpu_ms = 0.0;
+    double setup_params_cpu_ms = 0.0;
+    double setup_backend_init_cpu_ms = 0.0;
     double input_ms = 0.0;
     double keygen_ms = 0.0;
     double first_block_ms = 0.0;
