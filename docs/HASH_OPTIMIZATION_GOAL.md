@@ -381,6 +381,7 @@ Rejected or risky experiments:
 - reusing generated-key string storage with `fillRandomKey` slightly reduced keygen timing but regressed short generated CUDA sequence throughput and increased total input timing
 - limiting first-block worker count by attempts per worker regressed short main-target CUDA throughput and did not produce a stable gain
 - caching decoded salt bytes in `Argon2Params` preserved the golden CUDA hash but did not improve repeated generated-batch throughput
+- parallel generated-key construction with one random generator per worker preserved correctness but regressed same-settings d8/b2048 throughput, so keygen parallelization should not be retried without a different design
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
