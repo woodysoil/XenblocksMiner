@@ -8,9 +8,11 @@
 #include "../argon2-common.h"
 #include "../argon2params.h"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace hashapi {
@@ -22,12 +24,62 @@ double elapsedMillis(std::chrono::steady_clock::time_point start,
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
+constexpr std::size_t kMinParallelFirstBlockAttempts = 8;
+
 void fillPasswordBlock(ComputeBackend& backend,
                        const Argon2Params& params,
                        std::size_t index,
                        const std::string& password)
 {
     params.fillFirstBlocks(backend.getInputMemory(index), password.c_str(), password.size());
+}
+
+std::size_t firstBlockWorkerCount(std::size_t attempts)
+{
+    if (attempts < kMinParallelFirstBlockAttempts) {
+        return 1;
+    }
+
+    const unsigned int hardware_threads = std::thread::hardware_concurrency();
+    if (hardware_threads < 2) {
+        return 1;
+    }
+
+    return std::min<std::size_t>(attempts, hardware_threads);
+}
+
+void fillPasswordBlocks(ComputeBackend& backend,
+                        const Argon2Params& params,
+                        const std::vector<std::string>& passwords)
+{
+    const std::size_t attempts = passwords.size();
+    const std::size_t worker_count = firstBlockWorkerCount(attempts);
+    if (worker_count <= 1) {
+        for (std::size_t i = 0; i < attempts; ++i) {
+            fillPasswordBlock(backend, params, i, passwords[i]);
+        }
+        return;
+    }
+
+    const std::size_t chunk_size = (attempts + worker_count - 1) / worker_count;
+    std::vector<std::thread> workers;
+    workers.reserve(worker_count);
+    for (std::size_t worker = 0; worker < worker_count; ++worker) {
+        const std::size_t begin = worker * chunk_size;
+        const std::size_t end = std::min(attempts, begin + chunk_size);
+        if (begin >= end) {
+            break;
+        }
+        workers.emplace_back([&backend, &params, &passwords, begin, end]() {
+            for (std::size_t i = begin; i < end; ++i) {
+                fillPasswordBlock(backend, params, i, passwords[i]);
+            }
+        });
+    }
+
+    for (std::thread& worker : workers) {
+        worker.join();
+    }
 }
 
 std::string finalizeHash(ComputeBackend& backend,
@@ -143,17 +195,29 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         password_storage_.reserve(attempts);
         RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
 
-        for (std::size_t i = 0; i < attempts; ++i) {
+        if (firstBlockWorkerCount(attempts) <= 1) {
+            for (std::size_t i = 0; i < attempts; ++i) {
+                const auto keygen_start = std::chrono::steady_clock::now();
+                const std::string key = single_key ? fixed_key : key_generator.nextRandomKey();
+                const auto keygen_end = std::chrono::steady_clock::now();
+                result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
+
+                const auto first_block_start = std::chrono::steady_clock::now();
+                fillPasswordBlock(compute_backend, params, i, key);
+                const auto first_block_end = std::chrono::steady_clock::now();
+                result.timings.first_block_ms += elapsedMillis(first_block_start, first_block_end);
+                password_storage_.push_back(key);
+            }
+        } else {
             const auto keygen_start = std::chrono::steady_clock::now();
-            const std::string key = single_key ? fixed_key : key_generator.nextRandomKey();
-            const auto keygen_end = std::chrono::steady_clock::now();
-            result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
+            for (std::size_t i = 0; i < attempts; ++i) {
+                password_storage_.push_back(single_key ? fixed_key : key_generator.nextRandomKey());
+            }
+            result.timings.keygen_ms = elapsedMillis(keygen_start, std::chrono::steady_clock::now());
 
             const auto first_block_start = std::chrono::steady_clock::now();
-            fillPasswordBlock(compute_backend, params, i, key);
-            const auto first_block_end = std::chrono::steady_clock::now();
-            result.timings.first_block_ms += elapsedMillis(first_block_start, first_block_end);
-            password_storage_.push_back(key);
+            fillPasswordBlocks(compute_backend, params, password_storage_);
+            result.timings.first_block_ms = elapsedMillis(first_block_start, std::chrono::steady_clock::now());
         }
         result.timings.input_ms = elapsedMillis(input_start, std::chrono::steady_clock::now());
 
