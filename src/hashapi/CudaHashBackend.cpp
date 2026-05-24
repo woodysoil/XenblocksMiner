@@ -413,12 +413,13 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 
         const auto finalize_start = std::chrono::steady_clock::now();
         std::array<std::array<std::uint8_t, kDefaultHashLength>, kFinalizeTimingChunkSize> finalized_buffers;
-        std::vector<std::string> finalized_hashes;
-        finalized_hashes.reserve(std::min(kFinalizeTimingChunkSize, attempts));
+        std::vector<std::string> finalized_hashes(std::min(kFinalizeTimingChunkSize, attempts));
+        for (std::string& hash : finalized_hashes) {
+            hash.reserve(base64EncodedLength(kDefaultHashLength));
+        }
         for (std::size_t begin = 0; begin < attempts; begin += kFinalizeTimingChunkSize) {
             const std::size_t end = std::min(attempts, begin + kFinalizeTimingChunkSize);
-            finalized_hashes.clear();
-            finalized_hashes.reserve(end - begin);
+            const std::size_t chunk_size = end - begin;
 
             const auto finalize_hash_start = std::chrono::steady_clock::now();
             const auto argon2_finalize_start = std::chrono::steady_clock::now();
@@ -430,14 +431,14 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
                 std::chrono::steady_clock::now());
 
             const auto base64_start = std::chrono::steady_clock::now();
-            for (std::size_t i = begin; i < end; ++i) {
-                finalized_hashes.push_back(base64Encode(finalized_buffers[i - begin].data(), kDefaultHashLength));
+            for (std::size_t offset = 0; offset < chunk_size; ++offset) {
+                base64EncodeInto(finalized_hashes[offset], finalized_buffers[offset].data(), kDefaultHashLength);
             }
             result.timings.base64_ms += elapsedMillis(base64_start, std::chrono::steady_clock::now());
             result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, std::chrono::steady_clock::now());
 
             const auto match_start = std::chrono::steady_clock::now();
-            for (std::size_t offset = 0; offset < finalized_hashes.size(); ++offset) {
+            for (std::size_t offset = 0; offset < chunk_size; ++offset) {
                 const std::size_t i = begin + offset;
                 const std::string& hash = finalized_hashes[offset];
                 const std::string& key = password_storage_[i];

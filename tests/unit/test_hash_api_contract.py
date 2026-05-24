@@ -192,7 +192,11 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
 
 def test_hash_api_base64_encoder_avoids_incremental_string_appends():
     content = read("src/hashapi/HashApiEncoding.cpp")
-    assert "encoded.reserve(((in_len + 2) / 3) * 4)" in content
+    header = read("src/hashapi/HashApiEncoding.h")
+    assert "base64EncodedLength" in header
+    assert "base64EncodeInto" in header
+    assert "encoded.reserve(base64EncodedLength(in_len))" in content
+    assert "base64EncodeInto(encoded, bytes_to_encode, in_len)" in content
     assert "encoded.push_back" in content
     assert "ret +=" not in content
 
