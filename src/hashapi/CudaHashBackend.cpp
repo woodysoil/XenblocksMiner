@@ -183,25 +183,38 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         const auto input_start = std::chrono::steady_clock::now();
         password_storage_.clear();
         password_storage_.reserve(attempts);
-        RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
 
         if (firstBlockWorkerCount(attempts) <= 1) {
-            for (std::size_t i = 0; i < attempts; ++i) {
+            if (single_key) {
                 const auto keygen_start = std::chrono::steady_clock::now();
-                const std::string key = single_key ? fixed_key : key_generator.nextRandomKey();
+                password_storage_.push_back(fixed_key);
                 const auto keygen_end = std::chrono::steady_clock::now();
                 result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
 
                 const auto first_block_start = std::chrono::steady_clock::now();
-                fillPasswordBlock(compute_backend, params, i, key);
+                fillPasswordBlock(compute_backend, params, 0, password_storage_.front());
                 const auto first_block_end = std::chrono::steady_clock::now();
                 result.timings.first_block_ms += elapsedMillis(first_block_start, first_block_end);
-                password_storage_.push_back(key);
+            } else {
+                RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
+                for (std::size_t i = 0; i < attempts; ++i) {
+                    const auto keygen_start = std::chrono::steady_clock::now();
+                    const std::string key = key_generator.nextRandomKey();
+                    const auto keygen_end = std::chrono::steady_clock::now();
+                    result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
+
+                    const auto first_block_start = std::chrono::steady_clock::now();
+                    fillPasswordBlock(compute_backend, params, i, key);
+                    const auto first_block_end = std::chrono::steady_clock::now();
+                    result.timings.first_block_ms += elapsedMillis(first_block_start, first_block_end);
+                    password_storage_.push_back(key);
+                }
             }
         } else {
             const auto keygen_start = std::chrono::steady_clock::now();
+            RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
             for (std::size_t i = 0; i < attempts; ++i) {
-                password_storage_.push_back(single_key ? fixed_key : key_generator.nextRandomKey());
+                password_storage_.push_back(key_generator.nextRandomKey());
             }
             result.timings.keygen_ms = elapsedMillis(keygen_start, std::chrono::steady_clock::now());
 

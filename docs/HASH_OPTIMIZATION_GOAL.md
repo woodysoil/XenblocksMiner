@@ -377,6 +377,7 @@ Known useful changes already made:
 - d8 CUDA default batch size raised to 2048 when no explicit user batch-size limit is configured
 - little-endian `Blake2b` 64-bit load/store fast path reduced generated CUDA per-attempt cost in a d8/b2048 A/B benchmark
 - `RandomHexKeyGenerator` now consumes multiple hex nibbles from each `mt19937` output instead of using per-character distribution calls; local d8/b2048 generated CUDA confirmation reduced median `keygen_ms` per attempt from about 0.00222 ms to about 0.000845 ms and reached 49.9k H/s with 5.15% spread
+- Fixed-key CUDA requests now avoid constructing the generated-key random generator; isolation confirmation kept generated d8/b2048 stable at about 66.96k H/s median and improved fixed-key d8/b1 to about 4.41k H/s median with 0.8% spread
 - `Blake2b::final` writes full 64-byte outputs directly into the destination buffer instead of staging through a temporary copy; local d8/b2048 generated CUDA confirmation stayed correct and reached 52.4k H/s median, with noisy but lower per-attempt first-block/finalize timings than the keygen baseline
 - Argon2 initial hash setup now batches fixed 32-bit metadata into stack buffers for the no-secret/no-associated-data mining path, reducing local d8/b2048 generated CUDA `first_block_ms` per attempt from about 0.01148 ms to about 0.00820 ms and reaching 67.1k H/s median with 3.7% spread
 
