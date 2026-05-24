@@ -311,9 +311,9 @@ def ensure_unique_scenario_names(scenarios: list[BenchmarkScenario]) -> None:
         seen.add(scenario.name)
 
 
-def run_metadata_command(command: list[str]) -> dict[str, Any]:
+def run_metadata_command(command: list[str], timeout: int = 10) -> dict[str, Any]:
     try:
-        completed = subprocess.run(command, text=True, capture_output=True, timeout=10, check=False)
+        completed = subprocess.run(command, text=True, capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {
             "available": False,
@@ -423,6 +423,45 @@ def collect_hardware_metadata() -> dict[str, Any]:
             ]
         ),
         "nvcc": run_metadata_command(["nvcc", "--version"]),
+    }
+
+
+def collect_environment_metadata() -> dict[str, Any]:
+    if platform.system() != "Windows":
+        return {
+            "available": False,
+            "reason": "unsupported_platform",
+        }
+
+    completed = run_metadata_command(
+        [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average",
+        ],
+        timeout=5,
+    )
+    if not completed.get("available") or completed.get("exit_code") != 0:
+        return {
+            "available": False,
+            "reason": "cpu_load_unavailable",
+        }
+
+    try:
+        cpu_load_pct = float(str(completed.get("stdout", "")).strip())
+    except ValueError:
+        return {
+            "available": False,
+            "reason": "cpu_load_parse_failed",
+        }
+
+    high_cpu_load = cpu_load_pct >= 90.0
+    return {
+        "available": True,
+        "cpu_load_pct": cpu_load_pct,
+        "high_cpu_load": high_cpu_load,
+        "benchmark_trust": "low" if high_cpu_load else "normal",
     }
 
 
@@ -768,6 +807,7 @@ def build_sanitized_report(report: dict[str, Any]) -> dict[str, Any]:
                 "warmup_runs",
             ],
         },
+        "environment": report.get("environment", {}),
         "presets": report.get("presets", []),
         "recommendations": report.get("recommendations", {}),
         "runs": [
@@ -1042,6 +1082,7 @@ def main(argv: list[str]) -> int:
         },
         "build": collect_build_metadata(args.build_cache),
         "hardware": collect_hardware_metadata(),
+        "environment": collect_environment_metadata(),
         "binary": str(args.binary),
         "salt": args.salt,
         "presets": args.preset,

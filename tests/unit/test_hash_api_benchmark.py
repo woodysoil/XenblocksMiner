@@ -26,6 +26,24 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
     }
 
 
+def _stub_metadata(monkeypatch):
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 12.5,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+    )
+
+
 def test_parse_scenario_inherits_warmup_and_repeat_defaults():
     scenario = benchmark.parse_scenario(
         "name=cuda-test,backend=cuda,difficulty=8,batch_size=64,seconds=3,device=1",
@@ -907,6 +925,12 @@ def test_build_sanitized_report_drops_private_fields():
         },
         "binary": r"D:\private\miner.exe",
         "salt": "private-salt",
+        "environment": {
+            "available": True,
+            "cpu_load_pct": 95.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
         "presets": ["warm-short"],
         "recommendations": {"batch_size_by_difficulty": []},
         "runs": [
@@ -946,6 +970,12 @@ def test_build_sanitized_report_drops_private_fields():
         "basename": "nvcc.exe",
         "release": "12.8",
         "version": "12.8.93",
+    }
+    assert sanitized["environment"] == {
+        "available": True,
+        "cpu_load_pct": 95.0,
+        "high_cpu_load": True,
+        "benchmark_trust": "low",
     }
     assert sanitized["privacy"]["sanitized"] is True
     assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
@@ -1118,9 +1148,6 @@ def test_run_scenario_treats_warmup_nonzero_exit_as_summary_failure(monkeypatch)
 
 
 def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_run_scenario(binary, salt, scenario):
         return {
             "scenario": benchmark.asdict(scenario),
@@ -1135,7 +1162,7 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
 
@@ -1160,6 +1187,7 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["schema"] == "xenblocks.hashapi.benchmark.v1"
     assert report["recommendations"]["stable_spread_pct"] == 10.0
+    assert report["environment"]["benchmark_trust"] == "normal"
     assert report["recommendations"]["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
@@ -1167,9 +1195,6 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
 
 
 def test_main_records_build_cache_metadata(monkeypatch, tmp_path, capsys):
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_build_metadata(cache_path):
         assert cache_path == tmp_path / "build"
         return {
@@ -1193,7 +1218,7 @@ def test_main_records_build_cache_metadata(monkeypatch, tmp_path, capsys):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "collect_build_metadata", fake_build_metadata)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
@@ -1229,9 +1254,6 @@ def test_main_records_build_cache_metadata(monkeypatch, tmp_path, capsys):
 def test_main_can_disable_xuni_for_all_scenarios(monkeypatch, tmp_path):
     captured = []
 
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_run_scenario(binary, salt, scenario):
         captured.append(scenario)
         return {
@@ -1247,7 +1269,7 @@ def test_main_can_disable_xuni_for_all_scenarios(monkeypatch, tmp_path):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
 
     exit_code = benchmark.main(
@@ -1292,9 +1314,6 @@ def test_build_hash_command_includes_fixed_key():
 
 
 def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
-    def fake_metadata():
-        return {"nvidia_smi": {"stdout": "private gpu"}}
-
     def fake_run_scenario(binary, salt, scenario):
         return {
             "scenario": {**benchmark.asdict(scenario), "prefix": "deadbeef"},
@@ -1309,7 +1328,17 @@ def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
             "result": {"ok": True, "hashrate": 42.0, "matches": [{"key": "secret-key"}]},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", lambda: {"nvidia_smi": {"stdout": "private gpu"}})
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 95.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+    )
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     sanitized_output = tmp_path / "summary.json"
 
@@ -1335,6 +1364,7 @@ def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
     assert sanitized["runs"][0]["summary"]["hashrate"] == 42.0
     assert "binary" not in sanitized
     assert "hardware" not in sanitized
+    assert sanitized["environment"]["benchmark_trust"] == "low"
     assert r"D:\private" not in encoded
     assert "private gpu" not in encoded
     assert "private-salt" not in encoded
@@ -1343,10 +1373,51 @@ def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
     capsys.readouterr()
 
 
-def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+def test_collect_environment_metadata_marks_high_windows_cpu_load(monkeypatch):
+    monkeypatch.setattr(benchmark.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        benchmark,
+        "run_metadata_command",
+        lambda command, timeout=10: {
+            "available": True,
+            "exit_code": 0,
+            "stdout": "99\n",
+            "stderr": "",
+        },
+    )
 
+    metadata = benchmark.collect_environment_metadata()
+
+    assert metadata == {
+        "available": True,
+        "cpu_load_pct": 99.0,
+        "high_cpu_load": True,
+        "benchmark_trust": "low",
+    }
+
+
+def test_collect_environment_metadata_handles_unavailable_cpu_load(monkeypatch):
+    monkeypatch.setattr(benchmark.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        benchmark,
+        "run_metadata_command",
+        lambda command, timeout=10: {
+            "available": False,
+            "exit_code": 1,
+            "stdout": "",
+            "stderr": "failed",
+        },
+    )
+
+    metadata = benchmark.collect_environment_metadata()
+
+    assert metadata == {
+        "available": False,
+        "reason": "cpu_load_unavailable",
+    }
+
+
+def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
     def fake_run_scenario(binary, salt, scenario):
         return {
             "scenario": benchmark.asdict(scenario),
@@ -1361,7 +1432,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
 
@@ -1399,9 +1470,6 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
 def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
     captured_names = []
 
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_run_scenario(binary, salt, scenario):
         captured_names.append(scenario.name)
         return {
@@ -1417,7 +1485,7 @@ def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
 
@@ -1451,9 +1519,6 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     captured_names = []
     captured_detailed_timings = []
 
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_run_scenario(binary, salt, scenario):
         captured_names.append(scenario.name)
         captured_detailed_timings.append(scenario.detailed_timings)
@@ -1470,7 +1535,7 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
 
@@ -1504,9 +1569,6 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
 def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
     captured = []
 
-    def fake_metadata():
-        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
-
     def fake_run_scenario(binary, salt, scenario):
         captured.append(scenario)
         return {
@@ -1522,7 +1584,7 @@ def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
             "result": {"ok": True, "hashrate": 42.0},
         }
 
-    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    _stub_metadata(monkeypatch)
     monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
     output = tmp_path / "report.json"
 

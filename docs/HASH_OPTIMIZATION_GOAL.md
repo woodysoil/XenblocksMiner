@@ -466,6 +466,11 @@ Rejected or risky experiments:
 - replacing the `Blake2b` rotate macro with an MSVC `_rotr64` intrinsic wrapper preserved focused tests and the CUDA golden hash, but d8/b2048 generated CUDA measured about `77.7k H/s` median with `11.9%` spread versus the stable `78.3k H/s` Release baseline, so keep the original rotate expression unless a broader compiler or Blake2b rewrite changes the evidence
 - changing the `Blake2b` sigma table from `unsigned int` to `std::uint8_t` preserved focused tests and the CUDA golden hash, but d8/b2048 generated CUDA regressed to about `17.9k H/s` median with `59.4%` spread versus the stable `78.3k H/s` Release baseline, so keep the original `unsigned int` table layout
 
+Measurement cautions:
+
+- A later clean-source post-revert d8/b2048 confirmation was much slower at about `26.2k H/s` median with `16.5%` spread while the host CPU load was observed near saturation. Treat that run as a low-trust environment sample, not as a new baseline or a code regression.
+- Benchmark reports now include public-safe environment metadata with aggregate CPU load and `benchmark_trust`. Do not accept CPU-side input/first-block throughput conclusions from reports marked `benchmark_trust: low` unless the result is only being used to diagnose environment noise.
+
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
 ## Next Autonomous Iteration
