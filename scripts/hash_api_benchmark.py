@@ -347,6 +347,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--warmup", default=0, type=int, help="Warm-up runs per scenario before measured repeats.")
     parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
+    parser.add_argument("--recommendations-only", action="store_true", help="Print only report recommendations as JSON.")
     parser.add_argument(
         "--preset",
         action="append",
@@ -403,7 +404,10 @@ def main(argv: list[str]) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output + "\n", encoding="utf-8")
-    print(output)
+    if args.recommendations_only:
+        print(json.dumps(report["recommendations"], indent=2, sort_keys=True))
+    else:
+        print(output)
     return 0 if all(run["exit_code"] == 0 and run["result"].get("ok") for run in report["runs"]) else 2
 
 

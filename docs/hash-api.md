@@ -192,6 +192,8 @@ The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scen
 
 Reusable presets include `smoke`, `warm-short`, `cuda-compare`, and `batch-scan`. Use `batch-scan` before hard-coding batch assumptions on a new GPU; it compares medium and large batch sizes for low difficulties while keeping raw reports under ignored local benchmark directories.
 
+Use `--recommendations-only` when an automation step only needs the selected tuning recommendations on stdout while still optionally writing the full report with `--output`.
+
 ## Local Hash Service
 
 The optional local service is a separate FastAPI app under `server/hash_api/`. It is not registered on the marketplace platform server and does not depend on marketplace routers, MQTT, leases, wallets, settlement, or SQLite.

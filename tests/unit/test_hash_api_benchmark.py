@@ -297,6 +297,49 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert json.loads(capsys.readouterr().out)["runs"][0]["summary"]["hashrate"] == 42.0
 
 
+def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--output",
+            str(output),
+            "--recommendations-only",
+        ]
+    )
+
+    assert exit_code == 0
+    stdout = json.loads(capsys.readouterr().out)
+    assert list(stdout) == ["batch_size_by_difficulty"]
+    assert stdout["batch_size_by_difficulty"][0]["batch_size"] == 2
+    assert "runs" in json.loads(output.read_text(encoding="utf-8"))
+
+
 def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
     captured_names = []
 
