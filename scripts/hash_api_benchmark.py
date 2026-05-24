@@ -15,6 +15,7 @@ from typing import Any
 
 
 DEFAULT_SALT = "aabbccddeeff0011"
+PRESET_NAMES = ("smoke", "warm-short", "cuda-compare")
 
 
 @dataclass(frozen=True)
@@ -49,28 +50,62 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
 
 
 def default_scenarios(seconds: int, backend: str, device: int, warmup: int, repeat: int) -> list[BenchmarkScenario]:
+    return preset_scenarios("smoke", seconds, backend, device, warmup, repeat)
+
+
+def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmup: int, repeat: int) -> list[BenchmarkScenario]:
+    if preset == "smoke":
+        return [
+            BenchmarkScenario(
+                name=f"{backend}-smoke-b1-d1",
+                backend=backend,
+                difficulty=1,
+                batch_size=1,
+                seconds=seconds,
+                device=device,
+                warmup=warmup,
+                repeat=repeat,
+            ),
+            BenchmarkScenario(
+                name=f"{backend}-batch-b8-d1",
+                backend=backend,
+                difficulty=1,
+                batch_size=8,
+                seconds=seconds,
+                device=device,
+                warmup=warmup,
+                repeat=repeat,
+            ),
+        ]
+
+    if preset == "warm-short":
+        pairs = [(1, 1), (1, 64), (8, 64)]
+    elif preset == "cuda-compare":
+        pairs = [(1, 64), (8, 64), (64, 128), (256, 256)]
+    else:
+        raise ValueError(f"unknown benchmark preset: {preset}")
+
     return [
         BenchmarkScenario(
-            name=f"{backend}-smoke-b1-d1",
+            name=f"{backend}-{preset}-d{difficulty}-b{batch_size}",
             backend=backend,
-            difficulty=1,
-            batch_size=1,
+            difficulty=difficulty,
+            batch_size=batch_size,
             seconds=seconds,
             device=device,
             warmup=warmup,
             repeat=repeat,
-        ),
-        BenchmarkScenario(
-            name=f"{backend}-batch-b8-d1",
-            backend=backend,
-            difficulty=1,
-            batch_size=8,
-            seconds=seconds,
-            device=device,
-            warmup=warmup,
-            repeat=repeat,
-        ),
+        )
+        for difficulty, batch_size in pairs
     ]
+
+
+def ensure_unique_scenario_names(scenarios: list[BenchmarkScenario]) -> None:
+    seen: set[str] = set()
+    for scenario in scenarios:
+        if scenario.name in seen:
+            raise ValueError(f"duplicate benchmark scenario name: {scenario.name}")
+        seen.add(scenario.name)
 
 
 def run_metadata_command(command: list[str]) -> dict[str, Any]:
@@ -232,6 +267,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
     parser.add_argument(
+        "--preset",
+        action="append",
+        choices=PRESET_NAMES,
+        default=[],
+        help="Add a reusable scenario preset. Can be provided more than once.",
+    )
+    parser.add_argument(
         "--scenario",
         action="append",
         default=[],
@@ -242,9 +284,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
-    scenarios = [parse_scenario(item, default_warmup=args.warmup, default_repeat=args.repeat) for item in args.scenario]
-    if not scenarios:
-        scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
+    try:
+        scenarios = [
+            scenario
+            for preset in args.preset
+            for scenario in preset_scenarios(preset, args.seconds, args.backend, args.device, args.warmup, args.repeat)
+        ]
+        scenarios.extend(
+            parse_scenario(item, default_warmup=args.warmup, default_repeat=args.repeat) for item in args.scenario
+        )
+        if not scenarios:
+            scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
+        ensure_unique_scenario_names(scenarios)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
@@ -258,6 +312,7 @@ def main(argv: list[str]) -> int:
         "hardware": collect_hardware_metadata(),
         "binary": str(args.binary),
         "salt": args.salt,
+        "presets": args.preset,
         "runs": [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios],
     }
 

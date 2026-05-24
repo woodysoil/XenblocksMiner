@@ -54,6 +54,46 @@ def test_parse_scenario_allows_scenario_specific_warmup_and_repeat():
     assert scenario.repeat == 3
 
 
+def test_preset_scenarios_builds_warm_short_matrix():
+    scenarios = benchmark.preset_scenarios(
+        "warm-short",
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=5,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-warm-short-d1-b1",
+        "cuda-warm-short-d1-b64",
+        "cuda-warm-short-d8-b64",
+    ]
+    assert [scenario.difficulty for scenario in scenarios] == [1, 1, 8]
+    assert [scenario.batch_size for scenario in scenarios] == [1, 64, 64]
+    assert all(scenario.seconds == 3 for scenario in scenarios)
+    assert all(scenario.device == 1 for scenario in scenarios)
+    assert all(scenario.warmup == 2 for scenario in scenarios)
+    assert all(scenario.repeat == 5 for scenario in scenarios)
+
+
+def test_ensure_unique_scenario_names_rejects_duplicates():
+    scenario = benchmark.BenchmarkScenario(
+        name="duplicate",
+        backend="cuda",
+        difficulty=1,
+        batch_size=2,
+        seconds=1,
+    )
+
+    try:
+        benchmark.ensure_unique_scenario_names([scenario, scenario])
+    except ValueError as exc:
+        assert "duplicate benchmark scenario name" in str(exc)
+    else:
+        raise AssertionError("expected duplicate scenario rejection")
+
+
 def test_summarize_iterations_reports_median_min_max_and_totals():
     scenario = benchmark.BenchmarkScenario(
         name="cuda-test",
@@ -171,3 +211,70 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
     assert json.loads(capsys.readouterr().out)["runs"][0]["summary"]["hashrate"] == 42.0
+
+
+def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
+    captured_names = []
+
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured_names.append(scenario.name)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--warmup",
+            "1",
+            "--repeat",
+            "2",
+            "--preset",
+            "smoke",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=8,batch_size=16,seconds=1",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_names == ["cuda-smoke-b1-d1", "cuda-batch-b8-d1", "manual"]
+    assert json.loads(output.read_text(encoding="utf-8"))["presets"] == ["smoke"]
+
+
+def test_main_rejects_duplicate_scenario_names(capsys):
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--preset",
+            "smoke",
+            "--scenario",
+            "name=cpu-smoke-b1-d1,backend=cpu,difficulty=1,batch_size=1,seconds=1",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "duplicate benchmark scenario name" in capsys.readouterr().err
