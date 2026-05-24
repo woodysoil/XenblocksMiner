@@ -380,18 +380,24 @@ def test_summarize_iterations_reports_timing_stage_percentages():
     assert "total_ms" not in aggregate["timing_analysis"]["stage_pct"]
 
 
-def test_timing_analysis_treats_kernel_ms_as_nested_compute_timing():
+def test_timing_analysis_treats_sub_timings_as_nested_timing():
     analysis = benchmark.timing_analysis(
         {
             "input_ms": 6.0,
             "compute_ms": 4.0,
             "kernel_ms": 9.0,
+            "finalize_ms": 3.0,
+            "finalize_hash_ms": 8.0,
+            "match_ms": 7.0,
             "total_ms": 10.0,
         }
     )
 
     assert analysis["dominant_stage"] == "input_ms"
     assert "kernel_ms" not in analysis["stage_pct"]
+    assert "finalize_hash_ms" not in analysis["stage_pct"]
+    assert "match_ms" not in analysis["stage_pct"]
+    assert analysis["stage_pct"]["finalize_ms"] == 30.0
 
 
 def test_summarize_iterations_reports_median_timing_per_attempt():

@@ -127,6 +127,8 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.compute_ms += source.compute_ms;
     target.kernel_ms += source.kernel_ms;
     target.finalize_ms += source.finalize_ms;
+    target.finalize_hash_ms += source.finalize_hash_ms;
+    target.match_ms += source.match_ms;
     target.total_ms += source.total_ms;
 }
 

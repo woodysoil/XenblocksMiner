@@ -39,7 +39,7 @@ Current progress:
 - Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
-- CUDA timing metadata reports `kernel_ms` as a sub-measurement inside `compute_ms` so future tuning can distinguish kernel time from launch, copy, and synchronization overhead.
+- CUDA timing metadata reports nested sub-measurements such as `kernel_ms` inside `compute_ms`, plus `finalize_hash_ms` and `match_ms` inside `finalize_ms`, so future tuning can distinguish kernel time, hash finalization, and target matching from their parent stages.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
@@ -139,7 +139,7 @@ Start here after reading this file:
    - high `input_ms`: reduce CPU-side key generation, salt/key preparation, or first-block setup overhead
    - high `setup_ms`: cache difficulty-derived or device-derived setup safely
    - high `compute_ms`: inspect CUDA allocation, copy, launch geometry, memory behavior, and kernel occupancy
-   - high `finalize_ms`: reduce encoding, matching, result collection, or JSON work outside the timed hot path
+   - high `finalize_ms`: use `finalize_hash_ms` and `match_ms` to choose between hash finalization, encoding, matching, result collection, or JSON work outside the timed hot path
 7. Make one scoped change.
 8. Validate correctness.
 9. Re-run the same benchmark and compare median warm throughput first.

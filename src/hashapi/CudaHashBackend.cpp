@@ -225,12 +225,19 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 
         const auto finalize_start = std::chrono::steady_clock::now();
         for (std::size_t i = 0; i < attempts; ++i) {
+            const auto finalize_hash_start = std::chrono::steady_clock::now();
             const std::string hash = finalizeHash(compute_backend, params, i);
+            const auto finalize_hash_end = std::chrono::steady_clock::now();
+            result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, finalize_hash_end);
+
             const std::string& key = password_storage_[i];
             if (single_key) {
                 result.hash = hash;
             }
+
+            const auto match_start = std::chrono::steady_clock::now();
             appendMatches(request, result, key, hash, i);
+            result.timings.match_ms += elapsedMillis(match_start, std::chrono::steady_clock::now());
         }
         result.timings.finalize_ms = elapsedMillis(finalize_start, std::chrono::steady_clock::now());
 

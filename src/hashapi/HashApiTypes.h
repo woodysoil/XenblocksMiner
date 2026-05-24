@@ -43,6 +43,8 @@ struct HashApiTimings {
     double compute_ms = 0.0;
     double kernel_ms = 0.0;
     double finalize_ms = 0.0;
+    double finalize_hash_ms = 0.0;
+    double match_ms = 0.0;
     double total_ms = 0.0;
 };
 

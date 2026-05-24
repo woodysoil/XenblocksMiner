@@ -102,6 +102,8 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "compute_ms",
         "kernel_ms",
         "finalize_ms",
+        "finalize_hash_ms",
+        "match_ms",
         "total_ms",
     ]:
         assert field in types
