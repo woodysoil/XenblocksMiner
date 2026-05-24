@@ -9,7 +9,13 @@ import io
 import scripts.hash_api_compare as compare
 
 
-def _run(name: str, hashrate: float, ok: bool = True, timings: dict | None = None) -> dict:
+def _run(
+    name: str,
+    hashrate: float,
+    ok: bool = True,
+    timings: dict | None = None,
+    spread_pct: float = 2.0,
+) -> dict:
     return {
         "scenario": {
             "name": name,
@@ -33,6 +39,7 @@ def _run(name: str, hashrate: float, ok: bool = True, timings: dict | None = Non
             "median_hashrate": hashrate,
             "min_hashrate": hashrate - 1,
             "max_hashrate": hashrate + 1,
+            "hashrate_spread_pct": spread_pct,
             "matches": 0,
             "ok": ok,
             "error": "" if ok else "failed",
@@ -64,6 +71,23 @@ def test_compare_reports_classifies_improvement_and_regression():
     assert by_name["cuda-b"]["change_pct"] == -10.0
     assert result["summary"]["improved"] == 1
     assert result["summary"]["regressed"] == 1
+
+
+def test_compare_reports_marks_changed_noisy_runs():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, spread_pct=25.0), _run("cuda-b", 100.0)),
+        _report(_run("cuda-a", 120.0), _run("cuda-b", 80.0, spread_pct=25.0)),
+        min_change_pct=1.0,
+        max_spread_pct=10.0,
+    )
+
+    by_name = {item["name"]: item for item in result["comparisons"]}
+    assert by_name["cuda-a"]["status"] == "noisy-improved"
+    assert by_name["cuda-a"]["before_spread_pct"] == 25.0
+    assert by_name["cuda-b"]["status"] == "noisy-regressed"
+    assert by_name["cuda-b"]["after_spread_pct"] == 25.0
+    assert result["summary"]["noisy_improved"] == 1
+    assert result["summary"]["noisy_regressed"] == 1
 
 
 def test_compare_reports_includes_timing_deltas():
@@ -129,6 +153,7 @@ def test_format_text_outputs_automation_friendly_rows():
 
     assert text.splitlines()[0].startswith("scenario,status,before_hashrate")
     assert "cuda-a,improved,100.000000,105.000000,5.000000,5.000" in text
+    assert "2.000,2.000" in text
     assert "input_ms:-3.000ms" in text
 
 

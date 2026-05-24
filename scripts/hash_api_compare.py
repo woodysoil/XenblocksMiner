@@ -65,6 +65,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "median_hashrate": _float_value(summary, "median_hashrate", _float_value(summary, "hashrate", 0.0)),
         "min_hashrate": _float_value(summary, "min_hashrate", _float_value(summary, "hashrate", 0.0)),
         "max_hashrate": _float_value(summary, "max_hashrate", _float_value(summary, "hashrate", 0.0)),
+        "hashrate_spread_pct": _float_value(summary, "hashrate_spread_pct", 0.0),
         "timings": summary.get("timings", {}),
         "matches": _int_value(summary, "matches", 0),
         "ok": bool(summary.get("ok")),
@@ -107,7 +108,13 @@ def compare_timings(before: dict[str, Any] | None, after: dict[str, Any] | None)
     return comparison
 
 
-def _status(before: dict[str, Any] | None, after: dict[str, Any] | None, change_pct: float | None, min_change_pct: float) -> str:
+def _status(
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
+    change_pct: float | None,
+    min_change_pct: float,
+    max_spread_pct: float,
+) -> str:
     if before is None:
         return "missing-before"
     if after is None:
@@ -116,14 +123,23 @@ def _status(before: dict[str, Any] | None, after: dict[str, Any] | None, change_
         return "invalid"
     if change_pct is None:
         return "unrated"
+    noisy = (
+        _float_value(before, "hashrate_spread_pct", 0.0) > max_spread_pct or
+        _float_value(after, "hashrate_spread_pct", 0.0) > max_spread_pct
+    )
     if change_pct > min_change_pct:
-        return "improved"
+        return "noisy-improved" if noisy else "improved"
     if change_pct < -min_change_pct:
-        return "regressed"
+        return "noisy-regressed" if noisy else "regressed"
     return "unchanged"
 
 
-def compare_reports(before_report: Report, after_report: Report, min_change_pct: float = 0.0) -> Report:
+def compare_reports(
+    before_report: Report,
+    after_report: Report,
+    min_change_pct: float = 0.0,
+    max_spread_pct: float = 10.0,
+) -> Report:
     before_runs = index_runs(before_report)
     after_runs = index_runs(after_report)
     comparisons: list[dict[str, Any]] = []
@@ -134,7 +150,7 @@ def compare_reports(before_report: Report, after_report: Report, min_change_pct:
         before_rate = before["median_hashrate"] if before else 0.0
         after_rate = after["median_hashrate"] if after else 0.0
         change_pct = _percent_change(before_rate, after_rate) if before and after else None
-        status = _status(before, after, change_pct, min_change_pct)
+        status = _status(before, after, change_pct, min_change_pct, max_spread_pct)
         comparisons.append(
             {
                 "name": name,
@@ -143,6 +159,9 @@ def compare_reports(before_report: Report, after_report: Report, min_change_pct:
                 "after_hashrate": after_rate,
                 "delta_hashrate": after_rate - before_rate,
                 "change_pct": change_pct,
+                "max_spread_pct": max_spread_pct,
+                "before_spread_pct": _float_value(before or {}, "hashrate_spread_pct", 0.0),
+                "after_spread_pct": _float_value(after or {}, "hashrate_spread_pct", 0.0),
                 "backend": (after or before or {}).get("backend", ""),
                 "device_id": (after or before or {}).get("device_id", 0),
                 "difficulty": (after or before or {}).get("difficulty", 0),
@@ -160,10 +179,13 @@ def compare_reports(before_report: Report, after_report: Report, min_change_pct:
     return {
         "schema": "xenblocks.hashapi.compare.v1",
         "min_change_pct": min_change_pct,
+        "max_spread_pct": max_spread_pct,
         "summary": {
             "total": len(comparisons),
             "improved": statuses.count("improved"),
             "regressed": statuses.count("regressed"),
+            "noisy_improved": statuses.count("noisy-improved"),
+            "noisy_regressed": statuses.count("noisy-regressed"),
             "unchanged": statuses.count("unchanged"),
             "invalid": statuses.count("invalid"),
             "missing_before": statuses.count("missing-before"),
@@ -187,6 +209,8 @@ def format_text(report: Report) -> str:
             "backend",
             "difficulty",
             "batch_size",
+            "before_spread_pct",
+            "after_spread_pct",
             "seconds",
             "warmup",
             "repeat",
@@ -214,6 +238,8 @@ def format_text(report: Report) -> str:
                 str(item["backend"]),
                 str(item["difficulty"]),
                 str(item["batch_size"]),
+                f"{item['before_spread_pct']:.3f}",
+                f"{item['after_spread_pct']:.3f}",
                 str(item["seconds"]),
                 str(item["warmup"]),
                 str(item["repeat"]),
@@ -234,6 +260,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="Absolute percent threshold used to classify improved/regressed status.",
     )
+    parser.add_argument(
+        "--max-spread-pct",
+        type=float,
+        default=10.0,
+        help="Maximum before/after hashrate spread accepted before marking a changed scenario as noisy.",
+    )
     parser.add_argument("--fail-on-regression", action="store_true", help="Exit with code 2 if any scenario regresses.")
     return parser
 
@@ -241,7 +273,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = compare_reports(load_report(args.before), load_report(args.after), min_change_pct=args.min_change_pct)
+        report = compare_reports(
+            load_report(args.before),
+            load_report(args.after),
+            min_change_pct=args.min_change_pct,
+            max_spread_pct=args.max_spread_pct,
+        )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -251,7 +288,7 @@ def main(argv: list[str]) -> int:
     else:
         print(format_text(report))
 
-    if args.fail_on_regression and report["summary"]["regressed"] > 0:
+    if args.fail_on_regression and (report["summary"]["regressed"] > 0 or report["summary"]["noisy_regressed"] > 0):
         return 2
     return 0
 
