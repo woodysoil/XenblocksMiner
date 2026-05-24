@@ -207,6 +207,37 @@ def median_timings(summaries: list[dict[str, Any]]) -> dict[str, float]:
     return medians
 
 
+def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
+    total_ms = float(timings.get("total_ms", 0.0) or 0.0)
+    shares: dict[str, float] = {}
+    for key, value in timings.items():
+        if key == "total_ms" or total_ms <= 0.0:
+            continue
+        shares[key] = float(value) / total_ms * 100.0
+
+    dominant_stage = ""
+    dominant_stage_ms = 0.0
+    dominant_stage_pct = 0.0
+    stage_values = {key: value for key, value in timings.items() if key != "total_ms"}
+    if stage_values:
+        dominant_stage = max(stage_values, key=stage_values.get)
+        dominant_stage_ms = float(timings.get(dominant_stage, 0.0) or 0.0)
+        dominant_stage_pct = shares.get(dominant_stage, 0.0)
+
+    return {
+        "dominant_stage": dominant_stage,
+        "dominant_stage_ms": dominant_stage_ms,
+        "dominant_stage_pct": dominant_stage_pct,
+        "stage_pct": shares,
+    }
+
+
+def hashrate_spread_pct(min_hashrate: float, max_hashrate: float, median_hashrate: float) -> float:
+    if median_hashrate <= 0.0:
+        return 0.0
+    return (max_hashrate - min_hashrate) / median_hashrate * 100.0
+
+
 def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": scenario.name,
@@ -228,6 +259,10 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
     ok_summaries = [item for item in summaries if item["ok"]]
     hashrates = [float(item["hashrate"]) for item in ok_summaries]
     errors = [item["error"] for item in summaries if item["error"]]
+    median_hashrate = statistics.median(hashrates) if hashrates else 0.0
+    min_hashrate = min(hashrates) if hashrates else 0.0
+    max_hashrate = max(hashrates) if hashrates else 0.0
+    timings = median_timings(ok_summaries)
     aggregate = {
         "name": scenario.name,
         "backend": summaries[0]["backend"] if summaries else scenario.backend,
@@ -236,11 +271,13 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": sum(int(item["attempts"]) for item in ok_summaries),
         "elapsed_ms": sum(float(item["elapsed_ms"]) for item in ok_summaries),
-        "hashrate": statistics.median(hashrates) if hashrates else 0.0,
-        "median_hashrate": statistics.median(hashrates) if hashrates else 0.0,
-        "min_hashrate": min(hashrates) if hashrates else 0.0,
-        "max_hashrate": max(hashrates) if hashrates else 0.0,
-        "timings": median_timings(ok_summaries),
+        "hashrate": median_hashrate,
+        "median_hashrate": median_hashrate,
+        "min_hashrate": min_hashrate,
+        "max_hashrate": max_hashrate,
+        "hashrate_spread_pct": hashrate_spread_pct(min_hashrate, max_hashrate, median_hashrate),
+        "timings": timings,
+        "timing_analysis": timing_analysis(timings),
         "matches": sum(int(item["matches"]) for item in ok_summaries),
         "ok": len(ok_summaries) == len(summaries) and bool(summaries),
         "error": "; ".join(errors),

@@ -167,6 +167,7 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["median_hashrate"] == 20.0
     assert aggregate["min_hashrate"] == 10.0
     assert aggregate["max_hashrate"] == 30.0
+    assert aggregate["hashrate_spread_pct"] == 100.0
     assert aggregate["attempts"] == 60
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
@@ -194,6 +195,38 @@ def test_summarize_iterations_reports_median_timing_breakdown():
 
     assert aggregate["timings"]["compute_ms"] == 4.0
     assert aggregate["timings"]["input_ms"] == 2.0
+    assert aggregate["timing_analysis"]["dominant_stage"] == "compute_ms"
+    assert aggregate["timing_analysis"]["dominant_stage_ms"] == 4.0
+    assert aggregate["timing_analysis"]["dominant_stage_pct"] == 0.0
+
+
+def test_summarize_iterations_reports_timing_stage_percentages():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-test",
+        backend="cuda",
+        difficulty=1,
+        batch_size=2,
+        seconds=1,
+        repeat=3,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [
+            _summary(10.0, timings={"compute_ms": 2.0, "input_ms": 6.0, "total_ms": 10.0}),
+            _summary(30.0, timings={"compute_ms": 4.0, "input_ms": 8.0, "total_ms": 10.0}),
+            _summary(20.0, timings={"compute_ms": 3.0, "input_ms": 7.0, "total_ms": 10.0}),
+        ],
+    )
+
+    assert aggregate["timings"]["compute_ms"] == 3.0
+    assert aggregate["timings"]["input_ms"] == 7.0
+    assert aggregate["timing_analysis"]["dominant_stage"] == "input_ms"
+    assert aggregate["timing_analysis"]["dominant_stage_ms"] == 7.0
+    assert aggregate["timing_analysis"]["dominant_stage_pct"] == 70.0
+    assert aggregate["timing_analysis"]["stage_pct"]["compute_ms"] == 30.0
+    assert aggregate["timing_analysis"]["stage_pct"]["input_ms"] == 70.0
+    assert "total_ms" not in aggregate["timing_analysis"]["stage_pct"]
 
 
 def test_build_recommendations_selects_best_batch_per_difficulty():
