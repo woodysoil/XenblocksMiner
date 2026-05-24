@@ -31,9 +31,10 @@ def _stub_metadata(monkeypatch):
 
     def fake_environment_metadata():
         environment_calls["count"] += 1
+        cpu_load_pct = 10.0 + environment_calls["count"]
         return {
             "available": True,
-            "cpu_load_pct": 12.5,
+            "cpu_load_pct": cpu_load_pct,
             "high_cpu_load": False,
             "benchmark_trust": "normal",
         }
@@ -1035,6 +1036,7 @@ def test_run_scenario_records_warmup_iterations_and_selects_median_result(monkey
         )
 
     monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    environment_calls = _stub_metadata(monkeypatch)
     scenario = benchmark.BenchmarkScenario(
         name="cuda-test",
         backend="cuda",
@@ -1056,6 +1058,16 @@ def test_run_scenario_records_warmup_iterations_and_selects_median_result(monkey
     assert result["summary"]["median_hashrate"] == 103.0
     assert result["summary"]["timings"]["compute_ms"] == 103.0
     assert result["exit_code"] == 0
+    assert environment_calls["count"] == 8
+    assert result["environment"] == {
+        "available": True,
+        "cpu_load_pct": 18.0,
+        "start_cpu_load_pct": 11.0,
+        "end_cpu_load_pct": 18.0,
+        "sample_count": 8,
+        "high_cpu_load": False,
+        "benchmark_trust": "normal",
+    }
 
 
 def test_run_scenario_treats_nonzero_exit_with_valid_json_as_failure(monkeypatch):
@@ -1083,6 +1095,7 @@ def test_run_scenario_treats_nonzero_exit_with_valid_json_as_failure(monkeypatch
         )
 
     monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    _stub_metadata(monkeypatch)
     scenario = benchmark.BenchmarkScenario(
         name="cuda-crash",
         backend="cuda",
@@ -1130,6 +1143,7 @@ def test_run_scenario_treats_warmup_nonzero_exit_as_summary_failure(monkeypatch)
         )
 
     monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    _stub_metadata(monkeypatch)
     scenario = benchmark.BenchmarkScenario(
         name="cuda-warmup-crash",
         backend="cuda",
@@ -1445,6 +1459,75 @@ def test_combine_environment_metadata_uses_max_cpu_load_for_trust():
         "high_cpu_load": True,
         "benchmark_trust": "low",
     }
+
+
+def test_main_combines_per_run_environment_samples(monkeypatch, tmp_path, capsys):
+    loads = iter([15.0, 20.0, 97.0, 30.0])
+
+    def fake_environment_metadata():
+        cpu_load_pct = next(loads)
+        return {
+            "available": True,
+            "cpu_load_pct": cpu_load_pct,
+            "high_cpu_load": cpu_load_pct >= 90.0,
+            "benchmark_trust": "low" if cpu_load_pct >= 90.0 else "normal",
+        }
+
+    def fake_run(command, text, capture_output, check):
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "backend": "cuda",
+                    "device_id": 0,
+                    "batch_size": 2,
+                    "attempts": 2,
+                    "elapsed_ms": 1000.0,
+                    "hashrate": 2.0,
+                    "timings": {"compute_ms": 1.0},
+                    "matches": [],
+                    "error": "",
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(benchmark, "collect_environment_metadata", fake_environment_metadata)
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", lambda: {"nvidia_smi": {"available": False}})
+    monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=8,batch_size=2,seconds=1",
+            "--repeat",
+            "2",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["environment"] == {
+        "available": True,
+        "cpu_load_pct": 97.0,
+        "start_cpu_load_pct": 15.0,
+        "end_cpu_load_pct": 30.0,
+        "sample_count": 4,
+        "high_cpu_load": True,
+        "benchmark_trust": "low",
+    }
+    assert report["runs"][0]["environment"] == report["environment"]
+    capsys.readouterr()
 
 
 def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):

@@ -483,6 +483,12 @@ def combine_environment_metadata(*samples: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def sample_environment(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    sample = collect_environment_metadata()
+    samples.append(sample)
+    return sample
+
+
 def summarize_timings(timings: Any) -> dict[str, float]:
     if not isinstance(timings, dict):
         return {}
@@ -873,10 +879,14 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
     return command
 
 
-def run_hash_command(command: list[str]) -> dict[str, Any]:
+def run_hash_command(command: list[str], environment_samples: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    if environment_samples is not None:
+        sample_environment(environment_samples)
     started_at = time.time()
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     elapsed_ms = (time.time() - started_at) * 1000.0
+    if environment_samples is not None:
+        sample_environment(environment_samples)
 
     try:
         result = json.loads(completed.stdout)
@@ -916,8 +926,9 @@ def run_failure_errors(runs: list[dict[str, Any]]) -> list[str]:
 
 def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[str, Any]:
     command = build_hash_command(binary, salt, scenario)
-    warmup_runs = [run_hash_command(command) for _ in range(scenario.warmup)]
-    iterations = [run_hash_command(command) for _ in range(scenario.repeat)]
+    environment_samples: list[dict[str, Any]] = []
+    warmup_runs = [run_hash_command(command, environment_samples) for _ in range(scenario.warmup)]
+    iterations = [run_hash_command(command, environment_samples) for _ in range(scenario.repeat)]
     iteration_summaries = [summarize_result(scenario, item["result"]) for item in iterations]
     aggregate = summarize_iterations(scenario, iteration_summaries)
     selected_index = 0
@@ -952,7 +963,31 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
         "iterations": iterations,
         "iteration_summaries": iteration_summaries,
         "result": selected_result,
+        "environment": combine_environment_metadata(*environment_samples),
+        "environment_samples": environment_samples,
     }
+
+
+def report_environment_metadata(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    samples = [
+        sample
+        for run in runs
+        for sample in run.get("environment_samples", [])
+        if isinstance(sample, dict)
+    ]
+    if samples:
+        return combine_environment_metadata(*samples)
+
+    run_environments = [
+        environment
+        for run in runs
+        for environment in [run.get("environment")]
+        if isinstance(environment, dict) and environment
+    ]
+    if run_environments:
+        return combine_environment_metadata(*run_environments)
+
+    return collect_environment_metadata()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1088,9 +1123,7 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    environment_before = collect_environment_metadata()
     runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
-    environment_after = collect_environment_metadata()
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "created_at_unix": time.time(),
@@ -1102,7 +1135,7 @@ def main(argv: list[str]) -> int:
         },
         "build": collect_build_metadata(args.build_cache),
         "hardware": collect_hardware_metadata(),
-        "environment": combine_environment_metadata(environment_before, environment_after),
+        "environment": report_environment_metadata(runs),
         "binary": str(args.binary),
         "salt": args.salt,
         "presets": args.preset,
