@@ -17,7 +17,7 @@ Use `goal.md` as the short entrypoint, then keep this file as the authoritative 
 Suggested `/goal` objective:
 
 ```text
-Continuously execute docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1 and p/s=1 with m=difficulty, preserving real argon2id-xen semantics. Iterate through benchmark, optimize, validate, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths or private machine details.
+Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1 and s=1/p=1 with only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
 ```
 
 ## Current State Snapshot
@@ -28,9 +28,10 @@ Active goal status:
 
 - `/goal` is active for continuous Hash API and CUDA throughput optimization.
 - The branch may be ahead of the remote with many local commits. Treat those commits as retained local work, not lost work, unless the user explicitly requests a squash, reorder, push, or public history rewrite.
-- The current clean Release continuity baseline is the generated-key CUDA main-target scenario at difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, and no XUNI matching, with about `78.3k H/s` median and `3.8%` spread.
+- The current trusted Release continuity evidence is the generated-key CUDA main-target scenario at difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, and no XUNI matching, with about `79.2k H/s` median from the latest normal-trust refresh. Older `78.3k H/s` evidence remains useful continuity context but should not override newer trusted evidence.
 - The dominant measured bottleneck in that baseline is CPU-side input preparation, especially first-block preparation. Detailed timing showed `input_ms` at about `58-61%` of wall time and `first_block_ms` at about `54-57%`.
 - This baseline is local evidence on a CUDA-capable GPU. Do not publish raw reports, local binary paths, hardware identifiers, or private machine details.
+- There is a measurement-only slice in progress to expose first-block scheduling metadata in Hash API JSON and benchmark summaries: `first_block_worker_count` and `first_block_chunk_size`. Finish its Release CUDA rebuild, golden hash, smoke benchmark, privacy scan, and commit before starting a new optimization experiment.
 
 Known current capabilities:
 
@@ -93,6 +94,7 @@ Current observations:
 - A fresh Release CUDA build using the modern architecture preset preserved the golden d8 CUDA hash. New generated-key d8 baselines on the CUDA-capable local GPU remained noisy: b2048 reached 52.6k H/s median with 11.4% spread, while b1024 reached 63.7k H/s median with 16.7% spread. Both runs were `report_ok: true` but unstable by the 10% spread gate. They should be treated as current measurement evidence, not as default-tuning proof. Both remained dominated by `input_ms` at about 62% of wall time and `first_block_ms` at about 58%, so the next code experiments should continue to target generated input and first-block preparation before CUDA kernel rewrites.
 - A rerun of the Release CUDA modern-architecture d8/b2048 baseline with benchmark build metadata produced a stable report: 78.3k H/s median, 3.8% spread, `report_ok: true`, `input_ms` about 58% of wall time, and `first_block_ms` about 54%. Treat this as the current clean Release continuity baseline for before/after comparisons until a newer stable report supersedes it.
 - A matching detailed-timing d8/b2048 run stayed noisy but useful for diagnosis: `input_ms` remained about 61% of wall time and `first_block_ms` about 57%. Nested first-block CPU counters showed digest expansion dominates initial prehash by a wide margin, but those counters sum worker-local CPU time and are not additive wall time. Prefer digest/Blake2b or first-block scheduling experiments over keygen-only work unless newer timing contradicts this.
+- A later trusted generated-key CUDA d8/b2048 refresh superseded the 78.3k H/s continuity number with about `79.2k H/s` median and normal benchmark trust. Use the newer value for rejected/accepted comparison until a future stable report supersedes it.
 - A short d8/b2048 detailed worker-cap smoke using the first-block CPU-sum-to-wall ratio kept automatic first-block workers ahead of explicit caps: auto reached about `69.1k H/s`, while caps 4, 8, and 12 reached about `66.1k`, `64.4k`, and `66.3k H/s`. The auto first-block CPU-sum-to-wall ratio was about `5.2`, showing useful parallelism but not enough evidence to change worker defaults. Treat this as measurement-only smoke evidence, not a stable tuning claim.
 
 ## Fixed Algorithm Constraints
@@ -472,6 +474,7 @@ Measurement cautions:
 - A later clean-source post-revert d8/b2048 confirmation was much slower at about `26.2k H/s` median with `16.5%` spread while the host CPU load was observed near saturation. Treat that run as a low-trust environment sample, not as a new baseline or a code regression.
 - Benchmark reports now include public-safe environment metadata with aggregate CPU load samples around each benchmark subprocess and `benchmark_trust`. Do not accept CPU-side input/first-block throughput conclusions from reports marked `benchmark_trust: low` unless the result is only being used to diagnose environment noise.
 - Measurement-only update: per-command environment sampling was validated with focused tests and a real CUDA smoke. A one-warmup, one-repeat CUDA smoke produced a sanitized summary with `sample_count: 4` and `benchmark_trust: normal`, confirming that automation can now detect mid-run CPU load spikes more reliably.
+- In-progress measurement-only update: expose first-block scheduling metadata as public-safe integers in Hash API JSON and benchmark summaries. The intended fields are `first_block_worker_count` and `first_block_chunk_size`. This should not change default scheduling behavior; it only makes automatic worker count and chunking visible for future scans.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
@@ -480,13 +483,14 @@ Do not retry rejected experiments unless the implementation shape has changed en
 Start the next cycle from the latest clean commit and this decision tree:
 
 1. If the worktree is dirty, identify whether it is a previous-agent experiment. Revert only rejected experiments owned by the current goal.
-2. Run the focused Hash API tests before editing performance code.
-3. Build or reuse the clean Release CUDA binary from the configured preset.
-4. Run the CUDA golden hash check before trusting benchmark data.
-5. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
-6. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
-7. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate.
-8. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
+2. If the dirty files are the first-block scheduling metadata slice, finish that validation and commit it before starting a new experiment.
+3. Run the focused Hash API tests before editing performance code.
+4. Build or reuse the clean Release CUDA binary from the configured preset.
+5. Run the CUDA golden hash check before trusting benchmark data.
+6. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
+7. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
+8. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate.
+9. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
 
 Good next experiment shapes:
 

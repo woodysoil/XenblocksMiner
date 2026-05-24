@@ -5,12 +5,38 @@
 Use this exact command when starting or recreating the long-running goal:
 
 ```text
-/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s/p=1 are fixed and only m=difficulty may change between sessions. Keep iterating until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet private data, or local hardware identifiers.
+/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s=1/p=1 are fixed and only m=difficulty may change between sessions. Keep iterating until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, privacy-clean staged diffs, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, private wallet data, or local hardware identifiers.
 ```
 
-This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual, phase plan, and experiment ledger.
+This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual, phase plan, and experiment ledger. A running `/goal` agent should read this file first, then use the detailed document for current evidence, rejected experiments, and the next measurable step.
 
-The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, and the documented completion rule.
+The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, privacy checks, and the documented completion rule.
+
+## Goal Runtime Protocol
+
+This goal is intended to run for many continuation turns without human approval prompts. Each turn should make one measurable step and leave a useful checkpoint for the next turn.
+
+Default turn shape:
+
+1. Read `goal.md`, then `docs/HASH_OPTIMIZATION_GOAL.md` if context is stale or compacted.
+2. Run `git status -sb` and inspect the latest benchmark or optimization commits.
+3. Classify any dirty files before editing: previous-agent in-progress work, rejected experiment, user change, or unrelated local artifact.
+4. Finish validation for useful dirty work before starting a new experiment.
+5. Select one bottleneck or architecture cleanup from current benchmark evidence.
+6. Make the smallest code, test, script, or doc change that advances that step.
+7. Run correctness checks before trusting any speed result.
+8. Run a smoke benchmark for instrumentation changes and a repeated comparison for performance claims.
+9. Stage only intended files, run whitespace and privacy checks, then commit a coherent English slice.
+10. Update `docs/HASH_OPTIMIZATION_GOAL.md` when a result changes future decisions.
+
+The agent may run local builds, tests, CUDA smoke checks, benchmark scripts, ignored benchmark artifact writes, scoped edits, and small commits without asking. It should stop only for the stop conditions in this file.
+
+Each turn must end in one of these states:
+
+- accepted: correctness passed, the change is useful, privacy checks passed, and a small commit was made
+- rejected: the current uncommitted experiment was reverted or documented as rejected evidence
+- measurement-only: benchmark, timing, test, or documentation infrastructure improved and was committed without a speed claim
+- blocked: an explicit stop condition was reached and the remaining blocker is concrete
 
 ## Long-Run State Model
 
@@ -59,6 +85,19 @@ This goal follows the strongest Codex Goal shape and is designed for unattended 
 The agent should not ask for approval during normal local optimization cycles. Builds, tests, CUDA smoke checks, benchmark runs, ignored local artifacts, scoped source edits, scoped documentation edits, and small validated commits are expected parts of the loop.
 
 The agent should continue across compaction and resume events by reading this file first, then `docs/HASH_OPTIMIZATION_GOAL.md`, then the latest commits and dirty diff. If a previous agent left a correct dirty experiment in progress, finish its validation before starting a new experiment.
+
+## Current Immediate State
+
+This section should be refreshed whenever it would prevent duplicated work after a resume.
+
+- The branch can be ahead of the remote during autonomous work. Ahead commits are retained local progress unless the user explicitly asks to squash, reorder, push, or rewrite history.
+- The Hash API extraction is already usable for isolated optimization. The current stable automation surface is the CLI adapter: `hash-one`, `hash-batch`, and `hash-benchmark`.
+- "CLI API" means those command-line Hash API entrypoints. It is not the frontend, websocket layer, marketplace API, wallet flow, or hosted HTTP API.
+- Current trusted Release continuity evidence for generated-key CUDA d8/b2048 is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence is still useful continuity context but should not override newer trusted evidence.
+- Current timing evidence still points at CPU-side generated input and first-block preparation as the dominant bottleneck for the d8/b2048 generated-key path.
+- The next in-progress measurement-only slice is expected to expose first-block scheduling metadata in Hash API JSON and benchmark summaries: `first_block_worker_count` and `first_block_chunk_size`.
+- After any dirty measurement slice, rebuild the Release CUDA binary, run the golden CUDA hash check, run a short CUDA benchmark smoke, scan the staged diff for privacy leaks, then commit if clean.
+- Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 
 ## Strong Goal Shape
 
@@ -118,6 +157,8 @@ Maintain progress against a named baseline rather than against memory or termina
 - Improvement: `(best_median_hps - baseline_median_hps) / baseline_median_hps * 100`.
 - Main scenario for continuity: generated-key CUDA, main-target-only, difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, with the same seconds value for before/after comparisons.
 - Supplemental scenarios: difficulty `1`, `64`, `256`, and `1024`, variable-difficulty sequences, and batch-size scans when the main scenario no longer explains the bottleneck.
+
+For example, a confirmed best of `79.2k H/s` over a `78.3k H/s` baseline is about `1.1%` improvement, not a meaningful step toward the 1000% target. A 1000% improvement from `78.3k H/s` would require about `861.3k H/s` on the same scenario and correctness surface.
 
 Do not claim the 1000% target from a single noisy run. Confirm large claims with repeated runs or a stable scan, and keep the raw report ignored unless a sanitized summary is intentionally committed.
 
@@ -246,6 +287,18 @@ Every completed iteration should leave enough evidence for the next agent to con
 - conclusion: accepted, rejected, or measurement-only
 
 Keep raw reports in ignored local artifact directories. Commit concise public-safe summaries only when they explain a decision or prevent future repeated work.
+
+## Dirty Work Policy
+
+When the worktree is dirty at the start of a turn, do not assume changes are lost or bad.
+
+- If the dirty files match the active goal and tests already passed in the previous checkpoint, finish the remaining validation and commit them before starting a new experiment.
+- If the dirty files are a rejected experiment from the current agent, revert only those files and document the rejection when it prevents repeated work.
+- If the dirty files appear user-authored, unrelated, or ambiguous, leave them untouched unless they block the current step.
+- If the same file contains both useful prior work and new required edits, inspect the diff carefully and preserve the prior work.
+- Never use `git reset --hard`, broad checkout, or history rewrite as a cleanup shortcut.
+
+Current dirty measurement-only work should be validated as a coherent slice before new optimization code starts. A representative validation sequence is focused Hash API tests, Release CUDA rebuild, golden CUDA hash, short CUDA benchmark smoke, `git diff --check`, staged privacy scan, then commit.
 
 ## Resume Behavior
 
