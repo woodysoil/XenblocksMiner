@@ -412,6 +412,7 @@ Rejected or risky experiments:
 - specializing `digestLong` for the 1024-byte Argon2 first-block output preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke regressed to 54.5k H/s median versus the current 58.3k H/s stable baseline and worsened per-attempt first-block/finalization timings
 - replacing the 16 `Blake2b::compress` little-endian 64-bit loads with one 128-byte `memcpy` preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke regressed to 48.5k H/s median with about 57% spread and worse per-attempt first-block timing
 - constructing generated random keys as a fixed-size string and writing hex nibbles by index preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke reached only 50.0k H/s median with 37% spread and higher per-attempt keygen timing than the accepted generator path
+- caching the resolved CUDA device id inside `CudaHashBackend` preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke had warmup and repeated subprocess exits with code 3221226356, so keep per-batch device info lookup unless backend lifetime handling is redesigned
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 

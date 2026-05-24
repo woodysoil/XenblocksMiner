@@ -375,6 +375,7 @@ def test_summarize_iterations_marks_nonzero_process_exit_invalid():
     assert aggregate["ok"] is False
     assert aggregate["attempts"] == 100
     assert aggregate["hashrate"] == 100.0
+    assert aggregate["stable"] is False
     assert aggregate["sample_count"] == 2
     assert aggregate["ok_sample_count"] == 1
     assert aggregate["error"] == "process exited with code 3221225477"
