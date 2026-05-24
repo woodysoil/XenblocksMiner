@@ -285,7 +285,7 @@ def test_cuda_batch_size_tuning_helper_exists():
 
     assert "kCudaBatchMemoryReserveBytes" in header
     assert "difficulty <= 1" in implementation
-    assert "return 512" in implementation
+    assert "return 2048" in implementation
     assert "difficulty <= 8" in implementation
     assert "return 3072" in implementation
     assert "difficulty <= 64" in implementation
