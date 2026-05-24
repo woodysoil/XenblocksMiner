@@ -86,6 +86,7 @@ void fillPasswordBlocks(ComputeBackend& backend,
     std::vector<Argon2FirstBlockTimings> worker_timings(timings == nullptr ? 0 : worker_count);
     std::vector<std::thread> workers;
     std::vector<double> worker_start_offsets(timings == nullptr ? 0 : worker_count);
+    std::vector<double> worker_finish_offsets(timings == nullptr ? 0 : worker_count);
     const auto launch_start = timings == nullptr
         ? std::chrono::steady_clock::time_point{}
         : std::chrono::steady_clock::now();
@@ -101,6 +102,7 @@ void fillPasswordBlocks(ComputeBackend& backend,
                               &passwords,
                               &worker_timings,
                               &worker_start_offsets,
+                              &worker_finish_offsets,
                               timings,
                               worker,
                               begin,
@@ -116,7 +118,9 @@ void fillPasswordBlocks(ComputeBackend& backend,
                 fillPasswordBlock(backend, params, i, passwords[i], local_timings);
             }
             if (local_timings != nullptr) {
-                local_timings->worker_ms = elapsedMillis(worker_start, std::chrono::steady_clock::now());
+                const auto worker_finish = std::chrono::steady_clock::now();
+                local_timings->worker_ms = elapsedMillis(worker_start, worker_finish);
+                worker_finish_offsets[worker] = elapsedMillis(launch_start, worker_finish);
             }
         });
     }
@@ -136,12 +140,15 @@ void fillPasswordBlocks(ComputeBackend& backend,
         }
         for (std::size_t worker = 0; worker < workers.size(); ++worker) {
             const double worker_start_ms = worker_start_offsets[worker];
+            const double worker_finish_ms = worker_finish_offsets[worker];
             if (worker == 0 || worker_start_ms < min_worker_start_ms) {
                 min_worker_start_ms = worker_start_ms;
             }
             timings->max_worker_start_ms = std::max(timings->max_worker_start_ms, worker_start_ms);
+            timings->max_worker_finish_ms = std::max(timings->max_worker_finish_ms, worker_finish_ms);
         }
         timings->worker_start_span_ms = timings->max_worker_start_ms - min_worker_start_ms;
+        timings->worker_finish_span_ms = timings->max_worker_finish_ms - min_worker_start_ms;
     }
 }
 
@@ -318,6 +325,8 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         result.timings.first_block_thread_launch_ms = first_block_timings.thread_launch_ms;
         result.timings.first_block_max_worker_start_ms = first_block_timings.max_worker_start_ms;
         result.timings.first_block_worker_start_span_ms = first_block_timings.worker_start_span_ms;
+        result.timings.first_block_max_worker_finish_ms = first_block_timings.max_worker_finish_ms;
+        result.timings.first_block_worker_finish_span_ms = first_block_timings.worker_finish_span_ms;
         result.timings.input_ms = elapsedMillis(input_start, std::chrono::steady_clock::now());
 
         const auto compute_start = std::chrono::steady_clock::now();

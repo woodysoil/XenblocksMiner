@@ -12,6 +12,8 @@ struct Argon2FirstBlockTimings
     double thread_launch_ms = 0.0;
     double max_worker_start_ms = 0.0;
     double worker_start_span_ms = 0.0;
+    double max_worker_finish_ms = 0.0;
+    double worker_finish_span_ms = 0.0;
 };
 
 class Argon2Params

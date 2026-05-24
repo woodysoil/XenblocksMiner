@@ -75,6 +75,8 @@ std::string toJson(const HashApiTimings& timings)
         << "\"first_block_thread_launch_ms\":" << timings.first_block_thread_launch_ms << ","
         << "\"first_block_max_worker_start_ms\":" << timings.first_block_max_worker_start_ms << ","
         << "\"first_block_worker_start_span_ms\":" << timings.first_block_worker_start_span_ms << ","
+        << "\"first_block_max_worker_finish_ms\":" << timings.first_block_max_worker_finish_ms << ","
+        << "\"first_block_worker_finish_span_ms\":" << timings.first_block_worker_finish_span_ms << ","
         << "\"compute_ms\":" << timings.compute_ms << ","
         << "\"kernel_ms\":" << timings.kernel_ms << ","
         << "\"host_to_device_ms\":" << timings.host_to_device_ms << ","
