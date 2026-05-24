@@ -380,6 +380,7 @@ Rejected or risky experiments:
 - fixed-buffer base64 finalization with string-view matching preserved the golden CUDA hash but regressed short generated CUDA sequence benchmarks, so it should not be retried without a broader finalization redesign
 - byte-pair random key generation using a 0-255 distribution regressed d8/b512 generated CUDA throughput by about 30% and did not reduce `keygen_ms`
 - reusing a single CUDA finalize base64 output string caused generated benchmark subprocess access-violation exits
+- bypassing the lane XOR copy in `Argon2Params::finalize` for `lanes == 1` preserved the golden CUDA hash but did not improve fixed-key throughput and only produced a noisy generated-path improvement, so it should not be kept without stronger profiler-backed evidence
 - reusing generated-key string storage with `fillRandomKey` slightly reduced keygen timing but regressed short generated CUDA sequence throughput and increased total input timing
 - limiting first-block worker count by attempts per worker regressed short main-target CUDA throughput and did not produce a stable gain
 - caching decoded salt bytes in `Argon2Params` preserved the golden CUDA hash but did not improve repeated generated-batch throughput
