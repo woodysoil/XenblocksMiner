@@ -206,6 +206,7 @@ def test_scan_scenarios_builds_custom_matrix():
         difficulties=[1, 8],
         batch_sizes=[512, 1024],
         first_block_workers=[],
+        detailed_timings=False,
         seconds=3,
         backend="cuda",
         device=1,
@@ -232,6 +233,7 @@ def test_scan_scenarios_can_scan_first_block_workers():
         difficulties=[8],
         batch_sizes=[1024],
         first_block_workers=[0, 4],
+        detailed_timings=False,
         seconds=3,
         backend="cuda",
         device=1,
@@ -244,6 +246,23 @@ def test_scan_scenarios_can_scan_first_block_workers():
         "cuda-scan-d8-b1024-fbw4",
     ]
     assert [scenario.first_block_workers for scenario in scenarios] == [0, 4]
+
+
+def test_scan_scenarios_can_enable_detailed_timings():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[8],
+        batch_sizes=[1024],
+        first_block_workers=[0],
+        detailed_timings=True,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == ["cuda-scan-d8-b1024"]
+    assert [scenario.detailed_timings for scenario in scenarios] == [True]
 
 
 def test_difficulty_sequence_scenarios_build_custom_matrix():
@@ -1240,12 +1259,14 @@ def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
 
 def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     captured_names = []
+    captured_detailed_timings = []
 
     def fake_metadata():
         return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
 
     def fake_run_scenario(binary, salt, scenario):
         captured_names.append(scenario.name)
+        captured_detailed_timings.append(scenario.detailed_timings)
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -1279,6 +1300,7 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
             "512",
             "--scan-batch-size",
             "1024",
+            "--scan-detailed-timings",
             "--output",
             str(output),
         ]
@@ -1286,6 +1308,7 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
 
     assert exit_code == 0
     assert captured_names == ["cuda-scan-d1-b512", "cuda-scan-d1-b1024", "cuda-scan-d8-b512", "cuda-scan-d8-b1024"]
+    assert captured_detailed_timings == [True, True, True, True]
 
 
 def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):

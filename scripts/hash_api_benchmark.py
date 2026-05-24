@@ -145,6 +145,7 @@ def scan_scenarios(
     difficulties: list[int],
     batch_sizes: list[int],
     first_block_workers: list[int],
+    detailed_timings: bool,
     seconds: int,
     backend: str,
     device: int,
@@ -167,6 +168,7 @@ def scan_scenarios(
             warmup=warmup,
             repeat=repeat,
             first_block_workers=worker_cap,
+            detailed_timings=detailed_timings,
         )
         for difficulty in difficulties
         for batch_size in batch_sizes
@@ -789,6 +791,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a CUDA first-block worker cap for generated scan scenarios. Use 0 for automatic worker count.",
     )
     parser.add_argument(
+        "--scan-detailed-timings",
+        action="store_true",
+        help="Enable detailed timing diagnostics on generated scan scenarios.",
+    )
+    parser.add_argument(
         "--difficulty-sequence",
         action="append",
         default=[],
@@ -836,6 +843,7 @@ def main(argv: list[str]) -> int:
                     args.scan_difficulty,
                     args.scan_batch_size,
                     args.scan_first_block_workers,
+                    args.scan_detailed_timings,
                     args.seconds,
                     args.backend,
                     args.device,
