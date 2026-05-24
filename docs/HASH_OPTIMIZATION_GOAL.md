@@ -373,6 +373,7 @@ Rejected or risky experiments:
 - thread-local `cudaSetDevice` caching regressed generated batch throughput
 - Blake2b initial hash prefix caching caused CUDA CLI or benchmark JSON output failures
 - persistent CUDA first-block worker pool caused benchmark subprocess exit failures after otherwise successful JSON output
+- fixed-buffer base64 finalization with string-view matching preserved the golden CUDA hash but regressed short generated CUDA sequence benchmarks, so it should not be retried without a broader finalization redesign
 - byte-pair random key generation using a 0-255 distribution regressed d8/b512 generated CUDA throughput by about 30% and did not reduce `keygen_ms`
 - reusing a single CUDA finalize base64 output string caused generated benchmark subprocess access-violation exits
 - limiting first-block worker count by attempts per worker regressed short main-target CUDA throughput and did not produce a stable gain
