@@ -86,6 +86,20 @@ The agent should not ask for approval during normal local optimization cycles. B
 
 The agent should continue across compaction and resume events by reading this file first, then `docs/HASH_OPTIMIZATION_GOAL.md`, then the latest commits and dirty diff. If a previous agent left a correct dirty experiment in progress, finish its validation before starting a new experiment.
 
+## Active Goal Handling
+
+This repository can already have an active thread-scoped `/goal`. If `get_goal` shows an active objective that points at `goal.md` and `docs/HASH_OPTIMIZATION_GOAL.md`, do not recreate it. Treat the active objective as the runtime handle and this file as the stronger local contract.
+
+If the active objective has a minor wording issue but still points at these files, continue from the files instead of stopping to rename the goal. The goal should be recreated only if the user explicitly clears it or asks for a new objective.
+
+The current long-running objective is:
+
+- optimize the extracted Hash API CUDA path for fixed `t=1`, fixed `s=1` / `p=1`, and variable `m=diff`
+- keep iterating through measurement, architecture cleanup, hot-path optimization, validation, documentation, and small commits
+- preserve real `argon2id-xen` semantics and Hash API compatibility
+- keep all tracked files and commit history public-safe
+- continue until the 1000% improvement target is verified or plateau/practical-limit evidence is strong enough to stop
+
 ## Current Immediate State
 
 This section should be refreshed whenever it would prevent duplicated work after a resume.
@@ -96,6 +110,8 @@ This section should be refreshed whenever it would prevent duplicated work after
 - Current trusted Release continuity evidence for generated-key CUDA d8/b2048 is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence is still useful continuity context but should not override newer trusted evidence.
 - Current timing evidence still points at CPU-side generated input and first-block preparation as the dominant bottleneck for the d8/b2048 generated-key path.
 - The first-block scheduling metadata slice is complete. Hash API JSON and benchmark summaries now expose `first_block_worker_count` and `first_block_chunk_size`; commit `a19d069` validated it with focused tests, a clean Release CUDA rebuild, the golden CUDA hash, and a short CUDA smoke.
+- After the metadata slice, a clean-binary d8/b2048 refresh produced about `61.99k H/s` median with normal benchmark trust and automatic first-block scheduling metadata. Treat it as current clean-binary local evidence, but do not replace the higher trusted `79.2k H/s` best result without a newer stable confirmation.
+- Detailed post-metadata timing still shows `input_ms` and `first_block_ms` as dominant. The first default optimization track remains generated input and first-block preparation unless newer detailed timings contradict it.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 
@@ -252,7 +268,8 @@ This checkpoint exists so a long-running `/goal` session can resume without rein
 - It is not the marketplace, wallet, frontend, websocket, or hosted HTTP platform API.
 - Local commits ahead of the remote branch are retained local progress. Do not assume they were lost; verify with `git status -sb` and `git log`.
 - The branch can stay ahead of the remote during autonomous work. Keep improving and committing locally unless the user explicitly requests squash, reorder, push, or public history rewrite.
-- Current stable Release continuity evidence for generated-key CUDA d8/b2048 is about `78.3k H/s` median with `3.8%` spread. Treat it as local benchmark evidence, not as a public hardware claim.
+- Current trusted Release continuity evidence for generated-key CUDA d8/b2048 is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence remains useful continuity context, but the newer trusted result is the current best reference until superseded by another stable confirmation.
+- Current clean-binary post-metadata local evidence is about `61.99k H/s` median with normal benchmark trust. Use it for local binary sanity checks, but do not downgrade progress accounting from the higher trusted best result without repeated stable evidence.
 - Current timing evidence points to CPU-side input and first-block preparation as the dominant bottleneck, so prefer first-block/input-preparation work before risky CUDA kernel rewrites unless newer measurements contradict it.
 - Benchmark reports include public-safe environment trust metadata sampled before and after each run. Prefer `benchmark_trust: normal` reports for CPU-side input and first-block conclusions.
 - The current benchmark harness can scan difficulty, batch size, and CUDA first-block worker caps. First-block worker caps are tuning parameters for measurement, not a default behavior change unless stable repeated evidence supports it.
@@ -397,6 +414,31 @@ Pause only for the stop conditions in this file. Do not pause just because a bui
 When a command takes a long time, let it run to completion and continue from the result. Do not ask the user to approve routine rebuilds, CUDA checks, or repeated benchmarks.
 
 If a local command fails because a dependency or CUDA build is unavailable, record the blocker in English, fall back to the narrowest available validation, and continue with measurement/tooling/code work that does not require the unavailable dependency. Stop only when no useful next step remains.
+
+## Long-Running Automation Rules
+
+This goal is intended to keep making measurable progress over many automatic continuation turns. Each continuation should choose one useful slice, finish it, and leave a checkpoint that is easy for the next agent to audit.
+
+Use this commit cadence:
+
+- Commit measurement-only improvements after focused tests and privacy checks pass.
+- Commit performance code only after correctness checks pass and a same-scenario comparison supports the conclusion.
+- Commit rejected-experiment documentation only when the evidence prevents repeated work.
+- Keep raw benchmark artifacts untracked.
+
+Use this validation cadence:
+
+- Run focused Hash API tests before and after source changes that affect the contract, benchmark parser, or timing output.
+- Run the CUDA golden hash check after CUDA/backend/hot-path changes or after a clean rebuild.
+- Run a short smoke benchmark after instrumentation changes.
+- Run repeated before/after benchmarks before making speed claims or default tuning changes.
+
+Use this continuation cadence:
+
+- If the previous turn ended with a clean accepted commit, select the next measured bottleneck.
+- If the previous turn left a dirty accepted change, validate and commit it before starting new work.
+- If the previous turn left a dirty rejected experiment, revert only that experiment and document it only when useful.
+- If benchmark noise blocks a claim, improve measurement quality or narrow the scenario before changing defaults.
 
 ## Privacy And Public History
 
