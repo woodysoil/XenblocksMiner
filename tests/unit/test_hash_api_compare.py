@@ -17,6 +17,7 @@ def _run(
     timing_per_attempt: dict | None = None,
     spread_pct: float = 2.0,
     difficulty_sequence: list[int] | None = None,
+    key_mode: str = "generated",
 ) -> dict:
     sequence = difficulty_sequence or []
     return {
@@ -25,6 +26,7 @@ def _run(
             "backend": "cuda",
             "difficulty": 1,
             "difficulty_sequence": sequence,
+            "key_mode": key_mode,
             "batch_size": 64,
             "seconds": 3,
             "device": 0,
@@ -47,6 +49,7 @@ def _run(
             "difficulty_mode": "sequence" if sequence else "fixed",
             "difficulty_sequence": sequence,
             "difficulty_changes": sum(1 for index in range(1, len(sequence)) if sequence[index] != sequence[index - 1]),
+            "key_mode": key_mode,
             "matches": 0,
             "ok": ok,
             "error": "" if ok else "failed",
@@ -139,6 +142,15 @@ def test_compare_reports_includes_difficulty_sequence_metadata():
     assert item["difficulty_mode"] == "sequence"
     assert item["difficulty_sequence"] == [1, 8, 1, 8]
     assert item["difficulty_changes"] == 3
+
+
+def test_compare_reports_includes_key_mode_metadata():
+    result = compare.compare_reports(
+        _report(_run("cuda-fixed", 100.0, key_mode="fixed")),
+        _report(_run("cuda-fixed", 120.0, key_mode="fixed")),
+    )
+
+    assert result["comparisons"][0]["key_mode"] == "fixed"
 
 
 def test_compare_reports_reports_missing_scenarios():

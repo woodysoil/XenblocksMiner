@@ -63,6 +63,16 @@ def test_parse_scenario_can_disable_xuni_matching():
     assert scenario.allow_xuni is False
 
 
+def test_parse_scenario_supports_fixed_key():
+    fixed_key = "0" * 64
+    scenario = benchmark.parse_scenario(
+        f"name=cuda-fixed,backend=cuda,difficulty=8,batch_size=1,seconds=3,key={fixed_key}",
+    )
+
+    assert scenario.name == "cuda-fixed"
+    assert scenario.key == fixed_key
+
+
 def test_parse_scenario_supports_difficulty_sequence():
     scenario = benchmark.parse_scenario(
         "backend=cuda,difficulty_sequence=1|8|1|8,batch_size=512,seconds=2",
@@ -267,6 +277,7 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["difficulty_mode"] == "fixed"
     assert aggregate["difficulty_sequence"] == []
     assert aggregate["difficulty_changes"] == 0
+    assert aggregate["key_mode"] == "generated"
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
     assert aggregate["ok"] is True
@@ -292,6 +303,24 @@ def test_summarize_iterations_reports_sequence_metadata():
     assert aggregate["difficulty_mode"] == "sequence"
     assert aggregate["difficulty_sequence"] == [1, 8, 1, 8]
     assert aggregate["difficulty_changes"] == 3
+
+
+def test_summarize_iterations_reports_fixed_key_mode():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-fixed",
+        backend="cuda",
+        difficulty=8,
+        batch_size=1,
+        seconds=1,
+        key="0" * 64,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [_summary(10.0, attempts=1)],
+    )
+
+    assert aggregate["key_mode"] == "fixed"
 
 
 def test_summarize_iterations_reports_median_timing_breakdown():
@@ -491,7 +520,28 @@ def test_build_recommendations_ignores_sequence_runs():
     assert len(recommendations["candidates_by_difficulty"][0]["candidates"]) == 1
 
 
+def test_build_recommendations_ignores_fixed_key_runs():
+    runs = [
+        {"summary": {**_summary(100.0), "name": "d1-b512", "difficulty": 1, "batch_size": 512}},
+        {
+            "summary": {
+                **_summary(1000.0),
+                "name": "d1-fixed-b1",
+                "difficulty": 1,
+                "batch_size": 1,
+                "key_mode": "fixed",
+            }
+        },
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["batch_size_by_difficulty"][0]["scenario"] == "d1-b512"
+    assert len(recommendations["candidates_by_difficulty"][0]["candidates"]) == 1
+
+
 def test_build_sanitized_report_drops_private_fields():
+    fixed_key = "0" * 64
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "created_at_unix": 123.0,
@@ -514,6 +564,8 @@ def test_build_sanitized_report_drops_private_fields():
                     "warmup": 1,
                     "repeat": 2,
                     "prefix": "deadbeef",
+                    "key": fixed_key,
+                    "key_mode": "fixed",
                     "pattern": "XEN11",
                 },
                 "summary": _summary(42.0),
@@ -533,7 +585,9 @@ def test_build_sanitized_report_drops_private_fields():
     assert sanitized["privacy"]["sanitized"] is True
     assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
     assert sanitized["runs"][0]["scenario"]["difficulty_sequence"] == [1, 8, 1, 8]
+    assert sanitized["runs"][0]["scenario"]["key_mode"] == "fixed"
     assert "prefix" not in sanitized["runs"][0]["scenario"]
+    assert "key" not in sanitized["runs"][0]["scenario"]
     assert sanitized["runs"][0]["summary"]["hashrate"] == 42.0
     assert "binary" not in sanitized
     assert "hardware" not in sanitized
@@ -549,6 +603,7 @@ def test_build_sanitized_report_drops_private_fields():
         "Private GPU",
         "private-salt",
         "deadbeef",
+        fixed_key,
         "secret-key",
     ]:
         assert token not in encoded
@@ -699,6 +754,23 @@ def test_main_can_disable_xuni_for_all_scenarios(monkeypatch, tmp_path):
     assert captured
     assert all(scenario.allow_xuni is False for scenario in captured)
     assert all("--no-xuni" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
+
+
+def test_build_hash_command_includes_fixed_key():
+    fixed_key = "0" * 64
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-fixed",
+        backend="cuda",
+        difficulty=8,
+        batch_size=1,
+        seconds=1,
+        key=fixed_key,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--key" in command
+    assert command[command.index("--key") + 1] == fixed_key
 
 
 def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):

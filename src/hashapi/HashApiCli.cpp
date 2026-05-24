@@ -26,7 +26,7 @@ void printUsage()
         << "Hash API commands:\n"
         << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--json]\n"
         << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--json]\n";
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -135,6 +135,7 @@ HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& a
     request.request_id = getArg(args, "--request-id", "");
     request.backend = getArg(args, "--backend", "cpu");
     request.salt_hex = getArg(args, "--salt");
+    request.key = getArg(args, "--key");
     request.key_prefix = getArg(args, "--prefix");
     request.target_pattern = getArg(args, "--pattern", "XEN11");
     request.difficulty = getUIntArg(args, "--difficulty", request.difficulty);

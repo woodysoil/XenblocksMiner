@@ -28,6 +28,7 @@ class BenchmarkScenario:
     seconds: int
     difficulty_sequence: tuple[int, ...] = ()
     prefix: str = ""
+    key: str = ""
     pattern: str = "XEN11"
     device: int = 0
     warmup: int = 0
@@ -89,6 +90,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         seconds=int(parts.get("seconds", "5")),
         difficulty_sequence=difficulty_sequence,
         prefix=parts.get("prefix", ""),
+        key=parts.get("key", ""),
         pattern=parts.get("pattern", "XEN11"),
         device=int(parts.get("device", "0")),
         warmup=int(parts.get("warmup", str(default_warmup))),
@@ -362,6 +364,7 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "difficulty_sequence": list(scenario.difficulty_sequence),
         "difficulty_mode": "sequence" if scenario.difficulty_sequence else "fixed",
         "difficulty_changes": difficulty_change_count(scenario.difficulty_sequence),
+        "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": result.get("batch_size", scenario.batch_size),
         "attempts": result.get("attempts", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
@@ -391,6 +394,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "difficulty_sequence": list(scenario.difficulty_sequence),
         "difficulty_mode": "sequence" if scenario.difficulty_sequence else "fixed",
         "difficulty_changes": difficulty_change_count(scenario.difficulty_sequence),
+        "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": attempts,
         "elapsed_ms": elapsed_ms,
@@ -419,6 +423,8 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         if not summary.get("ok"):
             continue
         if summary.get("difficulty_sequence"):
+            continue
+        if summary.get("key_mode") == "fixed":
             continue
         key = (
             str(summary.get("backend", "")),
@@ -498,8 +504,11 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "warmup",
         "repeat",
         "pattern",
+        "key_mode",
     )
     sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
+    if "key_mode" not in sanitized:
+        sanitized["key_mode"] = "fixed" if scenario.get("key") else "generated"
     prefix = str(scenario.get("prefix", ""))
     sanitized["prefix_length"] = len(prefix)
     return sanitized
@@ -556,6 +565,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         str(scenario.device),
         "--json",
     ]
+    if scenario.key:
+        command.extend(["--key", scenario.key])
     if scenario.difficulty_sequence:
         command.extend(["--difficulty-sequence", ",".join(str(value) for value in scenario.difficulty_sequence)])
     if scenario.prefix:
