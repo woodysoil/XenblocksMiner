@@ -244,6 +244,7 @@ Validation:
 ```bash
 python scripts/hash_api_benchmark.py --binary <miner-binary> --scenario name=cuda-b1,backend=cuda,difficulty=1,batch_size=1,seconds=3,device=0
 python scripts/hash_api_benchmark.py --binary <miner-binary> --scenario name=cuda-b64,backend=cuda,difficulty=1,batch_size=64,seconds=3,device=0
+python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --fail-on-regression
 ```
 
 Commit examples:
@@ -460,7 +461,7 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 
 Work through this backlog before attempting high-risk kernel rewrites:
 
-1. Add benchmark comparison tooling for two report JSON files if it is not already present.
+1. Use benchmark comparison tooling for two report JSON files before accepting throughput claims.
 2. Add reusable benchmark scenario presets for smoke, warm short, and serious comparison runs.
 3. Record a local initial CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
 4. Separate cold initialization timing from warm steady-state hashing in result metadata if current output is not sufficient.
