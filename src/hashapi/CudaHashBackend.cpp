@@ -9,6 +9,7 @@
 #include "../argon2params.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <exception>
 #include <stdexcept>
@@ -216,6 +217,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 
         const auto finalize_start = std::chrono::steady_clock::now();
+        std::array<std::array<std::uint8_t, kDefaultHashLength>, kFinalizeTimingChunkSize> finalized_buffers;
         std::vector<std::string> finalized_hashes;
         finalized_hashes.reserve(std::min(kFinalizeTimingChunkSize, attempts));
         for (std::size_t begin = 0; begin < attempts; begin += kFinalizeTimingChunkSize) {
@@ -224,19 +226,19 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             finalized_hashes.reserve(end - begin);
 
             const auto finalize_hash_start = std::chrono::steady_clock::now();
+            const auto argon2_finalize_start = std::chrono::steady_clock::now();
             for (std::size_t i = begin; i < end; ++i) {
-                std::uint8_t buffer[kDefaultHashLength];
-
-                const auto argon2_finalize_start = std::chrono::steady_clock::now();
-                params.finalize(buffer, compute_backend.getOutputMemory(i));
-                result.timings.argon2_finalize_ms += elapsedMillis(
-                    argon2_finalize_start,
-                    std::chrono::steady_clock::now());
-
-                const auto base64_start = std::chrono::steady_clock::now();
-                finalized_hashes.push_back(base64Encode(buffer, kDefaultHashLength));
-                result.timings.base64_ms += elapsedMillis(base64_start, std::chrono::steady_clock::now());
+                params.finalize(finalized_buffers[i - begin].data(), compute_backend.getOutputMemory(i));
             }
+            result.timings.argon2_finalize_ms += elapsedMillis(
+                argon2_finalize_start,
+                std::chrono::steady_clock::now());
+
+            const auto base64_start = std::chrono::steady_clock::now();
+            for (std::size_t i = begin; i < end; ++i) {
+                finalized_hashes.push_back(base64Encode(finalized_buffers[i - begin].data(), kDefaultHashLength));
+            }
+            result.timings.base64_ms += elapsedMillis(base64_start, std::chrono::steady_clock::now());
             result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, std::chrono::steady_clock::now());
 
             const auto match_start = std::chrono::steady_clock::now();
