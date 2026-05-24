@@ -205,6 +205,7 @@ def test_scan_scenarios_builds_custom_matrix():
     scenarios = benchmark.scan_scenarios(
         difficulties=[1, 8],
         batch_sizes=[512, 1024],
+        first_block_workers=[],
         seconds=3,
         backend="cuda",
         device=1,
@@ -224,6 +225,25 @@ def test_scan_scenarios_builds_custom_matrix():
     assert all(scenario.device == 1 for scenario in scenarios)
     assert all(scenario.warmup == 2 for scenario in scenarios)
     assert all(scenario.repeat == 4 for scenario in scenarios)
+
+
+def test_scan_scenarios_can_scan_first_block_workers():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[8],
+        batch_sizes=[1024],
+        first_block_workers=[0, 4],
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-scan-d8-b1024",
+        "cuda-scan-d8-b1024-fbw4",
+    ]
+    assert [scenario.first_block_workers for scenario in scenarios] == [0, 4]
 
 
 def test_difficulty_sequence_scenarios_build_custom_matrix():

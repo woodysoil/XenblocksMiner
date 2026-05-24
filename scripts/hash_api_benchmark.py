@@ -144,15 +144,21 @@ def default_scenarios(seconds: int, backend: str, device: int, warmup: int, repe
 def scan_scenarios(
     difficulties: list[int],
     batch_sizes: list[int],
+    first_block_workers: list[int],
     seconds: int,
     backend: str,
     device: int,
     warmup: int,
     repeat: int,
 ) -> list[BenchmarkScenario]:
+    worker_caps = first_block_workers or [0]
     return [
         BenchmarkScenario(
-            name=f"{backend}-scan-d{difficulty}-b{batch_size}",
+            name=(
+                f"{backend}-scan-d{difficulty}-b{batch_size}"
+                if worker_cap == 0
+                else f"{backend}-scan-d{difficulty}-b{batch_size}-fbw{worker_cap}"
+            ),
             backend=backend,
             difficulty=difficulty,
             batch_size=batch_size,
@@ -160,9 +166,11 @@ def scan_scenarios(
             device=device,
             warmup=warmup,
             repeat=repeat,
+            first_block_workers=worker_cap,
         )
         for difficulty in difficulties
         for batch_size in batch_sizes
+        for worker_cap in worker_caps
     ]
 
 
@@ -774,6 +782,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a batch size for generated scan scenarios. Requires --scan-difficulty.",
     )
     parser.add_argument(
+        "--scan-first-block-workers",
+        action="append",
+        type=int,
+        default=[],
+        help="Add a CUDA first-block worker cap for generated scan scenarios. Use 0 for automatic worker count.",
+    )
+    parser.add_argument(
         "--difficulty-sequence",
         action="append",
         default=[],
@@ -820,6 +835,7 @@ def main(argv: list[str]) -> int:
                 scan_scenarios(
                     args.scan_difficulty,
                     args.scan_batch_size,
+                    args.scan_first_block_workers,
                     args.seconds,
                     args.backend,
                     args.device,
