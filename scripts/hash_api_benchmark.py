@@ -441,10 +441,12 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
     iteration_summaries = [summarize_result(scenario, item["result"]) for item in iterations]
     aggregate = summarize_iterations(scenario, iteration_summaries)
     selected_index = 0
-    if iteration_summaries:
-        selected_index = max(
-            range(len(iteration_summaries)),
-            key=lambda index: iteration_summaries[index]["hashrate"] if iteration_summaries[index]["ok"] else -1,
+    ok_indices = [index for index, summary in enumerate(iteration_summaries) if summary["ok"]]
+    if ok_indices:
+        median_hashrate = float(aggregate.get("median_hashrate", aggregate.get("hashrate", 0.0)) or 0.0)
+        selected_index = min(
+            ok_indices,
+            key=lambda index: abs(float(iteration_summaries[index]["hashrate"]) - median_hashrate),
         )
     selected_result = iterations[selected_index]["result"] if iterations else {}
     all_runs = warmup_runs + iterations

@@ -379,12 +379,13 @@ def test_build_sanitized_report_drops_private_fields():
         assert token not in encoded
 
 
-def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypatch):
+def test_run_scenario_records_warmup_iterations_and_selects_median_result(monkeypatch):
     calls = {"count": 0}
+    hashrates = [101.0, 300.0, 102.0, 103.0]
 
     def fake_run(command, text, capture_output, check):
+        hashrate = hashrates[calls["count"]]
         calls["count"] += 1
-        hashrate = 100.0 + calls["count"]
         return SimpleNamespace(
             returncode=0,
             stdout=json.dumps(
@@ -412,18 +413,19 @@ def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypa
         batch_size=2,
         seconds=1,
         warmup=1,
-        repeat=2,
+        repeat=3,
     )
 
     result = benchmark.run_scenario(Path("miner"), benchmark.DEFAULT_SALT, scenario)
 
     assert len(result["warmup_runs"]) == 1
-    assert len(result["iterations"]) == 2
-    assert len(result["iteration_summaries"]) == 2
+    assert len(result["iterations"]) == 3
+    assert len(result["iteration_summaries"]) == 3
     assert result["result"]["hashrate"] == 103.0
     assert result["summary"]["min_hashrate"] == 102.0
-    assert result["summary"]["max_hashrate"] == 103.0
-    assert result["summary"]["timings"]["compute_ms"] == 102.5
+    assert result["summary"]["max_hashrate"] == 300.0
+    assert result["summary"]["median_hashrate"] == 103.0
+    assert result["summary"]["timings"]["compute_ms"] == 103.0
     assert result["exit_code"] == 0
 
 
