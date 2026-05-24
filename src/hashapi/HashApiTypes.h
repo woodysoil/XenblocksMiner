@@ -70,6 +70,8 @@ struct HashApiResult {
     int device_id = 0;
     std::size_t batch_size = 0;
     std::size_t attempts = 0;
+    std::size_t first_block_worker_count = 0;
+    std::size_t first_block_chunk_size = 0;
     double elapsed_ms = 0.0;
     double hashrate = 0.0;
     HashApiTimings timings;

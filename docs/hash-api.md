@@ -66,6 +66,8 @@ Core files:
 - `device_id`
 - `batch_size`
 - `attempts`
+- `first_block_worker_count`
+- `first_block_chunk_size`
 - `elapsed_ms`
 - `hashrate`
 - `timings`
@@ -74,7 +76,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block CPU-time counters `first_block_initial_hash_cpu_ms` and `first_block_digest_cpu_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
+`first_block_worker_count` and `first_block_chunk_size` describe the CUDA first-block scheduling shape selected for the request, including automatic worker selection when `first_block_workers` is `0`. `timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block CPU-time counters `first_block_initial_hash_cpu_ms` and `first_block_digest_cpu_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 

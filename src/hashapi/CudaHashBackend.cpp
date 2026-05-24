@@ -59,6 +59,14 @@ std::size_t firstBlockWorkerCount(std::size_t attempts, std::size_t worker_cap)
     return std::max<std::size_t>(1, worker_count);
 }
 
+std::size_t firstBlockChunkSize(std::size_t attempts, std::size_t worker_count)
+{
+    if (attempts == 0 || worker_count == 0) {
+        return 0;
+    }
+    return (attempts + worker_count - 1) / worker_count;
+}
+
 void fillPasswordBlocks(ComputeBackend& backend,
                         const Argon2Params& params,
                         const std::vector<std::string>& passwords,
@@ -74,7 +82,7 @@ void fillPasswordBlocks(ComputeBackend& backend,
         return;
     }
 
-    const std::size_t chunk_size = (attempts + worker_count - 1) / worker_count;
+    const std::size_t chunk_size = firstBlockChunkSize(attempts, worker_count);
     std::vector<Argon2FirstBlockTimings> worker_timings(timings == nullptr ? 0 : worker_count);
     std::vector<std::thread> workers;
     workers.reserve(worker_count);
@@ -201,6 +209,8 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         });
         const bool single_key = !fixed_key.empty();
         const std::size_t attempts = single_key ? 1 : request.batch_size;
+        result.first_block_worker_count = firstBlockWorkerCount(attempts, request.first_block_workers);
+        result.first_block_chunk_size = firstBlockChunkSize(attempts, result.first_block_worker_count);
 
         auto& compute_backend = backend();
         result.timings.setup_activate_cpu_ms = timed_setup_step([&]() {
@@ -230,7 +240,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         password_storage_.clear();
         password_storage_.reserve(attempts);
 
-        if (firstBlockWorkerCount(attempts, request.first_block_workers) <= 1) {
+        if (result.first_block_worker_count <= 1) {
             if (single_key) {
                 const auto keygen_start = std::chrono::steady_clock::now();
                 password_storage_.push_back(fixed_key);

@@ -304,6 +304,8 @@ int runBenchmark(HashApiRequest request,
         }
         aggregate.ok = true;
         aggregate.attempts += current.attempts;
+        aggregate.first_block_worker_count = current.first_block_worker_count;
+        aggregate.first_block_chunk_size = current.first_block_chunk_size;
         addTimings(aggregate.timings, current.timings);
         if (!request.key.empty()) {
             aggregate.hash = current.hash;

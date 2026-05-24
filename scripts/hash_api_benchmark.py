@@ -522,6 +522,16 @@ def median_timings(summaries: list[dict[str, Any]]) -> dict[str, float]:
     return medians
 
 
+def _median_int(values: list[Any]) -> int:
+    numeric_values = []
+    for value in values:
+        try:
+            numeric_values.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return int(statistics.median(numeric_values)) if numeric_values else 0
+
+
 def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     total_ms = float(timings.get("total_ms", 0.0) or 0.0)
     shares: dict[str, float] = {}
@@ -611,6 +621,8 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": result.get("batch_size", scenario.batch_size),
         "attempts": result.get("attempts", 0),
+        "first_block_worker_count": result.get("first_block_worker_count", 0),
+        "first_block_chunk_size": result.get("first_block_chunk_size", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
         "hashrate": result.get("hashrate", 0.0),
         "timings": summarize_timings(result.get("timings", {})),
@@ -643,6 +655,8 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": attempts,
+        "first_block_worker_count": _median_int([item.get("first_block_worker_count", 0) for item in ok_summaries]),
+        "first_block_chunk_size": _median_int([item.get("first_block_chunk_size", 0) for item in ok_summaries]),
         "elapsed_ms": elapsed_ms,
         "ms_per_attempt": elapsed_ms / attempts if attempts > 0 else 0.0,
         "hashrate": median_hashrate,
