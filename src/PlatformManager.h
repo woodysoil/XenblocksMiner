@@ -20,7 +20,7 @@ enum class PlatformState {
 	LEASED,     // Lease assigned, preparing to mine
 	MINING,     // Actively mining for a consumer
 	COMPLETED,  // Lease completed, transitioning back
-	ERROR       // Error state, will attempt recovery
+	ERROR_STATE // Error state, will attempt recovery
 };
 
 const char* platformStateToString(PlatformState state);

@@ -11,7 +11,7 @@ const char* platformStateToString(PlatformState state)
 		case PlatformState::LEASED:    return "LEASED";
 		case PlatformState::MINING:    return "MINING";
 		case PlatformState::COMPLETED: return "COMPLETED";
-		case PlatformState::ERROR:     return "ERROR";
+		case PlatformState::ERROR_STATE: return "ERROR";
 		default:                       return "UNKNOWN";
 	}
 }
@@ -38,7 +38,7 @@ bool PlatformManager::start()
 	// Connect to MQTT broker
 	if (!mqtt_->connect()) {
 		std::cerr << RED << "PlatformManager: Failed to connect to MQTT broker" << RESET << std::endl;
-		transitionTo(PlatformState::ERROR);
+		transitionTo(PlatformState::ERROR_STATE);
 		return false;
 	}
 
@@ -48,7 +48,7 @@ bool PlatformManager::start()
 	mqtt_->subscribe(mqtt_->buildTopic(MqttClient::TOPIC_TASK));
 	mqtt_->subscribe(mqtt_->buildTopic(MqttClient::TOPIC_CONTROL));
 
-	// Set up message handler — dispatch off the Paho callback thread
+	// Set up message handler; dispatch off the Paho callback thread
 	// to avoid deadlock when publishing from within the callback.
 	mqtt_->setMessageCallback([this](const std::string& topic, const std::string& payload) {
 		std::thread([this, topic, payload]() {
@@ -190,7 +190,7 @@ void PlatformManager::handleRegisterAck(const nlohmann::json& msg)
 	} else {
 		std::string reason = msg.value("reason", "unknown");
 		std::cerr << RED << "PlatformManager: Registration rejected: " << reason << RESET << std::endl;
-		transitionTo(PlatformState::ERROR);
+		transitionTo(PlatformState::ERROR_STATE);
 	}
 }
 
@@ -211,7 +211,7 @@ void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 	// Validate prefix length
 	if (!prefix.empty() && prefix.length() != PLATFORM_PREFIX_LENGTH) {
 		std::cerr << RED << "PlatformManager: Invalid prefix length: " << prefix.length() << RESET << std::endl;
-		transitionTo(PlatformState::ERROR);
+		transitionTo(PlatformState::ERROR_STATE);
 		return;
 	}
 
@@ -220,7 +220,7 @@ void PlatformManager::handleAssignTask(const nlohmann::json& msg)
 	// Start the lease
 	if (!lease_manager_.startLease(lease_id, consumer_id, consumer_address, prefix, duration_sec)) {
 		std::cerr << RED << "PlatformManager: Failed to start lease" << RESET << std::endl;
-		transitionTo(PlatformState::ERROR);
+		transitionTo(PlatformState::ERROR_STATE);
 		return;
 	}
 
@@ -382,7 +382,7 @@ void PlatformManager::leaseWatchdogLoop()
 		}
 
 		// Attempt recovery from error state
-		if (state_ == PlatformState::ERROR) {
+		if (state_ == PlatformState::ERROR_STATE) {
 			std::cout << "PlatformManager: Attempting recovery..." << std::endl;
 			transitionTo(PlatformState::IDLE);
 			if (mqtt_->isConnected()) {

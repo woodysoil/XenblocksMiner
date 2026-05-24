@@ -31,6 +31,7 @@
 #include "StatReporter.h"
 #include "LocalServer.h"
 #include "BlockSubmitter.h"
+#include "hashapi/HashApiCli.h"
 #include <regex>
 
 #ifdef _WIN32
@@ -129,6 +130,10 @@ static void runMiningOnDevice(ComputeBackend& backend,
 
 int main(int argc, const char *const *argv)
 {
+    if (hashapi::isHashApiCommand(argc, argv)) {
+        return hashapi::runHashApiCli(argc, argv);
+    }
+
     bool executeTask = false;
     bool donotupload = false;
     static bool isTestFixedDiff = false;
@@ -348,7 +353,7 @@ int main(int argc, const char *const *argv)
     submitThread.detach();
 
     Logger logger("log", 1024 * 1024);
-    SubmitCallback submitCallback = [&logger, isTestFixedDiff](const std::string &hexsalt, const std::string &key, const std::string &hashed_pure, const size_t attempts, const float hashrate) {
+    SubmitCallback submitCallback = [&logger](const std::string &hexsalt, const std::string &key, const std::string &hashed_pure, const size_t attempts, const float hashrate) {
 
         if (globalPlatformManager && globalPlatformManager->isRunning()) {
             int diff_for_verify = 40404;

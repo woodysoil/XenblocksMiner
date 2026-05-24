@@ -13,13 +13,13 @@ CudaDevice::CudaDevice(int index) {
     picBusId = prop.pciBusID;
 }
 
-std::string CudaDevice::getName() {
+std::string CudaDevice::getName() const {
     cudaDeviceProp prop;
     CudaException::check(cudaGetDeviceProperties(&prop, deviceIndex));
     return std::string(prop.name);
 }
 
-std::string CudaDevice::getFullName() {
+std::string CudaDevice::getFullName() const {
     cudaDeviceProp prop;
     CudaException::check(cudaGetDeviceProperties(&prop, deviceIndex));
 

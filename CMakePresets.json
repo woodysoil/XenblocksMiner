@@ -6,6 +6,25 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        {
+            "name": "hashapi-cli-mingw",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build-hashapi",
+            "cacheVariables": {
+                "XENBLOCKS_BUILD_MINER": "OFF",
+                "XENBLOCKS_BUILD_HASHAPI_CLI": "ON"
+            }
+        },
+        {
+            "name": "hashapi-cli-smoke-mingw",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build-hashapi-smoke",
+            "cacheVariables": {
+                "XENBLOCKS_BUILD_MINER": "OFF",
+                "XENBLOCKS_BUILD_HASHAPI_CLI": "ON",
+                "XENBLOCKS_HASHAPI_STUB_BACKEND": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -17,6 +36,16 @@
         {
             "name": "ninja-vcpkg-release",
             "configurePreset": "ninja-multi-vcpkg",
+            "configuration": "Release"
+        },
+        {
+            "name": "hashapi-cli-mingw",
+            "configurePreset": "hashapi-cli-mingw",
+            "configuration": "Release"
+        },
+        {
+            "name": "hashapi-cli-smoke-mingw",
+            "configurePreset": "hashapi-cli-smoke-mingw",
             "configuration": "Release"
         }
     ]

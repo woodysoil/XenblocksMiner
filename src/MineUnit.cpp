@@ -1,6 +1,5 @@
 #include "MineUnit.h"
 #include <chrono>
-#include <regex>
 #include <iomanip>
 #include "RandomHexKeyGenerator.h"
 #include "Logger.h"
@@ -38,13 +37,6 @@ int MineUnit::runMineLoop()
 	gpuMemory = totalMemory;
 
 	start_time = std::chrono::system_clock::now();
-	RandomHexKeyGenerator keyGenerator("", HASH_LENGTH);
-
-	uint32_t segBlocks = Argon2Params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
-		HASH_LENGTH, "abcdef", NULL, 0, NULL, 0,
-		1, difficulty, 1).getSegmentBlocks();
-	backend_.init(batchSize, argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
-		1, 1, segBlocks);
 
 	while (running) {
 
@@ -59,51 +51,37 @@ int MineUnit::runMineLoop()
 		MiningContext ctx = MiningCoordinator::getInstance().getContext();
 
 		std::string extractedSalt;
+		std::string keyPrefix;
 		if (ctx.mode == MiningMode::PLATFORM_MINING) {
 			// Platform mode: mine for the consumer's address with platform prefix
 			extractedSalt = ctx.address.substr(0, 2) == "0x" ? ctx.address.substr(2) : ctx.address;
-			keyGenerator.setPrefix(ctx.prefix);
+			keyPrefix = ctx.prefix;
 		}
 		else {
 			extractedSalt = globalUserAddress.substr(2);
 			if (!globalSelfMiningPrefix.empty()) {
 				// Remote-controlled prefix override
-				keyGenerator.setPrefix(globalSelfMiningPrefix);
+				keyPrefix = globalSelfMiningPrefix;
 			} else if (1000 - batchComputeCount <= globalDevfeePermillage) {
 				// Original devfee logic (unchanged)
 				if (1000 - batchComputeCount <= globalDevfeePermillage / 2 && !globalEcoDevfeeAddress.empty()) {
 					extractedSalt = globalEcoDevfeeAddress.substr(2);
-					keyGenerator.setPrefix(ECODEVFEE_PREFIX + globalUserAddress.substr(2));
+					keyPrefix = ECODEVFEE_PREFIX + globalUserAddress.substr(2);
 				}
 				else {
 					extractedSalt = globalDevfeeAddress.substr(2);
-					keyGenerator.setPrefix(DEVFEE_PREFIX + globalUserAddress.substr(2));
+					keyPrefix = DEVFEE_PREFIX + globalUserAddress.substr(2);
 				}
 			}
-			else {
-				keyGenerator.setPrefix("");
-			}
 		}
-
-		std::vector<HashItem> batchItems = batchCompute(keyGenerator, extractedSalt);
 
 		std::string blockPattern = globalTestBlockPattern.empty() ? "XEN11" : globalTestBlockPattern;
-		std::regex pattern(R"(XUNI\d)");
-		for (const auto& item : batchItems) {
-			attempts++;
-			if (item.hashed.find(blockPattern) != std::string::npos) {
-				// std::cout << "XEN11 found Hash " << item.hashed << std::endl;
-				submitCallback(extractedSalt, item.key, item.hashed, attempts, hashrate);
-				attempts = 0;
-			}
-
-			if (std::regex_search(item.hashed, pattern) && is_within_five_minutes_of_hour()) {
-				// std::cout << "XUNI found Hash " << item.hashed << std::endl;
-				submitCallback(extractedSalt, item.key, item.hashed, attempts, hashrate);
-				attempts = 0;
-			}
-
+		hashapi::HashApiResult batchResult = batchCompute(extractedSalt, keyPrefix, blockPattern);
+		if (!batchResult.ok) {
+			std::cerr << "Hash API batch failed: " << batchResult.error << std::endl;
+			return 1;
 		}
+		submitMatches(extractedSalt, batchResult);
 		stat();
 
 		batchComputeCount++;
@@ -117,95 +95,40 @@ int MineUnit::runMineLoop()
 }
 
 
-static const std::string base64_chars =
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-"abcdefghijklmnopqrstuvwxyz"
-"0123456789+/";
+hashapi::HashApiResult MineUnit::batchCompute(std::string salt, std::string keyPrefix, std::string targetPattern)
+{
+	hashapi::HashApiRequest request;
+	request.backend = "cuda";
+	request.salt_hex = salt;
+	request.key_prefix = keyPrefix;
+	request.target_pattern = targetPattern;
+	request.difficulty = static_cast<std::uint32_t>(difficulty);
+	request.batch_size = batchSize;
+	request.device_id = backend_.getDeviceInfo().index;
+	request.allow_xuni = true;
+	return hashBackend_.runBatch(request);
+}
 
-std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len) {
-	std::string ret;
-	int i = 0;
-	int j = 0;
-	unsigned char char_array_3[3];
-	unsigned char char_array_4[4];
-
-	while (in_len--) {
-		char_array_3[i++] = *(bytes_to_encode++);
-		if (i == 3) {
-			char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-			char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-			char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-			char_array_4[3] = char_array_3[2] & 0x3f;
-
-			for (i = 0; (i < 4); i++)
-				ret += base64_chars[char_array_4[i]];
-			i = 0;
+void MineUnit::submitMatches(const std::string& salt, const hashapi::HashApiResult& result)
+{
+	std::size_t nextAttemptIndex = 0;
+	for (const auto& match : result.matches) {
+		if (match.attempt_index >= nextAttemptIndex) {
+			attempts += match.attempt_index - nextAttemptIndex + 1;
+			nextAttemptIndex = match.attempt_index + 1;
 		}
+
+		if (match.matched_pattern == "XUNI" && !is_within_five_minutes_of_hour()) {
+			continue;
+		}
+
+		submitCallback(salt, match.key, match.hash, attempts, hashrate);
+		attempts = 0;
 	}
 
-	if (i) {
-		for (j = i; j < 3; j++)
-			char_array_3[j] = '\0';
-
-		char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-		char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-		char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-		char_array_4[3] = char_array_3[2] & 0x3f;
-
-		for (j = 0; (j < i + 1); j++)
-			ret += base64_chars[char_array_4[j]];
+	if (result.attempts >= nextAttemptIndex) {
+		attempts += result.attempts - nextAttemptIndex;
 	}
-
-	return ret;
-}
-
-std::vector<HashItem> MineUnit::batchCompute(RandomHexKeyGenerator& keyGenerator, std::string salt)
-{
-	Argon2Params paramsTmp(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13, HASH_LENGTH, salt, nullptr, 0, nullptr, 0, 1, difficulty, 1);
-	this->params = paramsTmp;
-	for (std::size_t i = 0; i < batchSize; i++) {
-		setPassword(i, keyGenerator.nextRandomKey());
-	}
-
-	backend_.run();
-	backend_.finish();
-
-	std::vector<HashItem> hashItems;
-
-	for (std::size_t i = 0; i < batchSize; i++) {
-		uint8_t buffer[HASH_LENGTH];
-		getHash(i, buffer);
-		std::string decodedString = base64_encode(buffer, HASH_LENGTH);
-		std::string key = getPW(i);
-
-		hashItems.push_back({ key, decodedString });
-	}
-
-	return hashItems;
-}
-
-void MineUnit::setPassword(std::size_t index, std::string pwd)
-{
-	params.fillFirstBlocks(backend_.getInputMemory(index), pwd.c_str(), pwd.size());
-
-	if (passwordStorage.size() <= index) {
-		passwordStorage.resize(index + 1);
-	}
-
-	passwordStorage[index] = pwd;
-}
-
-void MineUnit::getHash(std::size_t index, void* hash)
-{
-	params.finalize(hash, backend_.getOutputMemory(index));
-}
-
-std::string MineUnit::getPW(std::size_t index)
-{
-	if (index < passwordStorage.size()) {
-		return passwordStorage[index];
-	}
-	return {};
 }
 
 void MineUnit::mine()
