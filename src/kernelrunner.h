@@ -38,4 +38,6 @@ public:
 
     void run();
     float finish();
+    float getLastHostToDeviceMs() const;
+    float getLastDeviceToHostMs() const;
 };

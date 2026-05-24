@@ -34,6 +34,8 @@ public:
 
 	virtual void run() = 0;
 	virtual float finish() = 0;
+	virtual float getLastHostToDeviceMs() const { return 0.0f; }
+	virtual float getLastDeviceToHostMs() const { return 0.0f; }
 };
 
 // Enumerate all available compute devices for the compiled backend.

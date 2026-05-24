@@ -462,6 +462,8 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
             "input_ms": 6.0,
             "compute_ms": 4.0,
             "kernel_ms": 9.0,
+            "host_to_device_ms": 11.0,
+            "device_to_host_ms": 12.0,
             "finalize_ms": 3.0,
             "finalize_hash_ms": 8.0,
             "argon2_finalize_ms": 6.0,
@@ -473,6 +475,8 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
 
     assert analysis["dominant_stage"] == "input_ms"
     assert "kernel_ms" not in analysis["stage_pct"]
+    assert "host_to_device_ms" not in analysis["stage_pct"]
+    assert "device_to_host_ms" not in analysis["stage_pct"]
     assert "finalize_hash_ms" not in analysis["stage_pct"]
     assert "argon2_finalize_ms" not in analysis["stage_pct"]
     assert "base64_ms" not in analysis["stage_pct"]

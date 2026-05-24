@@ -19,6 +19,8 @@ public:
 	const void* getOutputMemory(size_t jobId) const override;
 	void run() override;
 	float finish() override;
+	float getLastHostToDeviceMs() const override;
+	float getLastDeviceToHostMs() const override;
 
 	static std::vector<std::unique_ptr<ComputeBackend>> enumerate();
 

@@ -17,7 +17,17 @@ from typing import Any
 DEFAULT_SALT = "aabbccddeeff0011"
 PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan", "difficulty-sequence", "isolation")
 DEFAULT_STABLE_SPREAD_PCT = 10.0
-NESTED_TIMING_FIELDS = frozenset({"kernel_ms", "finalize_hash_ms", "argon2_finalize_ms", "base64_ms", "match_ms"})
+NESTED_TIMING_FIELDS = frozenset(
+    {
+        "kernel_ms",
+        "host_to_device_ms",
+        "device_to_host_ms",
+        "finalize_hash_ms",
+        "argon2_finalize_ms",
+        "base64_ms",
+        "match_ms",
+    }
+)
 
 
 @dataclass(frozen=True)

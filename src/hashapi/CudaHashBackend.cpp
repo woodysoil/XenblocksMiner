@@ -227,6 +227,8 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         const auto compute_start = std::chrono::steady_clock::now();
         compute_backend.run();
         result.timings.kernel_ms = static_cast<double>(compute_backend.finish());
+        result.timings.host_to_device_ms = static_cast<double>(compute_backend.getLastHostToDeviceMs());
+        result.timings.device_to_host_ms = static_cast<double>(compute_backend.getLastDeviceToHostMs());
         result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 
         const auto finalize_start = std::chrono::steady_clock::now();

@@ -126,6 +126,8 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.first_block_ms += source.first_block_ms;
     target.compute_ms += source.compute_ms;
     target.kernel_ms += source.kernel_ms;
+    target.host_to_device_ms += source.host_to_device_ms;
+    target.device_to_host_ms += source.device_to_host_ms;
     target.finalize_ms += source.finalize_ms;
     target.finalize_hash_ms += source.finalize_hash_ms;
     target.argon2_finalize_ms += source.argon2_finalize_ms;

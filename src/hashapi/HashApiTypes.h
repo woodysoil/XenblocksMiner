@@ -42,6 +42,8 @@ struct HashApiTimings {
     double first_block_ms = 0.0;
     double compute_ms = 0.0;
     double kernel_ms = 0.0;
+    double host_to_device_ms = 0.0;
+    double device_to_host_ms = 0.0;
     double finalize_ms = 0.0;
     double finalize_hash_ms = 0.0;
     double argon2_finalize_ms = 0.0;

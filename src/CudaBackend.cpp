@@ -62,6 +62,16 @@ float CudaBackend::finish()
 	return runner_->finish();
 }
 
+float CudaBackend::getLastHostToDeviceMs() const
+{
+	return runner_ == nullptr ? 0.0f : runner_->getLastHostToDeviceMs();
+}
+
+float CudaBackend::getLastDeviceToHostMs() const
+{
+	return runner_ == nullptr ? 0.0f : runner_->getLastDeviceToHostMs();
+}
+
 std::vector<std::unique_ptr<ComputeBackend>> CudaBackend::enumerate()
 {
 	auto devices = CudaDevice::getAllDevices();

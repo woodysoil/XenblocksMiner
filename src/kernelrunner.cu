@@ -687,3 +687,17 @@ float KernelRunner::finish()
     return time;
 }
 
+float KernelRunner::getLastHostToDeviceMs() const
+{
+    float time = 0.0f;
+    CudaException::check(cudaEventElapsedTime(&time, start, kernelStart));
+    return time;
+}
+
+float KernelRunner::getLastDeviceToHostMs() const
+{
+    float time = 0.0f;
+    CudaException::check(cudaEventElapsedTime(&time, kernelEnd, end));
+    return time;
+}
+

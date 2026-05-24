@@ -101,6 +101,8 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "first_block_ms",
         "compute_ms",
         "kernel_ms",
+        "host_to_device_ms",
+        "device_to_host_ms",
         "finalize_ms",
         "finalize_hash_ms",
         "argon2_finalize_ms",

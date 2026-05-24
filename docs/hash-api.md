@@ -73,7 +73,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. Unsupported or irrelevant stages are reported as `0.0`.
+`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -147,6 +147,8 @@ Example success shape:
     "first_block_ms": 0.0,
     "compute_ms": 12.0,
     "kernel_ms": 0.0,
+    "host_to_device_ms": 0.0,
+    "device_to_host_ms": 0.0,
     "finalize_ms": 0.0,
     "finalize_hash_ms": 0.0,
     "argon2_finalize_ms": 0.0,
@@ -181,6 +183,8 @@ Example failure shape:
     "first_block_ms": 0.0,
     "compute_ms": 0.0,
     "kernel_ms": 0.0,
+    "host_to_device_ms": 0.0,
+    "device_to_host_ms": 0.0,
     "finalize_ms": 0.0,
     "finalize_hash_ms": 0.0,
     "argon2_finalize_ms": 0.0,
