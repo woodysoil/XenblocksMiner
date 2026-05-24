@@ -1,4 +1,5 @@
 **/build/
+build-*/
 **/vcpkg_installed/
 log*
 __pycache__/
@@ -9,3 +10,5 @@ web/dist/
 *.tsbuildinfo
 test-logs/
 .claude/
+.deps/
+.venv/
