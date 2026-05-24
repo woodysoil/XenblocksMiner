@@ -49,6 +49,7 @@ struct HashApiTimings {
     double first_block_ms = 0.0;
     double first_block_initial_hash_cpu_ms = 0.0;
     double first_block_digest_cpu_ms = 0.0;
+    double first_block_max_worker_ms = 0.0;
     double compute_ms = 0.0;
     double kernel_ms = 0.0;
     double host_to_device_ms = 0.0;

@@ -93,9 +93,13 @@ void fillPasswordBlocks(ComputeBackend& backend,
             break;
         }
         workers.emplace_back([&backend, &params, &passwords, &worker_timings, timings, worker, begin, end]() {
+            const auto worker_start = std::chrono::steady_clock::now();
             Argon2FirstBlockTimings* local_timings = timings == nullptr ? nullptr : &worker_timings[worker];
             for (std::size_t i = begin; i < end; ++i) {
                 fillPasswordBlock(backend, params, i, passwords[i], local_timings);
+            }
+            if (local_timings != nullptr) {
+                local_timings->worker_ms = elapsedMillis(worker_start, std::chrono::steady_clock::now());
             }
         });
     }
@@ -107,6 +111,7 @@ void fillPasswordBlocks(ComputeBackend& backend,
         for (const Argon2FirstBlockTimings& item : worker_timings) {
             timings->initial_hash_ms += item.initial_hash_ms;
             timings->digest_ms += item.digest_ms;
+            timings->worker_ms = std::max(timings->worker_ms, item.worker_ms);
         }
     }
 }
@@ -280,6 +285,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         }
         result.timings.first_block_initial_hash_cpu_ms = first_block_timings.initial_hash_ms;
         result.timings.first_block_digest_cpu_ms = first_block_timings.digest_ms;
+        result.timings.first_block_max_worker_ms = first_block_timings.worker_ms;
         result.timings.input_ms = elapsedMillis(input_start, std::chrono::steady_clock::now());
 
         const auto compute_start = std::chrono::steady_clock::now();
