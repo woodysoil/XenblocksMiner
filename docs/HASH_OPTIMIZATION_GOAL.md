@@ -40,6 +40,7 @@ Current progress:
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
+- Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.
 - Do not start risky CUDA kernel rewrites until benchmark and timing data show that CPU-side setup, input generation, and allocation overhead are no longer the dominant bottlenecks.
@@ -645,6 +646,12 @@ Short benchmark:
 
 ```bash
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --preset warm-short --seconds 2 --warmup 1 --repeat 3 --output .benchmarks/warm-short.json
+```
+
+Variable-difficulty smoke:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --preset difficulty-sequence --seconds 2 --warmup 1 --repeat 3 --no-xuni --output .benchmarks/difficulty-sequence-smoke.json
 ```
 
 Batch scan candidate search:

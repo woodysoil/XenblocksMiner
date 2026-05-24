@@ -63,6 +63,35 @@ def test_parse_scenario_can_disable_xuni_matching():
     assert scenario.allow_xuni is False
 
 
+def test_parse_scenario_supports_difficulty_sequence():
+    scenario = benchmark.parse_scenario(
+        "backend=cuda,difficulty_sequence=1|8|1|8,batch_size=512,seconds=2",
+    )
+
+    assert scenario.name == "cuda-seq-d1x8x1x8-b512"
+    assert scenario.difficulty == 1
+    assert scenario.difficulty_sequence == (1, 8, 1, 8)
+
+
+def test_parse_scenario_rejects_malformed_key_value_pairs():
+    try:
+        benchmark.parse_scenario("backend=cuda,difficulty_sequence=1,8,batch_size=512")
+    except ValueError as exc:
+        assert "use difficulty_sequence=1|8|1|8 inside --scenario" in str(exc)
+    else:
+        raise AssertionError("expected malformed scenario rejection")
+
+
+def test_parse_difficulty_sequence_rejects_invalid_values():
+    for text in ["", "1,,8", "1,zero", "1,0"]:
+        try:
+            benchmark.parse_difficulty_sequence(text)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected invalid difficulty sequence rejection for {text!r}")
+
+
 def test_preset_scenarios_builds_warm_short_matrix():
     scenarios = benchmark.preset_scenarios(
         "warm-short",
@@ -113,6 +142,32 @@ def test_preset_scenarios_builds_batch_scan_matrix():
     assert all(scenario.repeat == 2 for scenario in scenarios)
 
 
+def test_preset_scenarios_builds_difficulty_sequence_matrix():
+    scenarios = benchmark.preset_scenarios(
+        "difficulty-sequence",
+        seconds=2,
+        backend="cuda",
+        device=0,
+        warmup=1,
+        repeat=2,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-difficulty-sequence-d1x1x1x1-b512",
+        "cuda-difficulty-sequence-d1x8x1x8-b512",
+        "cuda-difficulty-sequence-d8x64x8x64-b512",
+    ]
+    assert [scenario.difficulty_sequence for scenario in scenarios] == [
+        (1, 1, 1, 1),
+        (1, 8, 1, 8),
+        (8, 64, 8, 64),
+    ]
+    assert [scenario.difficulty for scenario in scenarios] == [1, 1, 8]
+    assert all(scenario.batch_size == 512 for scenario in scenarios)
+    assert all(scenario.warmup == 1 for scenario in scenarios)
+    assert all(scenario.repeat == 2 for scenario in scenarios)
+
+
 def test_scan_scenarios_builds_custom_matrix():
     scenarios = benchmark.scan_scenarios(
         difficulties=[1, 8],
@@ -133,6 +188,36 @@ def test_scan_scenarios_builds_custom_matrix():
     assert [scenario.difficulty for scenario in scenarios] == [1, 1, 8, 8]
     assert [scenario.batch_size for scenario in scenarios] == [512, 1024, 512, 1024]
     assert all(scenario.seconds == 3 for scenario in scenarios)
+    assert all(scenario.device == 1 for scenario in scenarios)
+    assert all(scenario.warmup == 2 for scenario in scenarios)
+    assert all(scenario.repeat == 4 for scenario in scenarios)
+
+
+def test_difficulty_sequence_scenarios_build_custom_matrix():
+    scenarios = benchmark.difficulty_sequence_scenarios(
+        sequences=[(1, 1, 1, 1), (1, 8, 1, 8)],
+        batch_sizes=[512, 1024],
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-difficulty-sequence-d1x1x1x1-b512",
+        "cuda-difficulty-sequence-d1x1x1x1-b1024",
+        "cuda-difficulty-sequence-d1x8x1x8-b512",
+        "cuda-difficulty-sequence-d1x8x1x8-b1024",
+    ]
+    assert [scenario.difficulty_sequence for scenario in scenarios] == [
+        (1, 1, 1, 1),
+        (1, 1, 1, 1),
+        (1, 8, 1, 8),
+        (1, 8, 1, 8),
+    ]
+    assert [scenario.difficulty for scenario in scenarios] == [1, 1, 1, 1]
+    assert [scenario.batch_size for scenario in scenarios] == [512, 1024, 512, 1024]
     assert all(scenario.device == 1 for scenario in scenarios)
     assert all(scenario.warmup == 2 for scenario in scenarios)
     assert all(scenario.repeat == 4 for scenario in scenarios)
@@ -179,9 +264,34 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["attempts"] == 60
     assert aggregate["elapsed_ms"] == 3000.0
     assert aggregate["ms_per_attempt"] == 50.0
+    assert aggregate["difficulty_mode"] == "fixed"
+    assert aggregate["difficulty_sequence"] == []
+    assert aggregate["difficulty_changes"] == 0
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
     assert aggregate["ok"] is True
+
+
+def test_summarize_iterations_reports_sequence_metadata():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-sequence",
+        backend="cuda",
+        difficulty=1,
+        difficulty_sequence=(1, 8, 1, 8),
+        batch_size=512,
+        seconds=1,
+        repeat=2,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [_summary(10.0, attempts=10), _summary(20.0, attempts=20)],
+    )
+
+    assert aggregate["difficulty"] == 1
+    assert aggregate["difficulty_mode"] == "sequence"
+    assert aggregate["difficulty_sequence"] == [1, 8, 1, 8]
+    assert aggregate["difficulty_changes"] == 3
 
 
 def test_summarize_iterations_reports_median_timing_breakdown():
@@ -361,6 +471,26 @@ def test_build_recommendations_prefers_stable_candidate_over_noisy_higher_median
     assert recommendation["selection_reason"] == "best_stable_median"
 
 
+def test_build_recommendations_ignores_sequence_runs():
+    runs = [
+        {"summary": {**_summary(100.0), "name": "d1-b512", "difficulty": 1, "batch_size": 512}},
+        {
+            "summary": {
+                **_summary(200.0),
+                "name": "d1x8-b512",
+                "difficulty": 1,
+                "difficulty_sequence": [1, 8, 1, 8],
+                "batch_size": 512,
+            }
+        },
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["batch_size_by_difficulty"][0]["scenario"] == "d1-b512"
+    assert len(recommendations["candidates_by_difficulty"][0]["candidates"]) == 1
+
+
 def test_build_sanitized_report_drops_private_fields():
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
@@ -377,6 +507,7 @@ def test_build_sanitized_report_drops_private_fields():
                     "name": "cuda-test",
                     "backend": "cuda",
                     "difficulty": 1,
+                    "difficulty_sequence": [1, 8, 1, 8],
                     "batch_size": 64,
                     "seconds": 3,
                     "device": 0,
@@ -401,6 +532,7 @@ def test_build_sanitized_report_drops_private_fields():
     assert sanitized["source_schema"] == "xenblocks.hashapi.benchmark.v1"
     assert sanitized["privacy"]["sanitized"] is True
     assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
+    assert sanitized["runs"][0]["scenario"]["difficulty_sequence"] == [1, 8, 1, 8]
     assert "prefix" not in sanitized["runs"][0]["scenario"]
     assert sanitized["runs"][0]["summary"]["hashrate"] == 42.0
     assert "binary" not in sanitized
@@ -765,6 +897,59 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     assert captured_names == ["cuda-scan-d1-b512", "cuda-scan-d1-b1024", "cuda-scan-d8-b512", "cuda-scan-d8-b1024"]
 
 
+def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--difficulty-sequence",
+            "1,1,1,1",
+            "--difficulty-sequence",
+            "1,8,1,8",
+            "--sequence-batch-size",
+            "512",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert [scenario.name for scenario in captured] == [
+        "cuda-difficulty-sequence-d1x1x1x1-b512",
+        "cuda-difficulty-sequence-d1x8x1x8-b512",
+    ]
+    assert [scenario.difficulty_sequence for scenario in captured] == [(1, 1, 1, 1), (1, 8, 1, 8)]
+    assert all("--difficulty-sequence" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
+
+
 def test_main_rejects_partial_custom_scan(capsys):
     exit_code = benchmark.main(
         [
@@ -777,6 +962,20 @@ def test_main_rejects_partial_custom_scan(capsys):
 
     assert exit_code == 2
     assert "--scan-difficulty and --scan-batch-size must be used together" in capsys.readouterr().err
+
+
+def test_main_rejects_partial_difficulty_sequence(capsys):
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--difficulty-sequence",
+            "1,8,1,8",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "--difficulty-sequence and --sequence-batch-size must be used together" in capsys.readouterr().err
 
 
 def test_main_rejects_duplicate_scenario_names(capsys):

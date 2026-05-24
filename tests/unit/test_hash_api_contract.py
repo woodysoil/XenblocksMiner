@@ -138,6 +138,8 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "CudaHashBackend" in content
     assert "makeReusableBackend" in content
     assert "backend->runBatch(request)" in content
+    assert "--difficulty-sequence" in content
+    assert "parseDifficultySequence" in content
     assert "ex.what()" in content
     assert "cuda backend is not available in this build" in content
 
@@ -199,12 +201,15 @@ def test_hash_api_benchmark_runner_exists():
 
     assert "xenblocks.hashapi.benchmark.v1" in content
     assert "hash-benchmark" in content
+    assert "difficulty_sequence" in content
+    assert "difficulty-sequence" in content
     assert "capture_output=True" in content
     assert "nvidia-smi" in content
     assert "nvcc" in content
     assert "summary" in content
     assert "scripts/hash_api_benchmark.py" in docs
     assert "<miner-binary>" in docs
+    assert "--difficulty-sequence" in docs
 
 
 def test_random_key_generator_avoids_per_key_stream_allocation():

@@ -11,9 +11,11 @@
 #include <chrono>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace hashapi {
 namespace {
@@ -24,7 +26,7 @@ void printUsage()
         << "Hash API commands:\n"
         << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--json]\n"
         << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--json]\n";
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -74,6 +76,45 @@ std::size_t getSizeArg(const std::unordered_map<std::string, std::string>& args,
         return fallback;
     }
     return static_cast<std::size_t>(std::stoull(it->second));
+}
+
+std::vector<std::uint32_t> parseDifficultySequence(const std::string& text)
+{
+    std::vector<std::uint32_t> values;
+    if (text.empty()) {
+        return values;
+    }
+
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        const std::size_t end = text.find(',', start);
+        const std::string token = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (token.empty()) {
+            throw std::runtime_error("difficulty sequence cannot contain empty values");
+        }
+        for (char ch : token) {
+            if (ch < '0' || ch > '9') {
+                throw std::runtime_error("difficulty sequence values must be unsigned integers");
+            }
+        }
+
+        std::size_t parsed = 0;
+        const unsigned long value = std::stoul(token, &parsed);
+        if (parsed != token.size()) {
+            throw std::runtime_error("difficulty sequence values must be unsigned integers");
+        }
+        if (value == 0 || value > std::numeric_limits<std::uint32_t>::max()) {
+            throw std::runtime_error("difficulty sequence values must be between 1 and UINT32_MAX");
+        }
+        values.push_back(static_cast<std::uint32_t>(value));
+
+        if (end == std::string::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+
+    return values;
 }
 
 void addTimings(HashApiTimings& target, const HashApiTimings& source)
@@ -180,18 +221,37 @@ std::unique_ptr<IHashBackend> makeReusableBackend(const HashApiRequest& request)
     return std::make_unique<CpuHashBackend>();
 }
 
-int runBenchmark(HashApiRequest request, std::uint32_t seconds, bool json)
+std::vector<std::uint32_t> benchmarkDifficulties(const HashApiRequest& request,
+                                                 const std::vector<std::uint32_t>& difficulty_sequence)
 {
-    const auto errors = validateRequest(request);
-    if (!errors.empty()) {
-        HashApiResult result;
-        result.request_id = request.request_id;
-        result.algorithm = request.algorithm;
-        result.backend = request.backend;
-        result.device_id = request.device_id;
-        result.batch_size = request.batch_size;
-        result.error = joinErrors(errors);
-        return printResult(result, json);
+    if (!difficulty_sequence.empty()) {
+        return difficulty_sequence;
+    }
+    return {request.difficulty};
+}
+
+int runBenchmark(HashApiRequest request,
+                 std::uint32_t seconds,
+                 bool json,
+                 const std::vector<std::uint32_t>& difficulty_sequence)
+{
+    const auto difficulties = benchmarkDifficulties(request, difficulty_sequence);
+    for (std::size_t i = 0; i < difficulties.size(); ++i) {
+        HashApiRequest validation_request = request;
+        validation_request.difficulty = difficulties[i];
+        const auto errors = validateRequest(validation_request);
+        if (!errors.empty()) {
+            HashApiResult result;
+            result.request_id = request.request_id;
+            result.algorithm = request.algorithm;
+            result.backend = request.backend;
+            result.device_id = request.device_id;
+            result.batch_size = request.batch_size;
+            result.error = difficulty_sequence.empty()
+                ? joinErrors(errors)
+                : "difficulty sequence item " + std::to_string(i) + ": " + joinErrors(errors);
+            return printResult(result, json);
+        }
     }
 
     std::unique_ptr<IHashBackend> backend;
@@ -209,6 +269,7 @@ int runBenchmark(HashApiRequest request, std::uint32_t seconds, bool json)
     }
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+    std::size_t difficulty_index = 0;
     HashApiResult aggregate;
     aggregate.request_id = request.request_id;
     aggregate.algorithm = request.algorithm;
@@ -218,6 +279,8 @@ int runBenchmark(HashApiRequest request, std::uint32_t seconds, bool json)
 
     const auto start = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
+        request.difficulty = difficulties[difficulty_index];
+        difficulty_index = (difficulty_index + 1) % difficulties.size();
         HashApiResult current = backend->runBatch(request);
         if (!current.ok) {
             return printResult(current, json);
@@ -273,7 +336,8 @@ int runHashApiCli(int argc, const char* const* argv)
         if (command == "hash-benchmark") {
             request.batch_size = getSizeArg(args, "--batch-size", 1);
             const auto seconds = getUIntArg(args, "--seconds", 30);
-            return runBenchmark(request, seconds, json);
+            const auto difficulty_sequence = parseDifficultySequence(getArg(args, "--difficulty-sequence"));
+            return runBenchmark(request, seconds, json, difficulty_sequence);
         }
     } catch (const std::exception& ex) {
         if (json) {

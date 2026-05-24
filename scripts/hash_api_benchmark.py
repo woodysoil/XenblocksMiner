@@ -15,7 +15,7 @@ from typing import Any
 
 
 DEFAULT_SALT = "aabbccddeeff0011"
-PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan")
+PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan", "difficulty-sequence")
 DEFAULT_STABLE_SPREAD_PCT = 10.0
 
 
@@ -26,6 +26,7 @@ class BenchmarkScenario:
     difficulty: int
     batch_size: int
     seconds: int
+    difficulty_sequence: tuple[int, ...] = ()
     prefix: str = ""
     pattern: str = "XEN11"
     device: int = 0
@@ -34,15 +35,59 @@ class BenchmarkScenario:
     allow_xuni: bool = True
 
 
+def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
+    normalized = text.replace("|", ",").replace(";", ",")
+    values = []
+    for token in normalized.split(","):
+        token = token.strip()
+        if token == "":
+            raise ValueError("difficulty sequence cannot contain empty values")
+        try:
+            value = int(token)
+        except ValueError as exc:
+            raise ValueError("difficulty sequence values must be integers") from exc
+        if value <= 0:
+            raise ValueError("difficulty sequence values must be greater than zero")
+        values.append(value)
+    if not values:
+        raise ValueError("difficulty sequence must not be empty")
+    return tuple(values)
+
+
+def difficulty_sequence_label(sequence: tuple[int, ...]) -> str:
+    return "x".join(str(value) for value in sequence)
+
+
+def difficulty_change_count(sequence: tuple[int, ...]) -> int:
+    if len(sequence) < 2:
+        return 0
+    return sum(1 for index in range(1, len(sequence)) if sequence[index] != sequence[index - 1])
+
+
 def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) -> BenchmarkScenario:
-    parts = dict(part.split("=", 1) for part in text.split(",") if part)
-    name = parts.get("name") or f"{parts.get('backend', 'cpu')}-d{parts.get('difficulty', '1')}-b{parts.get('batch_size', '1')}"
+    parts: dict[str, str] = {}
+    for part in text.split(","):
+        if not part:
+            continue
+        if "=" not in part:
+            raise ValueError(
+                "scenario fields must be key=value pairs; use difficulty_sequence=1|8|1|8 inside --scenario"
+            )
+        key, value = part.split("=", 1)
+        parts[key] = value
+    difficulty_sequence = parse_difficulty_sequence(parts["difficulty_sequence"]) if "difficulty_sequence" in parts else ()
+    difficulty = int(parts.get("difficulty", str(difficulty_sequence[0] if difficulty_sequence else 1)))
+    name = parts.get("name")
+    if not name:
+        difficulty_label = f"seq-d{difficulty_sequence_label(difficulty_sequence)}" if difficulty_sequence else f"d{difficulty}"
+        name = f"{parts.get('backend', 'cpu')}-{difficulty_label}-b{parts.get('batch_size', '1')}"
     return BenchmarkScenario(
         name=name,
         backend=parts.get("backend", "cpu"),
-        difficulty=int(parts.get("difficulty", "1")),
+        difficulty=difficulty,
         batch_size=int(parts.get("batch_size", "1")),
         seconds=int(parts.get("seconds", "5")),
+        difficulty_sequence=difficulty_sequence,
         prefix=parts.get("prefix", ""),
         pattern=parts.get("pattern", "XEN11"),
         device=int(parts.get("device", "0")),
@@ -81,6 +126,32 @@ def scan_scenarios(
     ]
 
 
+def difficulty_sequence_scenarios(
+    sequences: list[tuple[int, ...]],
+    batch_sizes: list[int],
+    seconds: int,
+    backend: str,
+    device: int,
+    warmup: int,
+    repeat: int,
+) -> list[BenchmarkScenario]:
+    return [
+        BenchmarkScenario(
+            name=f"{backend}-difficulty-sequence-d{difficulty_sequence_label(sequence)}-b{batch_size}",
+            backend=backend,
+            difficulty=sequence[0],
+            batch_size=batch_size,
+            seconds=seconds,
+            difficulty_sequence=sequence,
+            device=device,
+            warmup=warmup,
+            repeat=repeat,
+        )
+        for sequence in sequences
+        for batch_size in batch_sizes
+    ]
+
+
 def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmup: int, repeat: int) -> list[BenchmarkScenario]:
     if preset == "smoke":
         return [
@@ -90,6 +161,7 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
                 difficulty=1,
                 batch_size=1,
                 seconds=seconds,
+                difficulty_sequence=(),
                 device=device,
                 warmup=warmup,
                 repeat=repeat,
@@ -100,11 +172,23 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
                 difficulty=1,
                 batch_size=8,
                 seconds=seconds,
+                difficulty_sequence=(),
                 device=device,
                 warmup=warmup,
                 repeat=repeat,
             ),
         ]
+
+    if preset == "difficulty-sequence":
+        return difficulty_sequence_scenarios(
+            [(1, 1, 1, 1), (1, 8, 1, 8), (8, 64, 8, 64)],
+            [512],
+            seconds,
+            backend,
+            device,
+            warmup,
+            repeat,
+        )
 
     if preset == "warm-short":
         pairs = [(1, 1), (1, 64), (8, 64)]
@@ -131,6 +215,7 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
             difficulty=difficulty,
             batch_size=batch_size,
             seconds=seconds,
+            difficulty_sequence=(),
             device=device,
             warmup=warmup,
             repeat=repeat,
@@ -274,6 +359,9 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "backend": result.get("backend", scenario.backend),
         "device_id": result.get("device_id", scenario.device),
         "difficulty": scenario.difficulty,
+        "difficulty_sequence": list(scenario.difficulty_sequence),
+        "difficulty_mode": "sequence" if scenario.difficulty_sequence else "fixed",
+        "difficulty_changes": difficulty_change_count(scenario.difficulty_sequence),
         "batch_size": result.get("batch_size", scenario.batch_size),
         "attempts": result.get("attempts", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
@@ -300,6 +388,9 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "backend": summaries[0]["backend"] if summaries else scenario.backend,
         "device_id": summaries[0]["device_id"] if summaries else scenario.device,
         "difficulty": scenario.difficulty,
+        "difficulty_sequence": list(scenario.difficulty_sequence),
+        "difficulty_mode": "sequence" if scenario.difficulty_sequence else "fixed",
+        "difficulty_changes": difficulty_change_count(scenario.difficulty_sequence),
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": attempts,
         "elapsed_ms": elapsed_ms,
@@ -326,6 +417,8 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
     for run in runs:
         summary = run.get("summary") or {}
         if not summary.get("ok"):
+            continue
+        if summary.get("difficulty_sequence"):
             continue
         key = (
             str(summary.get("backend", "")),
@@ -398,6 +491,7 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "name",
         "backend",
         "difficulty",
+        "difficulty_sequence",
         "batch_size",
         "seconds",
         "device",
@@ -462,6 +556,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         str(scenario.device),
         "--json",
     ]
+    if scenario.difficulty_sequence:
+        command.extend(["--difficulty-sequence", ",".join(str(value) for value in scenario.difficulty_sequence)])
     if scenario.prefix:
         command.extend(["--prefix", scenario.prefix])
     if not scenario.allow_xuni:
@@ -555,6 +651,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a batch size for generated scan scenarios. Requires --scan-difficulty.",
     )
     parser.add_argument(
+        "--difficulty-sequence",
+        action="append",
+        default=[],
+        help="Add a comma-separated difficulty sequence for generated variable-difficulty scenarios. Requires --sequence-batch-size.",
+    )
+    parser.add_argument(
+        "--sequence-batch-size",
+        action="append",
+        type=int,
+        default=[],
+        help="Add a batch size for generated variable-difficulty scenarios. Requires --difficulty-sequence.",
+    )
+    parser.add_argument(
         "--preset",
         action="append",
         choices=PRESET_NAMES,
@@ -588,6 +697,20 @@ def main(argv: list[str]) -> int:
                 scan_scenarios(
                     args.scan_difficulty,
                     args.scan_batch_size,
+                    args.seconds,
+                    args.backend,
+                    args.device,
+                    args.warmup,
+                    args.repeat,
+                )
+            )
+        if args.difficulty_sequence or args.sequence_batch_size:
+            if not args.difficulty_sequence or not args.sequence_batch_size:
+                raise ValueError("--difficulty-sequence and --sequence-batch-size must be used together")
+            scenarios.extend(
+                difficulty_sequence_scenarios(
+                    [parse_difficulty_sequence(item) for item in args.difficulty_sequence],
+                    args.sequence_batch_size,
                     args.seconds,
                     args.backend,
                     args.device,
