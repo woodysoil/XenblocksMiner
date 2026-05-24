@@ -5,6 +5,7 @@
 #include "Logger.h"
 #include "MiningCommon.h"
 #include "MiningCoordinator.h"
+#include "hashapi/HashApiTuning.h"
 using namespace std;
 
 bool is_within_five_minutes_of_hour() {
@@ -24,15 +25,15 @@ int MineUnit::runMineLoop()
 	busId = devInfo.busId;
 	size_t totalMemory = devInfo.totalMemoryBytes;
 	size_t freeMemory = backend_.getFreeMemory();
-	freeMemory -= 100*1024*1024; // reserve 100MB for other usage
-	if(freeMemory < 0) {
+	const auto batchDecision = hashapi::selectCudaBatchSize(
+		freeMemory,
+		static_cast<std::uint32_t>(difficulty),
+		globalMaxBatchSize);
+	if(batchDecision.selected_batch_size == 0) {
 		std::cout << "Not enough memory" << std::endl;
 		return 1;
 	}
-	batchSize = freeMemory / 1.001 / difficulty / 1024;
-	if (globalMaxBatchSize > 0 && batchSize > globalMaxBatchSize) {
-		batchSize = globalMaxBatchSize;
-	}
+	batchSize = batchDecision.selected_batch_size;
 	usedMemory = batchSize * difficulty * 1024;
 	gpuMemory = totalMemory;
 

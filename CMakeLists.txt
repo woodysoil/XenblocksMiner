@@ -132,6 +132,7 @@ set(SOURCE_FILES
     src/hashapi/HashApiEncoding.cpp
     src/hashapi/HashApiJson.cpp
     src/hashapi/HashApiMatching.cpp
+    src/hashapi/HashApiTuning.cpp
     src/hashapi/HashApiValidation.cpp
 )
 set(HASHAPI_SOURCE_FILES
@@ -139,6 +140,7 @@ set(HASHAPI_SOURCE_FILES
     src/hashapi/HashApiEncoding.cpp
     src/hashapi/HashApiJson.cpp
     src/hashapi/HashApiMatching.cpp
+    src/hashapi/HashApiTuning.cpp
     src/hashapi/HashApiValidation.cpp
 )
 

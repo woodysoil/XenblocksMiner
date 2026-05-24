@@ -153,6 +153,45 @@ def test_mine_unit_routes_batch_compute_through_hash_api():
     assert "std::vector<HashItem>" not in header
 
 
+def test_cuda_batch_size_tuning_helper_exists():
+    header = read("src/hashapi/HashApiTuning.h")
+    implementation = read("src/hashapi/HashApiTuning.cpp")
+    cmake = read("CMakeLists.txt")
+
+    for token in [
+        "struct CudaBatchSizeDecision",
+        "estimateCudaMemoryBatchLimit",
+        "recommendedCudaBatchSize",
+        "selectCudaBatchSize",
+    ]:
+        assert token in header
+
+    for token in [
+        "estimateCudaMemoryBatchLimit",
+        "recommendedCudaBatchSize",
+        "selectCudaBatchSize",
+    ]:
+        assert token in implementation
+
+    assert "kCudaBatchMemoryReserveBytes" in header
+    assert "difficulty <= 1" in implementation
+    assert "return 256" in implementation
+    assert "difficulty <= 64" in implementation
+    assert "return 512" in implementation
+    assert "explicit_max_batch_size > 0" in implementation
+    assert "src/hashapi/HashApiTuning.cpp" in cmake
+
+
+def test_mine_unit_uses_hash_api_batch_size_tuning_without_overriding_manual_limit():
+    implementation = read("src/MineUnit.cpp")
+
+    assert '#include "hashapi/HashApiTuning.h"' in implementation
+    assert "hashapi::selectCudaBatchSize" in implementation
+    assert "globalMaxBatchSize" in implementation
+    assert "selected_batch_size == 0" in implementation
+    assert "batchSize = batchDecision.selected_batch_size" in implementation
+
+
 def test_hash_api_benchmark_runner_exists():
     content = read("scripts/hash_api_benchmark.py")
     docs = read("docs/hash-api.md")

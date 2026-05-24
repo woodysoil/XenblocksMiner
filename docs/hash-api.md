@@ -202,6 +202,16 @@ Use `--recommendations-only` when an automation step only needs the selected tun
 
 For larger GPUs or deeper tuning, use repeated `--scan-difficulty` and `--scan-batch-size` options to generate a custom matrix without editing the script.
 
+## CUDA Batch Tuning
+
+`src/hashapi/HashApiTuning.*` contains conservative batch-size helpers shared by miner integration and future autotuning work. The helper separates memory-limited safety from benchmark-informed defaults:
+
+- explicit miner `--batchSize` values remain an upper limit and are not overridden by tuning defaults
+- no explicit limit uses benchmark-informed defaults only for difficulty ranges with stable local evidence
+- unsupported difficulty ranges fall back to the memory-limited batch size
+
+Current conservative defaults are `256` attempts for difficulty `1` and `512` attempts for difficulties through `64`. Treat these as starting points for future autotuning, not universal hardware limits.
+
 ## Local Hash Service
 
 The optional local service is a separate FastAPI app under `server/hash_api/`. It is not registered on the marketplace platform server and does not depend on marketplace routers, MQTT, leases, wallets, settlement, or SQLite.
@@ -231,6 +241,7 @@ Implemented:
 - validation helpers
 - CPU/reference backend using existing `Argon2idHasher`
 - CUDA backend adapter using `ComputeBackend`
+- conservative CUDA batch-size tuning helpers
 - shared match detection and base64 helpers
 - miner batch flow consuming `HashApiResult` from the CUDA backend
 - JSON serialization

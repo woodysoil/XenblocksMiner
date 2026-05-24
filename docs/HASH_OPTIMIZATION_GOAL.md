@@ -38,6 +38,7 @@ Current progress:
 - Benchmark presets, warm-up runs, repeated runs, median/min/max summaries, output files, comparison tooling, recommendation output, and custom scan matrices are in place.
 - Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
+- Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.
 - Do not start risky CUDA kernel rewrites until benchmark and timing data show that CPU-side setup, input generation, and allocation overhead are no longer the dominant bottlenecks.
 
@@ -46,6 +47,7 @@ Current observations:
 - Generated batch paths can be dominated by `input_ms`, which includes CPU-side key generation and Argon2 first-block input preparation.
 - After CUDA first-block preparation was parallelized across CPU worker threads for generated-key batches, `input_ms` still dominates larger batch paths, but viable batch sizes shifted upward.
 - A short post-parallelization scan on a CUDA-capable local GPU found stable candidates around d1/b256, d8/b512, and d64/b512. Treat these as candidates only, not universal defaults.
+- Miner auto batch selection now applies those conservative low-difficulty candidates only when no manual batch limit is configured; unsupported difficulty ranges still fall back to the memory-limited batch size.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 
@@ -353,6 +355,7 @@ Known useful changes already made:
 - benchmark presets, repeats, comparison, recommendation output, and custom scan matrices
 - input timing split into key generation and first-block preparation metadata
 - CUDA first-block preparation parallelized across CPU worker threads for generated-key batches
+- conservative CUDA batch-size selection helper wired into miner auto batch selection
 
 Rejected or risky experiments:
 
@@ -678,9 +681,10 @@ Work through this backlog before attempting high-risk kernel rewrites:
 5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, and backend state make it provably safe.
 6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
 7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
-8. Tune batch size and launch parameters only after the above CPU-side overhead is under control.
-9. Add optional autotuning once there is enough benchmark data to justify it.
-10. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
+8. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
+9. Tune launch parameters only after the above CPU-side overhead is under control.
+10. Add optional autotuning once there is enough benchmark data to justify it.
+11. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
 
 Every backlog item must still follow the correctness and reporting rules above.
 
