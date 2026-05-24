@@ -101,6 +101,23 @@ def test_compare_reports_marks_changed_noisy_runs():
     assert result["summary"]["noisy_regressed"] == 1
 
 
+def test_compare_reports_marks_unchanged_noisy_runs():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, spread_pct=25.0), _run("cuda-b", 100.0)),
+        _report(_run("cuda-a", 100.5), _run("cuda-b", 99.5, spread_pct=25.0)),
+        min_change_pct=1.0,
+        max_spread_pct=10.0,
+    )
+
+    by_name = {item["name"]: item for item in result["comparisons"]}
+    assert by_name["cuda-a"]["status"] == "noisy-unchanged"
+    assert by_name["cuda-a"]["before_spread_pct"] == 25.0
+    assert by_name["cuda-b"]["status"] == "noisy-unchanged"
+    assert by_name["cuda-b"]["after_spread_pct"] == 25.0
+    assert result["summary"]["noisy_unchanged"] == 2
+    assert result["summary"]["unchanged"] == 0
+
+
 def test_compare_reports_includes_timing_deltas():
     result = compare.compare_reports(
         _report(_run("cuda-a", 100.0, timings={"input_ms": 10.0, "compute_ms": 5.0})),

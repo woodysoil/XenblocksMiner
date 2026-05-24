@@ -157,7 +157,7 @@ def _status(
         return "noisy-improved" if noisy else "improved"
     if change_pct < -min_change_pct:
         return "noisy-regressed" if noisy else "regressed"
-    return "unchanged"
+    return "noisy-unchanged" if noisy else "unchanged"
 
 
 def compare_reports(
@@ -217,6 +217,7 @@ def compare_reports(
             "regressed": statuses.count("regressed"),
             "noisy_improved": statuses.count("noisy-improved"),
             "noisy_regressed": statuses.count("noisy-regressed"),
+            "noisy_unchanged": statuses.count("noisy-unchanged"),
             "unchanged": statuses.count("unchanged"),
             "invalid": statuses.count("invalid"),
             "missing_before": statuses.count("missing-before"),

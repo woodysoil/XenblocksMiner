@@ -41,7 +41,7 @@ Current progress:
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - CUDA timing metadata reports nested sub-measurements such as `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`, so future tuning can distinguish transfers, kernel time, hash finalization, encoding, and target matching from their parent stages.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
-- Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy status, and variable-difficulty metadata for before/after runs.
+- Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
 - Hash API benchmark summaries mark any nonzero benchmark subprocess exit as invalid even when stdout contains parseable JSON, so crashy optimization experiments cannot enter recommendations.

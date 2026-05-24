@@ -224,7 +224,7 @@ Use `--recommendations-only` when an automation step only needs the selected tun
 
 For larger GPUs or deeper tuning, use repeated `--scan-difficulty` and `--scan-batch-size` options to generate a custom matrix without editing the script.
 
-Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing and per-attempt timing deltas, preserves variable-difficulty metadata, and marks changed scenarios as noisy when either run's spread exceeds the configured threshold.
+Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing and per-attempt timing deltas, preserves variable-difficulty metadata, and marks improved, regressed, and unchanged scenarios as noisy when either run's spread exceeds the configured threshold.
 
 Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the normal main-target path without secondary XUNI matching.
 
