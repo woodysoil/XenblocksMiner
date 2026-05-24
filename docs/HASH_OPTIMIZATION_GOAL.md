@@ -465,6 +465,7 @@ Rejected or risky experiments:
 - making CUDA event transfer/kernel timings opt-in for default runs preserved the golden CUDA hash and kept default d8/b2048 throughput effectively unchanged at 76.7k H/s versus the 77.1k H/s baseline, but the paired detailed-timing scenario exited invalid with code 3221225477, so keep the existing always-available CUDA event timing until the event lifetime design is changed more broadly
 - replacing the `Blake2b` rotate macro with an MSVC `_rotr64` intrinsic wrapper preserved focused tests and the CUDA golden hash, but d8/b2048 generated CUDA measured about `77.7k H/s` median with `11.9%` spread versus the stable `78.3k H/s` Release baseline, so keep the original rotate expression unless a broader compiler or Blake2b rewrite changes the evidence
 - changing the `Blake2b` sigma table from `unsigned int` to `std::uint8_t` preserved focused tests and the CUDA golden hash, but d8/b2048 generated CUDA regressed to about `17.9k H/s` median with `59.4%` spread versus the stable `78.3k H/s` Release baseline, so keep the original `unsigned int` table layout
+- replacing the per-call `digestLong` length-prefix `store32` with static little-endian constants for the 64-byte hash and 1024-byte block output lengths preserved focused tests and the CUDA golden hash, but a d8/b2048 generated CUDA confirmation reached only about `77.5k H/s` median with `3.2%` spread versus the refreshed trusted `79.2k H/s` baseline, so keep the simple dynamic `store32` path
 
 Measurement cautions:
 
