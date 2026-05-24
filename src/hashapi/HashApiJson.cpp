@@ -68,6 +68,8 @@ std::string toJson(const HashApiTimings& timings)
         << "\"kernel_ms\":" << timings.kernel_ms << ","
         << "\"finalize_ms\":" << timings.finalize_ms << ","
         << "\"finalize_hash_ms\":" << timings.finalize_hash_ms << ","
+        << "\"argon2_finalize_ms\":" << timings.argon2_finalize_ms << ","
+        << "\"base64_ms\":" << timings.base64_ms << ","
         << "\"match_ms\":" << timings.match_ms << ","
         << "\"total_ms\":" << timings.total_ms
         << "}";

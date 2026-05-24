@@ -44,6 +44,8 @@ struct HashApiTimings {
     double kernel_ms = 0.0;
     double finalize_ms = 0.0;
     double finalize_hash_ms = 0.0;
+    double argon2_finalize_ms = 0.0;
+    double base64_ms = 0.0;
     double match_ms = 0.0;
     double total_ms = 0.0;
 };

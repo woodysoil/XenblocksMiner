@@ -128,6 +128,8 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.kernel_ms += source.kernel_ms;
     target.finalize_ms += source.finalize_ms;
     target.finalize_hash_ms += source.finalize_hash_ms;
+    target.argon2_finalize_ms += source.argon2_finalize_ms;
+    target.base64_ms += source.base64_ms;
     target.match_ms += source.match_ms;
     target.total_ms += source.total_ms;
 }

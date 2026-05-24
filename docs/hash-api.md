@@ -73,7 +73,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms` inside `compute_ms`, plus `finalize_hash_ms` and `match_ms` inside `finalize_ms`. Unsupported or irrelevant stages are reported as `0.0`.
+`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -149,6 +149,8 @@ Example success shape:
     "kernel_ms": 0.0,
     "finalize_ms": 0.0,
     "finalize_hash_ms": 0.0,
+    "argon2_finalize_ms": 0.0,
+    "base64_ms": 0.0,
     "match_ms": 0.0,
     "total_ms": 12.4
   },
@@ -181,6 +183,8 @@ Example failure shape:
     "kernel_ms": 0.0,
     "finalize_ms": 0.0,
     "finalize_hash_ms": 0.0,
+    "argon2_finalize_ms": 0.0,
+    "base64_ms": 0.0,
     "match_ms": 0.0,
     "total_ms": 0.1
   },

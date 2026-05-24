@@ -103,6 +103,8 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "kernel_ms",
         "finalize_ms",
         "finalize_hash_ms",
+        "argon2_finalize_ms",
+        "base64_ms",
         "match_ms",
         "total_ms",
     ]:

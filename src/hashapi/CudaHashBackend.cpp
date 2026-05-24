@@ -83,15 +83,6 @@ void fillPasswordBlocks(ComputeBackend& backend,
     }
 }
 
-std::string finalizeHash(ComputeBackend& backend,
-                         const Argon2Params& params,
-                         std::size_t index)
-{
-    std::uint8_t buffer[kDefaultHashLength];
-    params.finalize(buffer, backend.getOutputMemory(index));
-    return base64Encode(buffer, kDefaultHashLength);
-}
-
 } // namespace
 
 CudaHashBackend::CudaHashBackend(ComputeBackend& backend)
@@ -234,7 +225,17 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 
             const auto finalize_hash_start = std::chrono::steady_clock::now();
             for (std::size_t i = begin; i < end; ++i) {
-                finalized_hashes.push_back(finalizeHash(compute_backend, params, i));
+                std::uint8_t buffer[kDefaultHashLength];
+
+                const auto argon2_finalize_start = std::chrono::steady_clock::now();
+                params.finalize(buffer, compute_backend.getOutputMemory(i));
+                result.timings.argon2_finalize_ms += elapsedMillis(
+                    argon2_finalize_start,
+                    std::chrono::steady_clock::now());
+
+                const auto base64_start = std::chrono::steady_clock::now();
+                finalized_hashes.push_back(base64Encode(buffer, kDefaultHashLength));
+                result.timings.base64_ms += elapsedMillis(base64_start, std::chrono::steady_clock::now());
             }
             result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, std::chrono::steady_clock::now());
 
