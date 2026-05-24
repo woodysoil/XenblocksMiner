@@ -109,6 +109,13 @@ def test_hash_api_result_exposes_machine_readable_timings():
     assert "`timings`" in docs
 
 
+def test_hash_api_base64_encoder_avoids_incremental_string_appends():
+    content = read("src/hashapi/HashApiEncoding.cpp")
+    assert "encoded.reserve(((in_len + 2) / 3) * 4)" in content
+    assert "encoded.push_back" in content
+    assert "ret +=" not in content
+
+
 def test_cuda_hash_api_backend_exists():
     header = read("src/hashapi/CudaHashBackend.h")
     implementation = read("src/hashapi/CudaHashBackend.cpp")
