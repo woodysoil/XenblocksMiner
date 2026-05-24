@@ -89,6 +89,24 @@ def _percent_change(before: float, after: float) -> float | None:
     return ((after - before) / before) * 100.0
 
 
+def compare_timings(before: dict[str, Any] | None, after: dict[str, Any] | None) -> dict[str, dict[str, float | None]]:
+    before_timings = (before or {}).get("timings") or {}
+    after_timings = (after or {}).get("timings") or {}
+    comparison: dict[str, dict[str, float | None]] = {}
+
+    for key in sorted(set(before_timings) | set(after_timings)):
+        before_value = _float_value(before_timings, key, 0.0)
+        after_value = _float_value(after_timings, key, 0.0)
+        comparison[key] = {
+            "before_ms": before_value,
+            "after_ms": after_value,
+            "delta_ms": after_value - before_value,
+            "change_pct": _percent_change(before_value, after_value),
+        }
+
+    return comparison
+
+
 def _status(before: dict[str, Any] | None, after: dict[str, Any] | None, change_pct: float | None, min_change_pct: float) -> str:
     if before is None:
         return "missing-before"
@@ -132,6 +150,7 @@ def compare_reports(before_report: Report, after_report: Report, min_change_pct:
                 "seconds": (after or before or {}).get("seconds", 0),
                 "warmup": (after or before or {}).get("warmup", 0),
                 "repeat": (after or before or {}).get("repeat", 1),
+                "timing_deltas": compare_timings(before, after),
                 "before": before,
                 "after": after,
             }
@@ -171,10 +190,19 @@ def format_text(report: Report) -> str:
             "seconds",
             "warmup",
             "repeat",
+            "dominant_timing_delta",
         ]
     )
     for item in report["comparisons"]:
         change = "" if item["change_pct"] is None else f"{item['change_pct']:.3f}"
+        timing_deltas = item.get("timing_deltas") or {}
+        dominant_timing_delta = ""
+        if timing_deltas:
+            dominant_stage, dominant_delta = max(
+                timing_deltas.items(),
+                key=lambda pair: abs(float(pair[1].get("delta_ms") or 0.0)),
+            )
+            dominant_timing_delta = f"{dominant_stage}:{float(dominant_delta.get('delta_ms') or 0.0):.3f}ms"
         writer.writerow(
             [
                 item["name"],
@@ -189,6 +217,7 @@ def format_text(report: Report) -> str:
                 str(item["seconds"]),
                 str(item["warmup"]),
                 str(item["repeat"]),
+                dominant_timing_delta,
             ]
         )
     return output.getvalue().rstrip("\n")

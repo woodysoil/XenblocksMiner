@@ -9,7 +9,7 @@ import io
 import scripts.hash_api_compare as compare
 
 
-def _run(name: str, hashrate: float, ok: bool = True) -> dict:
+def _run(name: str, hashrate: float, ok: bool = True, timings: dict | None = None) -> dict:
     return {
         "scenario": {
             "name": name,
@@ -38,6 +38,7 @@ def _run(name: str, hashrate: float, ok: bool = True) -> dict:
             "error": "" if ok else "failed",
             "warmup": 1,
             "repeat": 3,
+            "timings": timings or {},
         },
     }
 
@@ -63,6 +64,21 @@ def test_compare_reports_classifies_improvement_and_regression():
     assert by_name["cuda-b"]["change_pct"] == -10.0
     assert result["summary"]["improved"] == 1
     assert result["summary"]["regressed"] == 1
+
+
+def test_compare_reports_includes_timing_deltas():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, timings={"input_ms": 10.0, "compute_ms": 5.0})),
+        _report(_run("cuda-a", 120.0, timings={"input_ms": 8.0, "compute_ms": 6.0})),
+    )
+
+    timing_deltas = result["comparisons"][0]["timing_deltas"]
+
+    assert timing_deltas["input_ms"]["before_ms"] == 10.0
+    assert timing_deltas["input_ms"]["after_ms"] == 8.0
+    assert timing_deltas["input_ms"]["delta_ms"] == -2.0
+    assert timing_deltas["input_ms"]["change_pct"] == -20.0
+    assert timing_deltas["compute_ms"]["delta_ms"] == 1.0
 
 
 def test_compare_reports_reports_missing_scenarios():
@@ -104,12 +120,16 @@ def test_main_outputs_json_and_fails_on_regression(tmp_path, capsys):
 
 
 def test_format_text_outputs_automation_friendly_rows():
-    result = compare.compare_reports(_report(_run("cuda-a", 100.0)), _report(_run("cuda-a", 105.0)))
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, timings={"input_ms": 10.0, "compute_ms": 5.0})),
+        _report(_run("cuda-a", 105.0, timings={"input_ms": 7.0, "compute_ms": 6.0})),
+    )
 
     text = compare.format_text(result)
 
     assert text.splitlines()[0].startswith("scenario,status,before_hashrate")
     assert "cuda-a,improved,100.000000,105.000000,5.000000,5.000" in text
+    assert "input_ms:-3.000ms" in text
 
 
 def test_format_text_escapes_csv_fields():
