@@ -402,6 +402,7 @@ Rejected or risky experiments:
 - parallelizing CUDA final hash materialization across CPU threads preserved the golden CUDA hash and lowered `finalize_hash_ms`, but benchmark subprocesses exited unstably during d8/b2048 generated CUDA runs, so keep finalization serial unless backend output-memory lifetime and thread-safety are redesigned
 - default-constructing `Blake2b` without zero-initializing its state preserved the golden CUDA hash, but a d8/b2048 generated CUDA run regressed to 48.4k H/s median with 26.7% spread versus the latest accepted 52.4k H/s confirmation, so keep the explicit constructor initialization
 - returning early from zero-length `Blake2b::update` calls preserved the golden CUDA hash, but a d8/b2048 generated CUDA run reached only 50.2k H/s median with 18.4% spread versus the latest accepted 52.4k H/s confirmation, so keep the simpler update path
+- caching decoded salt bytes inside `Argon2Params` after the stack prehash optimization passed focused tests but made the CUDA golden hash command exit without JSON, so decoded salt caching remains rejected
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
