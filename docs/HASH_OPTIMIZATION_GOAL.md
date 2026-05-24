@@ -79,7 +79,7 @@ Current observations:
 
 - Generated batch paths can be dominated by `input_ms`, which includes CPU-side key generation and Argon2 first-block input preparation.
 - After CUDA first-block preparation was parallelized across CPU worker threads for generated-key batches, `input_ms` still dominates larger batch paths, but viable batch sizes shifted upward.
-- Repeated main-target-only scans on a CUDA-capable local GPU support d1/b2048 and d8/b3072 as current conservative low-difficulty defaults. Treat this as local evidence only, not a universal hardware limit.
+- Repeated main-target-only scans on a CUDA-capable local GPU support d1/b2048, d8/b3072, and d64/b3072 as current conservative low-difficulty defaults. Treat this as local evidence only, not a universal hardware limit.
 - Miner auto batch selection now applies conservative low-difficulty candidates only when no manual batch limit is configured; unsupported difficulty ranges still fall back to the memory-limited batch size.
 - d64 batch-size scans have been noisy and should not be used to change defaults without stronger repeated evidence.
 - Later 10-second d64 scans still conflicted between b1024 and b2048 stability versus median throughput, so keep the d64 default conservative until repeated evidence converges.
@@ -265,7 +265,7 @@ Never commit:
 - hostnames
 - private machine identifiers
 - raw benchmark reports with command lines or binary paths
-- secrets, tokens, cookies, private keys, wallet private data, or personal addresses
+- secrets, tokens, cookies, private key material, wallet credentials, or personal addresses
 - local GPU model names when they identify a private machine rather than a general device class
 
 Before committing, inspect the staged diff for privacy leaks. Use public-safe placeholders in docs and commit bodies:
@@ -521,6 +521,7 @@ Measurement cautions:
 - Rejected finalization lifetime experiment: backend-member scratch storage for the 64-slot finalization buffers preserved correctness through focused tests, a Release rebuild, and the CUDA golden hash, but the repeated d8/b2048 generated CUDA auto benchmark hung past the command timeout and produced no benchmark report. The lingering subprocesses were stopped and the source experiment was reverted. Treat this as instability evidence, not a performance result.
 - Accepted d8 batch-size tuning update: after rebuilding away from the rejected finalization scratch experiment, a miner-equivalent d8 auto batch-size window with seconds `10`, warm-up `1`, repeat `3`, and normal report quality found b3072 as the best stable candidate at about `86.94k H/s` with `2.57%` spread. A targeted d8 b2048/b3072 confirmation then reached about `84.33k H/s` at b2048 versus `92.32k H/s` at b3072 with `1.18%` b3072 spread, so the conservative d8 miner default is now b3072. Keep d8/b2048 as the continuity comparison scenario for historical progress accounting.
 - Accepted d1 batch-size tuning update: a miner-equivalent d1 auto scan with seconds `10`, warm-up `1`, repeat `3`, and normal report quality reached about `70.34k H/s` at b512, `89.16k H/s` at b2048, and `93.58k H/s` at b3072. A follow-up b3072/b4096 confirmation made b3072 unstable while b4096 was stable at about `89.15k H/s`, effectively tied with the stable b2048 result. The conservative d1 miner default is now b2048; keep b3072 and b4096 as candidate sizes for future confirmations rather than defaults.
+- Accepted d64 batch-size tuning update: a miner-equivalent d64 auto scan with seconds `10`, warm-up `1`, repeat `3`, and normal report quality reached about `67.83k H/s` at b512, `85.94k H/s` at b2048, and `87.86k H/s` at b3072. A follow-up b3072/b4096 confirmation kept b3072 best and stable at about `87.61k H/s`, while b4096 was lower at about `84.77k H/s`. The conservative d64 miner default is now b3072.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 

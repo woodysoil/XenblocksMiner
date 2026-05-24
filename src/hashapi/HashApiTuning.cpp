@@ -30,7 +30,7 @@ std::size_t recommendedCudaBatchSize(std::uint32_t difficulty)
         return 3072;
     }
     if (difficulty <= 64) {
-        return 512;
+        return 3072;
     }
     return 0;
 }

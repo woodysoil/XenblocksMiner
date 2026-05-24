@@ -127,6 +127,7 @@ This section should be refreshed whenever it would prevent duplicated work after
 - Reusing CUDA backend finalized-hash scratch storage across batches was tried after the current timing refresh. Focused tests, rebuild, and the CUDA golden hash passed, but the repeated d8/b2048 generated CUDA auto benchmark hung without writing a report and left a benchmark subprocess running. The experiment was reverted; do not retry this backend-lifetime finalization scratch shape without a broader lifetime/thread-safety redesign.
 - A clean miner-equivalent d8 auto batch-size window after the stale-binary rebuild found b3072 as the best stable candidate. A targeted d8 b2048/b3072 confirmation reached about `84.33k H/s` at b2048 and `92.32k H/s` at b3072 with `1.18%` b3072 spread, so the conservative d8 miner default is now b3072 while b2048 remains the continuity scenario for historical comparisons.
 - A clean miner-equivalent d1 auto batch-size scan reached about `70.34k H/s` at b512, `89.16k H/s` at b2048, and `93.58k H/s` at b3072, all stable in that matrix. A follow-up b3072/b4096 confirmation made b3072 unstable while b4096 was stable but about tied with b2048, so the conservative d1 miner default is now b2048 and larger batches remain candidates.
+- A clean miner-equivalent d64 auto batch-size scan reached about `67.83k H/s` at b512, `85.94k H/s` at b2048, and `87.86k H/s` at b3072. A follow-up b3072/b4096 confirmation kept b3072 best and stable at about `87.61k H/s`, while b4096 was lower, so the conservative d64 miner default is now b3072.
 - The next default optimization target is no longer adding the auto chunk policy. Start from post-auto detailed timing and inspect first-block digest/preparation structure, generated input materialization, or a carefully measured finalization path if newer timings show `finalize_ms` overtaking first-block cost.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
@@ -466,7 +467,7 @@ Never commit:
 - usernames
 - hostnames
 - private machine identifiers
-- secrets, tokens, cookies, private keys, wallet private data, or personal addresses
+- secrets, tokens, cookies, private key material, wallet credentials, or personal addresses
 - raw benchmark reports containing command lines, binary paths, hardware identifiers, or local environment details
 - local GPU model names when they identify a private machine
 
