@@ -63,10 +63,10 @@ Expected local prerequisites:
 
 The C++ build may fail before compilation if vcpkg cannot download `vcpkg.exe`, Ninja is unavailable, or CUDA compiler discovery is not configured.
 
-Windows full-build example using Visual Studio 2022, Ninja, vcpkg, and CUDA:
+Windows full-build example using Visual Studio, Ninja, vcpkg, and CUDA:
 
 ```cmd
-cmd /V:ON /c "call ""<vs-dev-shell>"" && set ""PATH=<cuda-root>\bin;<ninja-dir>;!PATH!"" && cmake -S . -B <build-dir> -G Ninja -DCMAKE_TOOLCHAIN_FILE=<vcpkg-toolchain> -DVCPKG_INSTALLED_DIR=%CD%/<vcpkg-build-dir>/vcpkg_installed -DCMAKE_CUDA_COMPILER=""<cuda-root>/bin/nvcc.exe"" -DCUDAToolkit_ROOT=""<cuda-root>"""
+cmd /V:ON /c "call ""<vs-dev-shell>"" && set ""PATH=<cuda-root>\bin;<ninja-dir>;!PATH!"" && cmake -S . -B <build-dir> -G Ninja -DCMAKE_TOOLCHAIN_FILE=<vcpkg-toolchain> -DVCPKG_INSTALLED_DIR=<vcpkg-installed-dir> -DCMAKE_CUDA_COMPILER=""<cuda-root>/bin/nvcc.exe"" -DCUDAToolkit_ROOT=""<cuda-root>"""
 cmd /V:ON /c "call ""<vs-dev-shell>"" && set ""PATH=<cuda-root>\bin;<ninja-dir>;!PATH!"" && cmake --build <build-dir> --config Release"
 ```
 
@@ -77,8 +77,8 @@ Use a CUDA toolkit version compatible with the selected host compiler.
 The Hash API CLI can be configured without enabling the full CUDA miner:
 
 ```bash
-cmake -S . -B build-hashapi --preset hashapi-cli-mingw
-cmake --build build-hashapi --preset hashapi-cli-mingw
+cmake -S . -B <hashapi-build-dir> --preset hashapi-cli-mingw
+cmake --build <hashapi-build-dir> --preset hashapi-cli-mingw
 ```
 
 This target still needs a C++17 compiler, `libargon2`, and optionally `nlohmann_json`. It does not require CUDA, MQTT, Boost, Crow, OpenSSL, or the marketplace server.
@@ -86,9 +86,9 @@ This target still needs a C++17 compiler, `libargon2`, and optionally `nlohmann_
 For CLI/JSON smoke testing on machines without `libargon2`, build the deterministic stub backend:
 
 ```bash
-cmake -S . -B build-hashapi-smoke --preset hashapi-cli-smoke-mingw
-cmake --build build-hashapi-smoke --preset hashapi-cli-smoke-mingw
-build-hashapi-smoke/bin/hashapi-cli.exe hash-one --salt aabbccddeeff0011 --key 0000000000000000000000000000000000000000000000000000000000000000 --difficulty 1 --json
+cmake -S . -B <hashapi-smoke-build-dir> --preset hashapi-cli-smoke-mingw
+cmake --build <hashapi-smoke-build-dir> --preset hashapi-cli-smoke-mingw
+<hashapi-cli> hash-one --salt aabbccddeeff0011 --key 0000000000000000000000000000000000000000000000000000000000000000 --difficulty 1 --json
 ```
 
 The stub backend is only for local CLI smoke tests. It is not a mining or correctness backend.
@@ -134,20 +134,20 @@ Validated locally:
 $env:PYTHONPATH="$PWD\.deps\python"
 $env:PYTHONDONTWRITEBYTECODE="1"
 python -m pytest tests -q --ignore=tests/integration/test_cpp_worker.py -p no:cacheprovider
-cmake --build build-hashapi-smoke --preset hashapi-cli-smoke-mingw
-python scripts/hash_api_benchmark.py --binary build-hashapi-smoke\bin\hashapi-cli.exe --seconds 1
+cmake --build <hashapi-smoke-build-dir> --preset hashapi-cli-smoke-mingw
+python scripts/hash_api_benchmark.py --binary <hashapi-cli> --seconds 1
 ```
 
 Full CUDA build and real worker validation now also pass locally with:
 
 ```powershell
-$env:PATH="$PWD\<build-dir>\bin;$env:CUDA_PATH\bin;$env:PATH"
-<build-dir>\bin\xenblocksMiner.exe hash-batch --salt aabbccddeeff0011 --backend cuda --batch-size 2 --difficulty 1 --json
-python scripts\hash_api_benchmark.py --binary <build-dir>\bin\xenblocksMiner.exe --scenario name=cuda-smoke,backend=cuda,difficulty=1,batch_size=2,seconds=1,device=0
+$env:PATH="<build-dir>\bin;<cuda-root>\bin;$env:PATH"
+<miner-binary> hash-batch --salt aabbccddeeff0011 --backend cuda --batch-size 2 --difficulty 1 --json
+python scripts\hash_api_benchmark.py --binary <miner-binary> --scenario name=cuda-smoke,backend=cuda,difficulty=1,batch_size=2,seconds=1,device=0
 
 $env:PYTHONPATH="$PWD\.deps\python"
 $env:PYTHONDONTWRITEBYTECODE="1"
-$env:MINER_BIN="$PWD\<build-dir>\bin\xenblocksMiner.exe"
+$env:MINER_BIN="<miner-binary>"
 python -m pytest tests\integration\test_cpp_worker.py -q -p no:cacheprovider
 ```
 

@@ -597,8 +597,8 @@ python -m pytest tests/unit/test_hash_api_contract.py tests/unit/test_hash_api_s
 Standalone smoke CLI:
 
 ```bash
-cmake --build build-hashapi-smoke --preset hashapi-cli-smoke-mingw
-python scripts/hash_api_benchmark.py --binary build-hashapi-smoke/bin/hashapi-cli --seconds 1
+cmake --build <hashapi-smoke-build-dir> --preset hashapi-cli-smoke-mingw
+python scripts/hash_api_benchmark.py --binary <hashapi-cli> --seconds 1
 ```
 
 Full CUDA build:

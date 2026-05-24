@@ -203,6 +203,7 @@ def test_hash_api_benchmark_runner_exists():
     assert "nvcc" in content
     assert "summary" in content
     assert "scripts/hash_api_benchmark.py" in docs
+    assert "<miner-binary>" in docs
 
 
 def test_random_key_generator_avoids_per_key_stream_allocation():

@@ -187,9 +187,9 @@ Example failure shape:
 `scripts/hash_api_benchmark.py` runs repeatable `hash-benchmark --json` scenarios and emits an aggregate JSON report for optimization agents.
 
 ```bash
-python scripts/hash_api_benchmark.py --binary build-hashapi-smoke/bin/hashapi-cli.exe --seconds 3
-python scripts/hash_api_benchmark.py --binary build/bin/xenblocksMiner.exe --backend cuda --device 0 --seconds 10
-python scripts/hash_api_benchmark.py --binary build/bin/xenblocksMiner.exe --scenario name=cuda-small,backend=cuda,difficulty=1024,batch_size=64,seconds=10,device=0
+python scripts/hash_api_benchmark.py --binary <hashapi-cli> --seconds 3
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10
+python scripts/hash_api_benchmark.py --binary <miner-binary> --scenario name=cuda-small,backend=cuda,difficulty=1024,batch_size=64,seconds=10,device=0
 ```
 
 The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scenario, command, process exit code, host metadata, CUDA/NVIDIA probe output when available, wall-clock duration, a comparable summary, and the parsed Hash API result. Run summaries include median/min/max hashrate, `hashrate_spread_pct`, median timing breakdowns, and `timing_analysis` fields that identify the dominant measured stage. Reports also include `recommendations.batch_size_by_difficulty`, which selects the best stable median hashrate per backend, device, and difficulty from the scenarios in that report. If no candidate is stable, recommendations fall back to the best successful median hashrate and mark `selection_reason` as `no_stable_candidate`. Recommendation rows include the spread percentage, dominant timing stage, `selection_reason`, and a `stable` flag based on the report's `stable_spread_pct` threshold.
@@ -219,7 +219,7 @@ The optional local service is a separate FastAPI app under `server/hash_api/`. I
 Run it against a Hash API CLI binary:
 
 ```bash
-python -m server.hash_api.server --binary build-hashapi-smoke/bin/hashapi-cli.exe --host 127.0.0.1 --port 8765
+python -m server.hash_api.server --binary <hashapi-cli> --host 127.0.0.1 --port 8765
 ```
 
 Endpoints:
