@@ -12,6 +12,18 @@ This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.
 
 The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, and the documented completion rule.
 
+## Active Goal Objective
+
+Run an autonomous, long-lived optimization loop for the extracted Hash API and CUDA backend. The practical target is to reduce time per real hash attempt as far as possible for the fixed workload:
+
+- `t = 1`
+- `s = 1` / `p = 1`
+- `m = diff` / `difficulty`, which may change between sessions or benchmark sequences
+
+The aspirational target is a verified 1000% throughput increase over the selected baseline. If that target is not reachable on the current hardware, keep iterating until the remaining bottleneck is supported by benchmark or profiler evidence and the risk of further changes is higher than the expected gain.
+
+The current local CUDA-capable GPU is the first test platform. The resulting architecture must stay portable enough for future RTX 3050-class and higher-end CUDA GPUs by using public device properties, compute capability, explicit tuning parameters, and runtime measurements instead of private device names or local machine assumptions.
+
 ## Long-Running Goal Contract
 
 This goal follows the strongest Codex Goal shape and is designed for unattended `/goal` execution:
@@ -97,6 +109,19 @@ Expected current shape:
 - timing metadata that separates validation, setup, input generation, compute, finalization, matching, and per-attempt costs
 
 If the current structure blocks optimization, refactor the Hash API/backend boundary first. Do not drift into frontend, marketplace, wallet, lease, devfee, authentication, or broad platform work while this goal is active.
+
+## Architecture Direction
+
+If the current layout makes serious optimization difficult, improve the structure before chasing micro-optimizations. Acceptable structural work includes:
+
+- keeping hot hashing paths callable without marketplace, wallet, frontend, lease, devfee, or network services
+- moving difficulty-derived setup, backend state, buffer ownership, and timing metadata behind clear Hash API or backend contracts
+- making CUDA tuning knobs explicit and easy to benchmark
+- separating cold setup, warm steady-state hashing, input preparation, kernel execution, transfer time, finalization, and result matching
+- keeping CPU/reference behavior available for correctness checks
+- adding benchmark or comparison tooling that makes future AI iterations harder to misread
+
+Do not introduce a new platform layer while optimizing hash speed. The preferred future shape is a small, reusable hash core with stable CLI and test entrypoints, so external programs or future agents can optimize or embed it without understanding the full miner.
 
 ## Per-Iteration Evidence
 
@@ -216,6 +241,24 @@ Each loop should end in one of three states:
 - accepted: correctness passed, benchmark evidence is useful, and a small commit was made
 - rejected: correctness or benchmark evidence failed, the current uncommitted experiment was reverted, and the rejection was documented only if it prevents repeated work
 - measurement-only: no speed claim was made, but benchmark, timing, test, or documentation infrastructure improved and was committed
+
+## Autonomous Work Queue
+
+Use this queue as the default order when no newer evidence is available:
+
+1. Confirm the worktree state, active goal, latest optimization commits, and privacy status.
+2. Run focused Hash API tests and a CUDA golden hash check before trusting performance data.
+3. Refresh the main generated-key CUDA baseline for d8/b2048 with warm-up and repeated samples.
+4. Inspect per-attempt timing and choose the largest credible bottleneck.
+5. If `input_ms` dominates, work on generated-key preparation, salt/key materialization, and Argon2 first-block setup.
+6. If `setup_ms` dominates, reduce repeated validation, difficulty setup, device resolution, allocation, or backend lifecycle costs.
+7. If `compute_ms` dominates, inspect CUDA allocation churn, transfer cost, launch geometry, memory behavior, occupancy, and kernel timing.
+8. If `finalize_ms` dominates, use the nested finalization timings before changing hash finalization, base64 encoding, matching, or result collection.
+9. When single-scenario gains flatten, run variable-`m=diff` and batch-scan scenarios to avoid overfitting one local setting.
+10. After stable cross-scenario evidence exists, add or improve autotuning based on public CUDA device properties and measured stability.
+11. Keep accepted and rejected experiments documented so future long-running agents do not repeat failed work.
+
+A structural cleanup can be the next iteration if it directly enables one of these work items or improves the reliability of future measurements.
 
 ## Bottleneck Order
 
