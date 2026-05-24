@@ -66,7 +66,11 @@ HashApiResult CpuHashBackend::runBatch(const HashApiRequest& request)
 
         const auto compute_start = std::chrono::steady_clock::now();
         for (std::size_t i = 0; i < attempts; ++i) {
+            const auto keygen_start = std::chrono::steady_clock::now();
             const std::string key = single_key ? fixed_key : key_generator.nextRandomKey();
+            const auto keygen_end = std::chrono::steady_clock::now();
+            result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
+
             const std::string hash = hasher.generateHash(key);
             if (single_key) {
                 result.hash = hash;

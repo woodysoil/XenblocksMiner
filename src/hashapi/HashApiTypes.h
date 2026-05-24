@@ -38,6 +38,8 @@ struct HashApiTimings {
     double validation_ms = 0.0;
     double setup_ms = 0.0;
     double input_ms = 0.0;
+    double keygen_ms = 0.0;
+    double first_block_ms = 0.0;
     double compute_ms = 0.0;
     double finalize_ms = 0.0;
     double total_ms = 0.0;

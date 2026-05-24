@@ -97,6 +97,8 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "validation_ms",
         "setup_ms",
         "input_ms",
+        "keygen_ms",
+        "first_block_ms",
         "compute_ms",
         "finalize_ms",
         "total_ms",

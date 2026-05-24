@@ -81,6 +81,8 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.validation_ms += source.validation_ms;
     target.setup_ms += source.setup_ms;
     target.input_ms += source.input_ms;
+    target.keygen_ms += source.keygen_ms;
+    target.first_block_ms += source.first_block_ms;
     target.compute_ms += source.compute_ms;
     target.finalize_ms += source.finalize_ms;
     target.total_ms += source.total_ms;

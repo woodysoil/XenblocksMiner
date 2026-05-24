@@ -144,8 +144,15 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
 
         for (std::size_t i = 0; i < attempts; ++i) {
+            const auto keygen_start = std::chrono::steady_clock::now();
             const std::string key = single_key ? fixed_key : key_generator.nextRandomKey();
+            const auto keygen_end = std::chrono::steady_clock::now();
+            result.timings.keygen_ms += elapsedMillis(keygen_start, keygen_end);
+
+            const auto first_block_start = std::chrono::steady_clock::now();
             fillPasswordBlock(compute_backend, params, i, key);
+            const auto first_block_end = std::chrono::steady_clock::now();
+            result.timings.first_block_ms += elapsedMillis(first_block_start, first_block_end);
             password_storage_.push_back(key);
         }
         result.timings.input_ms = elapsedMillis(input_start, std::chrono::steady_clock::now());

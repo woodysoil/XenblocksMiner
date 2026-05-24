@@ -62,6 +62,8 @@ std::string toJson(const HashApiTimings& timings)
         << "\"validation_ms\":" << timings.validation_ms << ","
         << "\"setup_ms\":" << timings.setup_ms << ","
         << "\"input_ms\":" << timings.input_ms << ","
+        << "\"keygen_ms\":" << timings.keygen_ms << ","
+        << "\"first_block_ms\":" << timings.first_block_ms << ","
         << "\"compute_ms\":" << timings.compute_ms << ","
         << "\"finalize_ms\":" << timings.finalize_ms << ","
         << "\"total_ms\":" << timings.total_ms
