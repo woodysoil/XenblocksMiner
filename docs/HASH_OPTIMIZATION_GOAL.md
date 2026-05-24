@@ -368,6 +368,8 @@ Rejected or risky experiments:
 - persistent CUDA first-block worker pool caused benchmark subprocess exit failures after otherwise successful JSON output
 - byte-pair random key generation using a 0-255 distribution regressed d8/b512 generated CUDA throughput by about 30% and did not reduce `keygen_ms`
 - reusing a single CUDA finalize base64 output string caused generated benchmark subprocess access-violation exits
+- limiting first-block worker count by attempts per worker regressed short main-target CUDA throughput and did not produce a stable gain
+- caching decoded salt bytes in `Argon2Params` preserved the golden CUDA hash but did not improve repeated generated-batch throughput
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
