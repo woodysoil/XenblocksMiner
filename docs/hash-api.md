@@ -214,7 +214,7 @@ Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the norma
 - no explicit limit uses benchmark-informed defaults only for difficulty ranges with stable local evidence
 - unsupported difficulty ranges fall back to the memory-limited batch size
 
-Current conservative defaults are `256` attempts for difficulty `1` and `512` attempts for difficulties through `64`. Treat these as starting points for future autotuning, not universal hardware limits.
+Current conservative defaults are `512` attempts for difficulties through `64`. Treat these as starting points for future autotuning, not universal hardware limits.
 
 ## Local Hash Service
 

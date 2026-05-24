@@ -24,7 +24,7 @@ std::size_t estimateCudaMemoryBatchLimit(std::size_t free_memory_bytes,
 std::size_t recommendedCudaBatchSize(std::uint32_t difficulty)
 {
     if (difficulty <= 1) {
-        return 256;
+        return 512;
     }
     if (difficulty <= 64) {
         return 512;
