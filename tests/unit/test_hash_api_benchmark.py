@@ -267,6 +267,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "median_hashrate": 150.0,
             "hashrate_spread_pct": 5.0,
             "stable": True,
+            "selection_reason": "best_stable_median",
             "dominant_stage": "input_ms",
             "dominant_stage_pct": 75.0,
             "scenario": "d1-b128",
@@ -279,11 +280,42 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "median_hashrate": 120.0,
             "hashrate_spread_pct": 15.0,
             "stable": False,
+            "selection_reason": "no_stable_candidate",
             "dominant_stage": "compute_ms",
             "dominant_stage_pct": 55.0,
             "scenario": "d8-b64",
         },
     ]
+
+
+def test_build_recommendations_prefers_stable_candidate_over_noisy_higher_median():
+    runs = [
+        {
+            "summary": {
+                **_summary(400.0),
+                "name": "d1-b2048-noisy",
+                "difficulty": 1,
+                "batch_size": 2048,
+                "hashrate_spread_pct": 40.0,
+            }
+        },
+        {
+            "summary": {
+                **_summary(300.0),
+                "name": "d1-b512-stable",
+                "difficulty": 1,
+                "batch_size": 512,
+                "hashrate_spread_pct": 5.0,
+            }
+        },
+    ]
+
+    recommendation = benchmark.build_recommendations(runs)["batch_size_by_difficulty"][0]
+
+    assert recommendation["batch_size"] == 512
+    assert recommendation["median_hashrate"] == 300.0
+    assert recommendation["stable"] is True
+    assert recommendation["selection_reason"] == "best_stable_median"
 
 
 def test_build_sanitized_report_drops_private_fields():

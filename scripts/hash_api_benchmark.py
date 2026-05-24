@@ -289,7 +289,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
 
 
 def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    best_by_key: dict[tuple[str, int, int], dict[str, Any]] = {}
+    candidates_by_key: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
     for run in runs:
         summary = run.get("summary") or {}
         if not summary.get("ok"):
@@ -299,13 +299,22 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             int(summary.get("device_id", 0)),
             int(summary.get("difficulty", 0)),
         )
-        hashrate = float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0)
-        current = best_by_key.get(key)
-        current_hashrate = 0.0
-        if current is not None:
-            current_hashrate = float(current.get("median_hashrate", current.get("hashrate", 0.0)) or 0.0)
-        if current is None or hashrate > current_hashrate:
-            best_by_key[key] = summary
+        candidates_by_key.setdefault(key, []).append(summary)
+
+    selected_by_key: dict[tuple[str, int, int], tuple[dict[str, Any], str]] = {}
+    for key, candidates in candidates_by_key.items():
+        stable_candidates = [
+            summary
+            for summary in candidates
+            if float(summary.get("hashrate_spread_pct", 0.0) or 0.0) <= DEFAULT_STABLE_SPREAD_PCT
+        ]
+        selection_pool = stable_candidates or candidates
+        selection_reason = "best_stable_median" if stable_candidates else "no_stable_candidate"
+        selected = max(
+            selection_pool,
+            key=lambda summary: float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
+        )
+        selected_by_key[key] = (selected, selection_reason)
 
     batch_size_by_difficulty = [
         {
@@ -316,11 +325,12 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "hashrate_spread_pct": float(summary.get("hashrate_spread_pct", 0.0) or 0.0),
             "stable": float(summary.get("hashrate_spread_pct", 0.0) or 0.0) <= DEFAULT_STABLE_SPREAD_PCT,
+            "selection_reason": selection_reason,
             "dominant_stage": str((summary.get("timing_analysis") or {}).get("dominant_stage", "")),
             "dominant_stage_pct": float((summary.get("timing_analysis") or {}).get("dominant_stage_pct", 0.0) or 0.0),
             "scenario": str(summary.get("name", "")),
         }
-        for (backend, device_id, difficulty), summary in sorted(best_by_key.items())
+        for (backend, device_id, difficulty), (summary, selection_reason) in sorted(selected_by_key.items())
     ]
     return {
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,

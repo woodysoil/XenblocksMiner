@@ -36,6 +36,7 @@ Current progress:
 
 - Reusable Hash API extraction is complete enough for isolated optimization work.
 - Benchmark presets, warm-up runs, repeated runs, median/min/max summaries, output files, comparison tooling, recommendation output, and custom scan matrices are in place.
+- Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.
 - Do not start risky CUDA kernel rewrites until benchmark and timing data show that CPU-side setup, input generation, and allocation overhead are no longer the dominant bottlenecks.
