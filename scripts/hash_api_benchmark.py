@@ -179,6 +179,7 @@ def scan_scenarios(
 def difficulty_sequence_scenarios(
     sequences: list[tuple[int, ...]],
     batch_sizes: list[int],
+    detailed_timings: bool,
     seconds: int,
     backend: str,
     device: int,
@@ -196,6 +197,7 @@ def difficulty_sequence_scenarios(
             device=device,
             warmup=warmup,
             repeat=repeat,
+            detailed_timings=detailed_timings,
         )
         for sequence in sequences
         for batch_size in batch_sizes
@@ -233,6 +235,7 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
         return difficulty_sequence_scenarios(
             [(1, 1, 1, 1), (1, 8, 1, 8), (8, 64, 8, 64)],
             [512],
+            False,
             seconds,
             backend,
             device,
@@ -809,6 +812,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a batch size for generated variable-difficulty scenarios. Requires --difficulty-sequence.",
     )
     parser.add_argument(
+        "--sequence-detailed-timings",
+        action="store_true",
+        help="Enable detailed timing diagnostics on generated variable-difficulty scenarios.",
+    )
+    parser.add_argument(
         "--preset",
         action="append",
         choices=PRESET_NAMES,
@@ -858,6 +866,7 @@ def main(argv: list[str]) -> int:
                 difficulty_sequence_scenarios(
                     [parse_difficulty_sequence(item) for item in args.difficulty_sequence],
                     args.sequence_batch_size,
+                    args.sequence_detailed_timings,
                     args.seconds,
                     args.backend,
                     args.device,

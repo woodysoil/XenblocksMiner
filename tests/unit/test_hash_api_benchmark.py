@@ -269,6 +269,7 @@ def test_difficulty_sequence_scenarios_build_custom_matrix():
     scenarios = benchmark.difficulty_sequence_scenarios(
         sequences=[(1, 1, 1, 1), (1, 8, 1, 8)],
         batch_sizes=[512, 1024],
+        detailed_timings=False,
         seconds=3,
         backend="cuda",
         device=1,
@@ -293,6 +294,22 @@ def test_difficulty_sequence_scenarios_build_custom_matrix():
     assert all(scenario.device == 1 for scenario in scenarios)
     assert all(scenario.warmup == 2 for scenario in scenarios)
     assert all(scenario.repeat == 4 for scenario in scenarios)
+
+
+def test_difficulty_sequence_scenarios_can_enable_detailed_timings():
+    scenarios = benchmark.difficulty_sequence_scenarios(
+        sequences=[(8, 64, 8, 64)],
+        batch_sizes=[512],
+        detailed_timings=True,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == ["cuda-difficulty-sequence-d8x64x8x64-b512"]
+    assert [scenario.detailed_timings for scenario in scenarios] == [True]
 
 
 def test_ensure_unique_scenario_names_rejects_duplicates():
@@ -1350,6 +1367,7 @@ def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
             "1,8,1,8",
             "--sequence-batch-size",
             "512",
+            "--sequence-detailed-timings",
             "--output",
             str(output),
         ]
@@ -1361,6 +1379,7 @@ def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
         "cuda-difficulty-sequence-d1x8x1x8-b512",
     ]
     assert [scenario.difficulty_sequence for scenario in captured] == [(1, 1, 1, 1), (1, 8, 1, 8)]
+    assert [scenario.detailed_timings for scenario in captured] == [True, True]
     assert all("--difficulty-sequence" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
 
 

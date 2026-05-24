@@ -46,6 +46,7 @@ Current progress:
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
+- Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
 - CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers` and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
 - Hash API benchmark summaries mark any nonzero benchmark subprocess exit as invalid even when stdout contains parseable JSON, so crashy optimization experiments cannot enter recommendations.
@@ -385,6 +386,7 @@ Known useful changes already made:
 - timing breakdown metadata for Hash API results
 - benchmark presets, repeats, comparison, recommendation output, and custom scan matrices
 - input timing split into key generation and first-block preparation metadata
+- generated variable-difficulty sequence matrices can enable detailed setup and first-block timing diagnostics with `--sequence-detailed-timings`
 - CUDA first-block preparation parallelized across CPU worker threads for generated-key batches
 - conservative CUDA batch-size selection helper wired into miner auto batch selection
 - main-target-only benchmark mode for measuring normal mining without secondary XUNI matching
