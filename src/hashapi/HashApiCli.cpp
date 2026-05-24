@@ -24,9 +24,9 @@ void printUsage()
 {
     std::cout
         << "Hash API commands:\n"
-        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--json]\n"
-        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--json]\n";
+        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--json]\n"
+        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--json]\n"
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -37,7 +37,7 @@ std::unordered_map<std::string, std::string> parseArgs(int argc, const char* con
         if (key.rfind("--", 0) != 0) {
             continue;
         }
-        if (key == "--json" || key == "--no-xuni") {
+        if (key == "--json" || key == "--no-xuni" || key == "--detailed-timings") {
             args[key] = "true";
             continue;
         }
@@ -124,6 +124,8 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.input_ms += source.input_ms;
     target.keygen_ms += source.keygen_ms;
     target.first_block_ms += source.first_block_ms;
+    target.first_block_initial_hash_cpu_ms += source.first_block_initial_hash_cpu_ms;
+    target.first_block_digest_cpu_ms += source.first_block_digest_cpu_ms;
     target.compute_ms += source.compute_ms;
     target.kernel_ms += source.kernel_ms;
     target.host_to_device_ms += source.host_to_device_ms;
@@ -149,6 +151,7 @@ HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& a
     request.batch_size = getSizeArg(args, "--batch-size", request.batch_size);
     request.device_id = static_cast<int>(getUIntArg(args, "--device", 0));
     request.allow_xuni = getArg(args, "--no-xuni") != "true";
+    request.detailed_timings = getArg(args, "--detailed-timings") == "true";
     return request;
 }
 

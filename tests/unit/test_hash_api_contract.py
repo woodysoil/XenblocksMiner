@@ -36,6 +36,7 @@ def test_hash_api_request_fields_exist():
         "batch_size",
         "device_id",
         "allow_xuni",
+        "detailed_timings",
     ]:
         assert field in content
 
@@ -99,6 +100,8 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "input_ms",
         "keygen_ms",
         "first_block_ms",
+        "first_block_initial_hash_cpu_ms",
+        "first_block_digest_cpu_ms",
         "compute_ms",
         "kernel_ms",
         "host_to_device_ms",
@@ -159,6 +162,7 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "parseDifficultySequence" in content
     assert "aggregate.hash = current.hash" in content
     assert "aggregate.hash.clear()" in content
+    assert "--detailed-timings" in content
     assert "ex.what()" in content
     assert "cuda backend is not available in this build" in content
 

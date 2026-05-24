@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <chrono>
 #include <string>
 
 static void store32(void *dst, std::uint32_t v)
@@ -19,6 +20,12 @@ static std::uint8_t *append32(std::uint8_t *dst, std::uint32_t v)
 {
     store32(dst, v);
     return dst + sizeof(std::uint32_t);
+}
+
+static double elapsedMillis(std::chrono::steady_clock::time_point start,
+                            std::chrono::steady_clock::time_point end)
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 Argon2Params::Argon2Params(
@@ -168,6 +175,51 @@ void Argon2Params::fillFirstBlocks(
     for (std::uint32_t l = 0; l < lanes; l++) {
         store32(initHash + argon2::ARGON2_PREHASH_DIGEST_LENGTH + 4, l);
         digestLong(bmemory, argon2::ARGON2_BLOCK_SIZE, initHash, sizeof(initHash));
+        bmemory += argon2::ARGON2_BLOCK_SIZE;
+    }
+}
+
+void Argon2Params::fillFirstBlocks(
+        void *memory,
+        const void *pwd,
+        std::size_t pwdLen,
+        Argon2FirstBlockTimings *timings) const
+{
+    std::uint8_t initHash[argon2::ARGON2_PREHASH_SEED_LENGTH];
+
+    if (timings != nullptr) {
+        const auto initial_hash_start = std::chrono::steady_clock::now();
+        initialHash(initHash, pwd, pwdLen);
+        timings->initial_hash_ms += elapsedMillis(initial_hash_start, std::chrono::steady_clock::now());
+    } else {
+        initialHash(initHash, pwd, pwdLen);
+    }
+
+    auto bmemory = static_cast<std::uint8_t *>(memory);
+
+    store32(initHash + argon2::ARGON2_PREHASH_DIGEST_LENGTH, 0);
+    for (std::uint32_t l = 0; l < lanes; l++) {
+        store32(initHash + argon2::ARGON2_PREHASH_DIGEST_LENGTH + 4, l);
+        if (timings != nullptr) {
+            const auto digest_start = std::chrono::steady_clock::now();
+            digestLong(bmemory, argon2::ARGON2_BLOCK_SIZE, initHash, sizeof(initHash));
+            timings->digest_ms += elapsedMillis(digest_start, std::chrono::steady_clock::now());
+        } else {
+            digestLong(bmemory, argon2::ARGON2_BLOCK_SIZE, initHash, sizeof(initHash));
+        }
+        bmemory += argon2::ARGON2_BLOCK_SIZE;
+    }
+
+    store32(initHash + argon2::ARGON2_PREHASH_DIGEST_LENGTH, 1);
+    for (std::uint32_t l = 0; l < lanes; l++) {
+        store32(initHash + argon2::ARGON2_PREHASH_DIGEST_LENGTH + 4, l);
+        if (timings != nullptr) {
+            const auto digest_start = std::chrono::steady_clock::now();
+            digestLong(bmemory, argon2::ARGON2_BLOCK_SIZE, initHash, sizeof(initHash));
+            timings->digest_ms += elapsedMillis(digest_start, std::chrono::steady_clock::now());
+        } else {
+            digestLong(bmemory, argon2::ARGON2_BLOCK_SIZE, initHash, sizeof(initHash));
+        }
         bmemory += argon2::ARGON2_BLOCK_SIZE;
     }
 }

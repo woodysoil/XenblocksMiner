@@ -460,6 +460,9 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     analysis = benchmark.timing_analysis(
         {
             "input_ms": 6.0,
+            "first_block_ms": 5.0,
+            "first_block_initial_hash_cpu_ms": 3.0,
+            "first_block_digest_cpu_ms": 2.0,
             "compute_ms": 4.0,
             "kernel_ms": 9.0,
             "host_to_device_ms": 11.0,
@@ -474,6 +477,8 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     )
 
     assert analysis["dominant_stage"] == "input_ms"
+    assert "first_block_initial_hash_cpu_ms" not in analysis["stage_pct"]
+    assert "first_block_digest_cpu_ms" not in analysis["stage_pct"]
     assert "kernel_ms" not in analysis["stage_pct"]
     assert "host_to_device_ms" not in analysis["stage_pct"]
     assert "device_to_host_ms" not in analysis["stage_pct"]
@@ -482,6 +487,29 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert "base64_ms" not in analysis["stage_pct"]
     assert "match_ms" not in analysis["stage_pct"]
     assert analysis["stage_pct"]["finalize_ms"] == 30.0
+
+
+def test_parse_scenario_supports_detailed_timings():
+    scenario = benchmark.parse_scenario(
+        "name=diag,backend=cuda,difficulty=8,batch_size=2048,seconds=1,detailed_timings=true"
+    )
+
+    assert scenario.detailed_timings is True
+
+
+def test_build_hash_command_adds_detailed_timings_flag():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        detailed_timings=True,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--detailed-timings" in command
 
 
 def test_summarize_iterations_reports_median_timing_per_attempt():

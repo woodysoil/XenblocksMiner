@@ -22,6 +22,8 @@ NESTED_TIMING_FIELDS = frozenset(
         "kernel_ms",
         "host_to_device_ms",
         "device_to_host_ms",
+        "first_block_initial_hash_cpu_ms",
+        "first_block_digest_cpu_ms",
         "finalize_hash_ms",
         "argon2_finalize_ms",
         "base64_ms",
@@ -45,6 +47,7 @@ class BenchmarkScenario:
     warmup: int = 0
     repeat: int = 1
     allow_xuni: bool = True
+    detailed_timings: bool = False
 
 
 def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
@@ -107,6 +110,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         warmup=int(parts.get("warmup", str(default_warmup))),
         repeat=max(1, int(parts.get("repeat", str(default_repeat)))),
         allow_xuni=parts.get("allow_xuni", "true").lower() not in {"0", "false", "no"},
+        detailed_timings=parts.get("detailed_timings", "false").lower() in {"1", "true", "yes"},
     )
 
 
@@ -547,6 +551,7 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "repeat",
         "pattern",
         "key_mode",
+        "detailed_timings",
     )
     sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
     if "key_mode" not in sanitized:
@@ -615,6 +620,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         command.extend(["--prefix", scenario.prefix])
     if not scenario.allow_xuni:
         command.append("--no-xuni")
+    if scenario.detailed_timings:
+        command.append("--detailed-timings")
     return command
 
 

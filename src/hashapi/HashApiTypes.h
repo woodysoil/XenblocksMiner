@@ -24,6 +24,7 @@ struct HashApiRequest {
     std::size_t batch_size = 1;
     int device_id = 0;
     bool allow_xuni = true;
+    bool detailed_timings = false;
 };
 
 struct HashApiMatch {
@@ -40,6 +41,8 @@ struct HashApiTimings {
     double input_ms = 0.0;
     double keygen_ms = 0.0;
     double first_block_ms = 0.0;
+    double first_block_initial_hash_cpu_ms = 0.0;
+    double first_block_digest_cpu_ms = 0.0;
     double compute_ms = 0.0;
     double kernel_ms = 0.0;
     double host_to_device_ms = 0.0;

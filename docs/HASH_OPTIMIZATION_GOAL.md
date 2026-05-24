@@ -143,7 +143,7 @@ Start here after reading this file:
 8. Inspect timing metadata and choose one bottleneck:
    - high `input_ms`: reduce CPU-side key generation, salt/key preparation, or first-block setup overhead
    - high `keygen_ms`: optimize random key generation, prefix handling, or generated-key memory layout
-   - high `first_block_ms`: improve safe Argon2 first-block preparation and CPU parallelism
+   - high `first_block_ms`: use `--detailed-timings` to split initial prehash and digest expansion, then improve safe Argon2 first-block preparation and CPU parallelism
    - high `setup_ms`: cache difficulty-derived or device-derived setup safely
    - high `compute_ms`: inspect CUDA allocation, copy, launch geometry, memory behavior, and kernel occupancy
    - high `finalize_ms`: use `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` to choose between hash finalization, encoding, matching, result collection, or JSON work outside the timed hot path

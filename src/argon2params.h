@@ -4,6 +4,12 @@
 #include <string>
 #include "argon2-common.h"
 
+struct Argon2FirstBlockTimings
+{
+    double initial_hash_ms = 0.0;
+    double digest_ms = 0.0;
+};
+
 class Argon2Params
 {
 private:
@@ -59,6 +65,10 @@ public:
         std::size_t t_cost, std::size_t m_cost, std::size_t lanes);
 
     void fillFirstBlocks(void* memory, const void* pwd, std::size_t pwdLen) const;
+    void fillFirstBlocks(void* memory,
+        const void* pwd,
+        std::size_t pwdLen,
+        Argon2FirstBlockTimings* timings) const;
 
     void finalize(void* out, const void* memory) const;
 };
