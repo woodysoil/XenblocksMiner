@@ -595,6 +595,12 @@ KernelRunner::~KernelRunner()
     if (end != nullptr) {
         cudaEventDestroy(end);
     }
+    if (kernelStart != nullptr) {
+        cudaEventDestroy(kernelStart);
+    }
+    if (kernelEnd != nullptr) {
+        cudaEventDestroy(kernelEnd);
+    }
     if (stream != nullptr) {
         cudaStreamDestroy(stream);
     }
