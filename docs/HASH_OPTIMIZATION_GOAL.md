@@ -421,6 +421,7 @@ Known useful changes already made:
 - Argon2 initial hash setup now batches fixed 32-bit metadata into stack buffers for the no-secret/no-associated-data mining path, reducing local d8/b2048 generated CUDA `first_block_ms` per attempt from about 0.01148 ms to about 0.00820 ms and reaching 67.1k H/s median with 3.7% spread
 - detailed CUDA transfer, first-block, and setup timing fields are available for diagnosis while the default non-detailed path avoids extra timing overhead
 - benchmark comparison can classify noisy unchanged runs when the median change is below threshold but spread is too high to treat the result as stable
+- benchmark timing analysis reports first-block detailed CPU-time sum and CPU-sum-to-wall ratio, so agents can distinguish digest-heavy work from first-block scheduling overhead without treating worker-local CPU counters as additive wall time
 
 Rejected or risky experiments:
 
