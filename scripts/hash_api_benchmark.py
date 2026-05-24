@@ -285,6 +285,55 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
+    safe_keys = (
+        "name",
+        "backend",
+        "difficulty",
+        "batch_size",
+        "seconds",
+        "device",
+        "warmup",
+        "repeat",
+        "pattern",
+    )
+    sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
+    prefix = str(scenario.get("prefix", ""))
+    sanitized["prefix_length"] = len(prefix)
+    return sanitized
+
+
+def build_sanitized_report(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "xenblocks.hashapi.benchmark-summary.v1",
+        "source_schema": report.get("schema", ""),
+        "created_at_unix": report.get("created_at_unix"),
+        "privacy": {
+            "sanitized": True,
+            "omitted_fields": [
+                "binary",
+                "command",
+                "hardware",
+                "host",
+                "iterations",
+                "prefix",
+                "raw result",
+                "salt",
+                "warmup_runs",
+            ],
+        },
+        "presets": report.get("presets", []),
+        "recommendations": report.get("recommendations", {}),
+        "runs": [
+            {
+                "scenario": sanitize_scenario(run.get("scenario", {})),
+                "summary": run.get("summary", {}),
+            }
+            for run in report.get("runs", [])
+        ],
+    }
+
+
 def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> list[str]:
     command = [
         str(binary),
@@ -372,6 +421,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--warmup", default=0, type=int, help="Warm-up runs per scenario before measured repeats.")
     parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
+    parser.add_argument(
+        "--sanitized-output",
+        type=Path,
+        help="Optional path to write a public-safe summary without local paths, hardware details, commands, raw results, salts, or prefixes.",
+    )
     parser.add_argument("--recommendations-only", action="store_true", help="Print only report recommendations as JSON.")
     parser.add_argument(
         "--scan-difficulty",
@@ -457,6 +511,10 @@ def main(argv: list[str]) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output + "\n", encoding="utf-8")
+    if args.sanitized_output:
+        args.sanitized_output.parent.mkdir(parents=True, exist_ok=True)
+        sanitized_output = json.dumps(build_sanitized_report(report), indent=2, sort_keys=True)
+        args.sanitized_output.write_text(sanitized_output + "\n", encoding="utf-8")
     if args.recommendations_only:
         print(json.dumps(report["recommendations"], indent=2, sort_keys=True))
     else:

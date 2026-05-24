@@ -226,6 +226,67 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     ]
 
 
+def test_build_sanitized_report_drops_private_fields():
+    report = {
+        "schema": "xenblocks.hashapi.benchmark.v1",
+        "created_at_unix": 123.0,
+        "host": {"system": "Windows", "machine": "private-host"},
+        "hardware": {"nvidia_smi": {"stdout": "0, Private GPU, 999.99, 4096 MiB"}},
+        "binary": r"D:\private\miner.exe",
+        "salt": "private-salt",
+        "presets": ["warm-short"],
+        "recommendations": {"batch_size_by_difficulty": []},
+        "runs": [
+            {
+                "scenario": {
+                    "name": "cuda-test",
+                    "backend": "cuda",
+                    "difficulty": 1,
+                    "batch_size": 64,
+                    "seconds": 3,
+                    "device": 0,
+                    "warmup": 1,
+                    "repeat": 2,
+                    "prefix": "deadbeef",
+                    "pattern": "XEN11",
+                },
+                "summary": _summary(42.0),
+                "command": [r"D:\private\miner.exe", "--salt", "private-salt"],
+                "warmup_runs": [{"result": {"matches": [{"key": "secret-key"}]}}],
+                "iterations": [{"result": {"matches": [{"key": "secret-key"}]}}],
+                "result": {"matches": [{"key": "secret-key"}]},
+            }
+        ],
+    }
+
+    sanitized = benchmark.build_sanitized_report(report)
+    encoded = json.dumps(sanitized)
+
+    assert sanitized["schema"] == "xenblocks.hashapi.benchmark-summary.v1"
+    assert sanitized["source_schema"] == "xenblocks.hashapi.benchmark.v1"
+    assert sanitized["privacy"]["sanitized"] is True
+    assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
+    assert "prefix" not in sanitized["runs"][0]["scenario"]
+    assert sanitized["runs"][0]["summary"]["hashrate"] == 42.0
+    assert "binary" not in sanitized
+    assert "hardware" not in sanitized
+    assert "host" not in sanitized
+    assert "salt" not in sanitized
+    assert "command" not in sanitized["runs"][0]
+    assert "warmup_runs" not in sanitized["runs"][0]
+    assert "iterations" not in sanitized["runs"][0]
+    assert "result" not in sanitized["runs"][0]
+    for token in [
+        r"D:\private",
+        "private-host",
+        "Private GPU",
+        "private-salt",
+        "deadbeef",
+        "secret-key",
+    ]:
+        assert token not in encoded
+
+
 def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypatch):
     calls = {"count": 0}
 
@@ -320,6 +381,58 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
     assert json.loads(capsys.readouterr().out)["runs"][0]["summary"]["hashrate"] == 42.0
+
+
+def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
+    def fake_metadata():
+        return {"nvidia_smi": {"stdout": "private gpu"}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        return {
+            "scenario": {**benchmark.asdict(scenario), "prefix": "deadbeef"},
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary), "--salt", salt],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [{"exit_code": 0, "result": {"ok": True}}],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0, "matches": [{"key": "secret-key"}]},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    sanitized_output = tmp_path / "summary.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            r"D:\private\miner.exe",
+            "--salt",
+            "private-salt",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--sanitized-output",
+            str(sanitized_output),
+        ]
+    )
+
+    assert exit_code == 0
+    sanitized = json.loads(sanitized_output.read_text(encoding="utf-8"))
+    encoded = json.dumps(sanitized)
+    assert sanitized["schema"] == "xenblocks.hashapi.benchmark-summary.v1"
+    assert sanitized["runs"][0]["summary"]["hashrate"] == 42.0
+    assert "binary" not in sanitized
+    assert "hardware" not in sanitized
+    assert r"D:\private" not in encoded
+    assert "private gpu" not in encoded
+    assert "private-salt" not in encoded
+    assert "deadbeef" not in encoded
+    assert "secret-key" not in encoded
+    capsys.readouterr()
 
 
 def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):

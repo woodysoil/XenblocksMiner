@@ -190,6 +190,8 @@ python scripts/hash_api_benchmark.py --binary build/bin/xenblocksMiner.exe --sce
 
 The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scenario, command, process exit code, host metadata, CUDA/NVIDIA probe output when available, wall-clock duration, a comparable summary, and the parsed Hash API result. Reports also include `recommendations.batch_size_by_difficulty`, which selects the best successful median hashrate per backend, device, and difficulty from the scenarios in that report.
 
+Raw benchmark reports are intended for ignored local artifact directories because they may include local binary paths, command lines, hardware probe output, salts, prefixes, and raw run details. Use `--sanitized-output <path>` when a run should also produce a public-safe summary. The sanitized report uses schema `xenblocks.hashapi.benchmark-summary.v1` and keeps only scenario metadata, aggregate summaries, and recommendations while omitting local paths, host and hardware details, commands, raw iterations, salts, prefixes, and raw results.
+
 Reusable presets include `smoke`, `warm-short`, `cuda-compare`, and `batch-scan`. Use `batch-scan` before hard-coding batch assumptions on a new GPU; it compares medium and large batch sizes for low difficulties while keeping raw reports under ignored local benchmark directories.
 
 Use `--recommendations-only` when an automation step only needs the selected tuning recommendations on stdout while still optionally writing the full report with `--output`.
