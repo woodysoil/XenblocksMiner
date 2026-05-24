@@ -673,6 +673,11 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
 
     recommendations = benchmark.build_recommendations(runs)
 
+    assert recommendations["report_ok"] is False
+    assert recommendations["run_count"] == 4
+    assert recommendations["valid_run_count"] == 3
+    assert recommendations["invalid_run_count"] == 1
+    assert recommendations["invalid_scenarios"] == ["d8-b128"]
     assert recommendations["stable_spread_pct"] == 10.0
     assert recommendations["batch_size_by_difficulty"] == [
         {
@@ -799,8 +804,34 @@ def test_build_recommendations_ignores_process_exit_failures():
 
     recommendations = benchmark.build_recommendations(runs)
 
+    assert recommendations["report_ok"] is False
+    assert recommendations["invalid_run_count"] == 1
+    assert recommendations["invalid_scenarios"] == ["d8-crashed"]
     assert recommendations["batch_size_by_difficulty"] == []
     assert recommendations["candidates_by_difficulty"] == []
+
+
+def test_build_recommendations_marks_clean_report():
+    runs = [
+        {"summary": {**_summary(100.0), "name": "d1-b512", "difficulty": 1, "batch_size": 512}},
+        {
+            "summary": {
+                **_summary(120.0),
+                "name": "d1-b1024",
+                "difficulty": 1,
+                "batch_size": 1024,
+                "hashrate_spread_pct": 5.0,
+            }
+        },
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["report_ok"] is True
+    assert recommendations["run_count"] == 2
+    assert recommendations["valid_run_count"] == 2
+    assert recommendations["invalid_run_count"] == 0
+    assert recommendations["invalid_scenarios"] == []
 
 
 def test_build_sanitized_report_drops_private_fields():
@@ -1218,7 +1249,17 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
 
     assert exit_code == 0
     stdout = json.loads(capsys.readouterr().out)
-    assert list(stdout) == ["batch_size_by_difficulty", "candidates_by_difficulty", "stable_spread_pct"]
+    assert list(stdout) == [
+        "batch_size_by_difficulty",
+        "candidates_by_difficulty",
+        "invalid_run_count",
+        "invalid_scenarios",
+        "report_ok",
+        "run_count",
+        "stable_spread_pct",
+        "valid_run_count",
+    ]
+    assert stdout["report_ok"] is True
     assert stdout["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert "runs" in json.loads(output.read_text(encoding="utf-8"))
 

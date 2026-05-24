@@ -508,9 +508,18 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
 
 
 def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    invalid_scenarios: list[str] = []
+    valid_run_count = 0
     candidates_by_key: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
     for run in runs:
         summary = run.get("summary") or {}
+        scenario = run.get("scenario") or {}
+        scenario_name = str(summary.get("name") or scenario.get("name") or "")
+        run_ok = int(run.get("exit_code", 0) or 0) == 0 and bool(summary.get("ok"))
+        if run_ok:
+            valid_run_count += 1
+        else:
+            invalid_scenarios.append(scenario_name)
         if not summary.get("ok"):
             continue
         if summary.get("difficulty_sequence"):
@@ -577,6 +586,11 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         for (backend, device_id, difficulty), candidates in sorted(candidates_by_key.items())
     ]
     return {
+        "report_ok": len(invalid_scenarios) == 0,
+        "run_count": len(runs),
+        "valid_run_count": valid_run_count,
+        "invalid_run_count": len(invalid_scenarios),
+        "invalid_scenarios": invalid_scenarios,
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": batch_size_by_difficulty,
         "candidates_by_difficulty": candidates_by_difficulty,
