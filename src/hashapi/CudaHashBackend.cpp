@@ -88,12 +88,17 @@ std::size_t recommendedFirstBlockDynamicChunkSize(const HashApiRequest& request,
     if (!request.first_block_dynamic_chunk_auto ||
         request.backend != "cuda" ||
         !request.key.empty() ||
-        request.difficulty != 8 ||
         attempts < 1024 ||
         worker_count <= 1) {
         return 0;
     }
-    return 32;
+    if (request.difficulty == 1) {
+        return 16;
+    }
+    if (request.difficulty == 8) {
+        return 32;
+    }
+    return 0;
 }
 
 void fillPasswordBlocks(ComputeBackend& backend,
