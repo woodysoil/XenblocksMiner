@@ -54,6 +54,7 @@ Current progress:
 - Benchmark `timing_analysis` includes `nested_stage_pct` so optimization agents can read nested diagnostics as percentages of their parent stage without treating them as additive wall time.
 - Optional `--detailed-timings` also splits CUDA setup timing and first-block CPU timing for diagnosis. These detailed fields are nested diagnostic timing, not additive wall time.
 - Detailed first-block diagnostics include `first_block_max_worker_ms`, which records the slowest worker-local wall time during parallel first-block preparation and helps separate scheduling/imbalance from aggregate digest CPU time.
+- Detailed first-block scheduling diagnostics include worker thread launch time and worker start skew fields, which help separate thread creation/start latency from the worker-local digest loop.
 - Benchmark timing analysis derives `first_block_worker_wall_to_wall` and `first_block_scheduling_overhead_ms` from detailed first-block worker timing, so agents can see how much first-block wall time remains outside the slowest worker-local loop.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, top-level and nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.

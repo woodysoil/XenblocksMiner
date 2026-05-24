@@ -132,6 +132,9 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.first_block_initial_hash_cpu_ms += source.first_block_initial_hash_cpu_ms;
     target.first_block_digest_cpu_ms += source.first_block_digest_cpu_ms;
     target.first_block_max_worker_ms += source.first_block_max_worker_ms;
+    target.first_block_thread_launch_ms += source.first_block_thread_launch_ms;
+    target.first_block_max_worker_start_ms += source.first_block_max_worker_start_ms;
+    target.first_block_worker_start_span_ms += source.first_block_worker_start_span_ms;
     target.compute_ms += source.compute_ms;
     target.kernel_ms += source.kernel_ms;
     target.host_to_device_ms += source.host_to_device_ms;

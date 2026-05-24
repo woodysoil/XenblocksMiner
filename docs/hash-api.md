@@ -76,7 +76,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`first_block_worker_count` and `first_block_chunk_size` describe the CUDA first-block scheduling shape selected for the request, including automatic worker selection when `first_block_workers` is `0`. `timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block diagnostics `first_block_initial_hash_cpu_ms`, `first_block_digest_cpu_ms`, and `first_block_max_worker_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time; `first_block_max_worker_ms` is the slowest worker-local wall time observed for the batch. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
+`first_block_worker_count` and `first_block_chunk_size` describe the CUDA first-block scheduling shape selected for the request, including automatic worker selection when `first_block_workers` is `0`. `timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block diagnostics `first_block_initial_hash_cpu_ms`, `first_block_digest_cpu_ms`, `first_block_max_worker_ms`, `first_block_thread_launch_ms`, `first_block_max_worker_start_ms`, and `first_block_worker_start_span_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time; `first_block_max_worker_ms` is the slowest worker-local wall time observed for the batch, while the worker start fields help separate thread launch latency from worker-loop work. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -157,6 +157,9 @@ Example success shape:
     "first_block_initial_hash_cpu_ms": 0.0,
     "first_block_digest_cpu_ms": 0.0,
     "first_block_max_worker_ms": 0.0,
+    "first_block_thread_launch_ms": 0.0,
+    "first_block_max_worker_start_ms": 0.0,
+    "first_block_worker_start_span_ms": 0.0,
     "compute_ms": 12.0,
     "kernel_ms": 0.0,
     "host_to_device_ms": 0.0,
@@ -201,6 +204,9 @@ Example failure shape:
     "first_block_initial_hash_cpu_ms": 0.0,
     "first_block_digest_cpu_ms": 0.0,
     "first_block_max_worker_ms": 0.0,
+    "first_block_thread_launch_ms": 0.0,
+    "first_block_max_worker_start_ms": 0.0,
+    "first_block_worker_start_span_ms": 0.0,
     "compute_ms": 0.0,
     "kernel_ms": 0.0,
     "host_to_device_ms": 0.0,

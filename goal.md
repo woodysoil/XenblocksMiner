@@ -113,6 +113,7 @@ This section should be refreshed whenever it would prevent duplicated work after
 - After the metadata slice, a clean-binary d8/b2048 refresh produced about `61.99k H/s` median with normal benchmark trust and automatic first-block scheduling metadata. Treat it as current clean-binary local evidence, but do not replace the higher trusted `79.2k H/s` best result without a newer stable confirmation.
 - Detailed post-metadata timing still shows `input_ms` and `first_block_ms` as dominant. The first default optimization track remains generated input and first-block preparation unless newer detailed timings contradict it.
 - Detailed first-block timing now exposes the slowest worker wall time and derived worker-wall/scheduling-overhead analysis. Use those fields before retrying scheduler or worker-chunk changes.
+- Detailed first-block scheduling timing also exposes thread launch time and worker start skew. Use those fields to decide whether scheduler work should target thread creation/start latency or worker-loop balance.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 

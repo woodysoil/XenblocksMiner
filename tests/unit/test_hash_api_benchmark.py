@@ -554,6 +554,9 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
             "first_block_initial_hash_cpu_ms": 3.0,
             "first_block_digest_cpu_ms": 2.0,
             "first_block_max_worker_ms": 4.0,
+            "first_block_thread_launch_ms": 0.5,
+            "first_block_max_worker_start_ms": 0.4,
+            "first_block_worker_start_span_ms": 0.3,
             "compute_ms": 4.0,
             "kernel_ms": 9.0,
             "host_to_device_ms": 11.0,
@@ -571,6 +574,9 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert "first_block_initial_hash_cpu_ms" not in analysis["stage_pct"]
     assert "first_block_digest_cpu_ms" not in analysis["stage_pct"]
     assert "first_block_max_worker_ms" not in analysis["stage_pct"]
+    assert "first_block_thread_launch_ms" not in analysis["stage_pct"]
+    assert "first_block_max_worker_start_ms" not in analysis["stage_pct"]
+    assert "first_block_worker_start_span_ms" not in analysis["stage_pct"]
     assert "setup_normalize_cpu_ms" not in analysis["stage_pct"]
     assert "setup_activate_cpu_ms" not in analysis["stage_pct"]
     assert "setup_device_info_cpu_ms" not in analysis["stage_pct"]
@@ -587,6 +593,9 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert analysis["nested_stage_pct"]["first_block_initial_hash_cpu_ms"] == 60.0
     assert analysis["nested_stage_pct"]["first_block_digest_cpu_ms"] == 40.0
     assert analysis["nested_stage_pct"]["first_block_max_worker_ms"] == 80.0
+    assert analysis["nested_stage_pct"]["first_block_thread_launch_ms"] == 10.0
+    assert analysis["nested_stage_pct"]["first_block_max_worker_start_ms"] == 8.0
+    assert analysis["nested_stage_pct"]["first_block_worker_start_span_ms"] == 6.0
     assert analysis["nested_stage_pct"]["setup_activate_cpu_ms"] == 0.2 / 5.5 * 100.0
     assert analysis["nested_stage_pct"]["kernel_ms"] == 9.0 / 4.0 * 100.0
     assert analysis["nested_stage_pct"]["finalize_hash_ms"] == 8.0 / 3.0 * 100.0
