@@ -95,8 +95,8 @@ This section should be refreshed whenever it would prevent duplicated work after
 - "CLI API" means those command-line Hash API entrypoints. It is not the frontend, websocket layer, marketplace API, wallet flow, or hosted HTTP API.
 - Current trusted Release continuity evidence for generated-key CUDA d8/b2048 is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence is still useful continuity context but should not override newer trusted evidence.
 - Current timing evidence still points at CPU-side generated input and first-block preparation as the dominant bottleneck for the d8/b2048 generated-key path.
-- The next in-progress measurement-only slice is expected to expose first-block scheduling metadata in Hash API JSON and benchmark summaries: `first_block_worker_count` and `first_block_chunk_size`.
-- After any dirty measurement slice, rebuild the Release CUDA binary, run the golden CUDA hash check, run a short CUDA benchmark smoke, scan the staged diff for privacy leaks, then commit if clean.
+- The first-block scheduling metadata slice is complete. Hash API JSON and benchmark summaries now expose `first_block_worker_count` and `first_block_chunk_size`; commit `a19d069` validated it with focused tests, a clean Release CUDA rebuild, the golden CUDA hash, and a short CUDA smoke.
+- If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 
 ## Strong Goal Shape

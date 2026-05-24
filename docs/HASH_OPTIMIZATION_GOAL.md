@@ -31,7 +31,7 @@ Active goal status:
 - The current trusted Release continuity evidence is the generated-key CUDA main-target scenario at difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, and no XUNI matching, with about `79.2k H/s` median from the latest normal-trust refresh. Older `78.3k H/s` evidence remains useful continuity context but should not override newer trusted evidence.
 - The dominant measured bottleneck in that baseline is CPU-side input preparation, especially first-block preparation. Detailed timing showed `input_ms` at about `58-61%` of wall time and `first_block_ms` at about `54-57%`.
 - This baseline is local evidence on a CUDA-capable GPU. Do not publish raw reports, local binary paths, hardware identifiers, or private machine details.
-- There is a measurement-only slice in progress to expose first-block scheduling metadata in Hash API JSON and benchmark summaries: `first_block_worker_count` and `first_block_chunk_size`. Finish its Release CUDA rebuild, golden hash, smoke benchmark, privacy scan, and commit before starting a new optimization experiment.
+- Commit `a19d069` completed the measurement-only first-block scheduling metadata slice. Hash API JSON, benchmark summaries, comparison output, docs, and contract tests now expose `first_block_worker_count` and `first_block_chunk_size`.
 
 Known current capabilities:
 
@@ -474,7 +474,8 @@ Measurement cautions:
 - A later clean-source post-revert d8/b2048 confirmation was much slower at about `26.2k H/s` median with `16.5%` spread while the host CPU load was observed near saturation. Treat that run as a low-trust environment sample, not as a new baseline or a code regression.
 - Benchmark reports now include public-safe environment metadata with aggregate CPU load samples around each benchmark subprocess and `benchmark_trust`. Do not accept CPU-side input/first-block throughput conclusions from reports marked `benchmark_trust: low` unless the result is only being used to diagnose environment noise.
 - Measurement-only update: per-command environment sampling was validated with focused tests and a real CUDA smoke. A one-warmup, one-repeat CUDA smoke produced a sanitized summary with `sample_count: 4` and `benchmark_trust: normal`, confirming that automation can now detect mid-run CPU load spikes more reliably.
-- In-progress measurement-only update: expose first-block scheduling metadata as public-safe integers in Hash API JSON and benchmark summaries. The intended fields are `first_block_worker_count` and `first_block_chunk_size`. This should not change default scheduling behavior; it only makes automatic worker count and chunking visible for future scans.
+- Measurement-only update: first-block scheduling metadata is now exposed as public-safe integers in Hash API JSON and benchmark summaries. The fields are `first_block_worker_count` and `first_block_chunk_size`. This does not change default scheduling behavior; it only makes automatic worker count and chunking visible for future scans.
+- A clean Release CUDA rebuild was needed after adding fields to `HashApiResult`; an incremental rebuild produced corrupted aggregate JSON fields before the clean rebuild. For future `HashApiResult` layout changes, prefer clean rebuild validation before trusting CLI benchmark output.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
@@ -483,14 +484,13 @@ Do not retry rejected experiments unless the implementation shape has changed en
 Start the next cycle from the latest clean commit and this decision tree:
 
 1. If the worktree is dirty, identify whether it is a previous-agent experiment. Revert only rejected experiments owned by the current goal.
-2. If the dirty files are the first-block scheduling metadata slice, finish that validation and commit it before starting a new experiment.
-3. Run the focused Hash API tests before editing performance code.
-4. Build or reuse the clean Release CUDA binary from the configured preset.
-5. Run the CUDA golden hash check before trusting benchmark data.
-6. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
-7. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
-8. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate.
-9. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
+2. Run the focused Hash API tests before editing performance code.
+3. Build or reuse the clean Release CUDA binary from the configured preset.
+4. Run the CUDA golden hash check before trusting benchmark data.
+5. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
+6. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
+7. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate.
+8. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
 
 Good next experiment shapes:
 
