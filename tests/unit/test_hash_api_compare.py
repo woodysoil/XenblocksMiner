@@ -22,6 +22,8 @@ def _run(
     key_mode: str = "generated",
     first_block_workers: int = 0,
     detailed_timings: bool = False,
+    first_block_worker_count: int = 0,
+    first_block_chunk_size: int = 0,
 ) -> dict:
     sequence = difficulty_sequence or []
     return {
@@ -68,6 +70,8 @@ def _run(
                 "nested_stage_pct": nested_stage_pct or {},
             },
             "first_block_workers": first_block_workers,
+            "first_block_worker_count": first_block_worker_count,
+            "first_block_chunk_size": first_block_chunk_size,
         },
     }
 
@@ -412,6 +416,8 @@ def test_format_text_outputs_automation_friendly_rows():
                 timing_per_attempt={"input_ms": 0.010, "compute_ms": 0.005},
                 stage_pct={"setup_ms": 20.0, "input_ms": 60.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 300.0},
+                first_block_worker_count=4,
+                first_block_chunk_size=16,
             )
         ),
         _report(
@@ -422,6 +428,8 @@ def test_format_text_outputs_automation_friendly_rows():
                 timing_per_attempt={"input_ms": 0.007, "compute_ms": 0.006},
                 stage_pct={"setup_ms": 10.0, "input_ms": 70.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 240.0},
+                first_block_worker_count=8,
+                first_block_chunk_size=8,
             )
         ),
     )
@@ -432,6 +440,12 @@ def test_format_text_outputs_automation_friendly_rows():
     assert "cuda-a,improved,100.000000,105.000000,5.000000,5.000" in text
     assert ",fixed,0," in text
     assert "2.000,2.000" in text
+    rows = list(csv.reader(io.StringIO(text)))
+    header = rows[0]
+    row = rows[1]
+    assert row[header.index("first_block_workers")] == "0"
+    assert row[header.index("first_block_worker_count")] == "8"
+    assert row[header.index("first_block_chunk_size")] == "8"
     assert "input_ms:-3.000ms" in text
     assert "input_ms:-0.003000ms/attempt" in text
     assert "input_ms:10.000pp" in text
