@@ -170,6 +170,7 @@ def scan_scenarios(
     device: int,
     warmup: int,
     repeat: int,
+    first_block_dynamic_chunk_auto: bool = False,
 ) -> list[BenchmarkScenario]:
     worker_caps = first_block_workers or [0]
     dynamic_chunk_sizes = first_block_dynamic_chunk_sizes or [0]
@@ -177,7 +178,8 @@ def scan_scenarios(
         BenchmarkScenario(
             name=f"{backend}-scan-d{difficulty}-b{batch_size}"
             + ("" if worker_cap == 0 else f"-fbw{worker_cap}")
-            + ("" if dynamic_chunk_size == 0 else f"-fbd{dynamic_chunk_size}"),
+            + ("" if dynamic_chunk_size == 0 else f"-fbd{dynamic_chunk_size}")
+            + ("-fbda" if first_block_dynamic_chunk_auto else ""),
             backend=backend,
             difficulty=difficulty,
             batch_size=batch_size,
@@ -187,6 +189,7 @@ def scan_scenarios(
             repeat=repeat,
             first_block_workers=worker_cap,
             first_block_dynamic_chunk_size=dynamic_chunk_size,
+            first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
             detailed_timings=detailed_timings,
         )
         for difficulty in difficulties
@@ -1165,6 +1168,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a CUDA first-block dynamic chunk size for generated scan scenarios. Use 0 for static chunking.",
     )
     parser.add_argument(
+        "--scan-first-block-dynamic-chunk-auto",
+        action="store_true",
+        help="Enable backend-selected first-block dynamic chunks for generated scan scenarios.",
+    )
+    parser.add_argument(
         "--scan-detailed-timings",
         action="store_true",
         help="Enable detailed timing diagnostics on generated scan scenarios.",
@@ -1229,6 +1237,7 @@ def main(argv: list[str]) -> int:
                     args.device,
                     args.warmup,
                     args.repeat,
+                    args.scan_first_block_dynamic_chunk_auto,
                 )
             )
         if args.difficulty_sequence or args.sequence_batch_size:

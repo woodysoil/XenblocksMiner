@@ -304,6 +304,25 @@ def test_scan_scenarios_can_scan_first_block_dynamic_chunks():
     assert [scenario.first_block_dynamic_chunk_size for scenario in scenarios] == [0, 64]
 
 
+def test_scan_scenarios_can_enable_first_block_dynamic_chunk_auto():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[8],
+        batch_sizes=[1024],
+        first_block_workers=[0],
+        first_block_dynamic_chunk_sizes=[],
+        detailed_timings=False,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+        first_block_dynamic_chunk_auto=True,
+    )
+
+    assert [scenario.name for scenario in scenarios] == ["cuda-scan-d8-b1024-fbda"]
+    assert [scenario.first_block_dynamic_chunk_auto for scenario in scenarios] == [True]
+
+
 def test_scan_scenarios_can_enable_detailed_timings():
     scenarios = benchmark.scan_scenarios(
         difficulties=[8],
@@ -1840,10 +1859,12 @@ def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
 def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     captured_names = []
     captured_detailed_timings = []
+    captured_dynamic_auto = []
 
     def fake_run_scenario(binary, salt, scenario):
         captured_names.append(scenario.name)
         captured_detailed_timings.append(scenario.detailed_timings)
+        captured_dynamic_auto.append(scenario.first_block_dynamic_chunk_auto)
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -1881,6 +1902,7 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
             "0",
             "--scan-first-block-dynamic-chunk-size",
             "64",
+            "--scan-first-block-dynamic-chunk-auto",
             "--scan-detailed-timings",
             "--output",
             str(output),
@@ -1889,16 +1911,17 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
 
     assert exit_code == 0
     assert captured_names == [
-        "cuda-scan-d1-b512",
-        "cuda-scan-d1-b512-fbd64",
-        "cuda-scan-d1-b1024",
-        "cuda-scan-d1-b1024-fbd64",
-        "cuda-scan-d8-b512",
-        "cuda-scan-d8-b512-fbd64",
-        "cuda-scan-d8-b1024",
-        "cuda-scan-d8-b1024-fbd64",
+        "cuda-scan-d1-b512-fbda",
+        "cuda-scan-d1-b512-fbd64-fbda",
+        "cuda-scan-d1-b1024-fbda",
+        "cuda-scan-d1-b1024-fbd64-fbda",
+        "cuda-scan-d8-b512-fbda",
+        "cuda-scan-d8-b512-fbd64-fbda",
+        "cuda-scan-d8-b1024-fbda",
+        "cuda-scan-d8-b1024-fbd64-fbda",
     ]
     assert captured_detailed_timings == [True] * 8
+    assert captured_dynamic_auto == [True] * 8
 
 
 def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):

@@ -634,6 +634,8 @@ Stable main-target scan:
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable-main-target.json
 ```
 
+Miner-equivalent generated CUDA batch scans should add `--scan-first-block-dynamic-chunk-auto` so the matrix uses the same backend-selected first-block chunk policy as mining batches.
+
 First-block worker-cap diagnostic scan:
 
 ```bash

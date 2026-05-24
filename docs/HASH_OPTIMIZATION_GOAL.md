@@ -64,7 +64,7 @@ Current progress:
 - Hash API comparison tooling can match by config while ignoring only detailed-timing mode with `--ignore-detailed-timings`, which helps compare default and diagnostic reports for the same scenario without changing other matching fields.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
-- CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers` and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
+- CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers`, can enable backend-selected first-block dynamic chunks with `--scan-first-block-dynamic-chunk-auto`, and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
 - CUDA Hash API scenarios can set `first_block_dynamic_chunk_size` / `--first-block-dynamic-chunk-size` to benchmark dynamic first-block chunk distribution. The default `0` keeps static chunking and current miner behavior; nonzero values are explicit experiments for worker start skew and load-balance diagnostics.
 - CUDA Hash API scenarios can opt into `first_block_dynamic_chunk_auto` / `--first-block-dynamic-chunk-auto` to benchmark backend-selected dynamic chunk sizing without changing explicit static `0` semantics. The conservative policy targets generated-key d1 and d8 batches with at least 1024 attempts: d1 selects chunk `16`, and d8 selects chunk `32`. Miner-generated CUDA batches now opt into this request-level policy for covered scenarios.
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
@@ -344,7 +344,7 @@ Serious comparison:
 For batch-size recommendations, prefer custom scan matrices over a single preset when tuning for a specific difficulty range:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/cuda-scan.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/cuda-scan.json
 ```
 
 Treat recommendations from 1-second scans as candidates only. Confirm them with longer repeated runs before changing defaults.
@@ -834,7 +834,7 @@ python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --de
 Serious batch scan:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/batch-scan-stable.json
 ```
 
 Before/after comparison:
