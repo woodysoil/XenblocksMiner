@@ -504,6 +504,8 @@ Measurement cautions:
 - Measurement-only smoke: a short d8/b256 generated CUDA run confirmed the dynamic chunk knob executes and reports `first_block_dynamic_chunk_size` correctly with normal benchmark trust. Static chunking reached about `50.6k H/s`; dynamic chunk size `64` reached about `45.6k H/s`. Treat this as a functionality smoke only, not a tuning claim, because it used one short sample.
 - Measurement-only update: dynamic first-block chunk scans are now useful tuning evidence. Current local evidence supports b1024 chunk `32`, b2048 chunk `16`, and b2048 chunk `32` as candidates for an explicit automatic-policy experiment. Keep chunk `64` diagnostic-only because the longer b2048 confirmation was unstable.
 - Measurement-only update: the automatic dynamic chunk policy is now an opt-in benchmark surface. Manual `first_block_dynamic_chunk_size` takes precedence over auto policy, and auto-disabled `0` remains forced static chunking.
+- Miner integration update: generated CUDA mining batches now opt into the automatic dynamic chunk policy. The backend still applies the policy only to covered generated-key d8 batches with at least 1024 attempts, so unsupported difficulties and small batches keep static chunking.
+- Post-integration validation: focused Hash API tests, a Release CUDA build, the CUDA golden hash, and a short miner-equivalent d8/b2048 auto smoke passed. The smoke reached `82.79k H/s` median with `3.96%` spread, selected dynamic chunk `32`, and kept normal benchmark trust. Treat this as integration validation; use longer confirmations for future default-policy claims.
 - A clean Release CUDA rebuild was needed after adding fields to `HashApiResult`; an incremental rebuild produced corrupted aggregate JSON fields before the clean rebuild. For future `HashApiResult` layout changes, prefer clean rebuild validation before trusting CLI benchmark output.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
@@ -526,7 +528,7 @@ Good next experiment shapes:
 - Add measurement that separates first-block digest expansion from scheduling overhead more clearly without adding default benchmark overhead.
 - Reduce generated first-block preparation allocations or copies if inspection finds a hot local allocation that is not already rejected.
 - Improve first-block scheduling or worker chunking behind a clear automatic-policy design. Preserve explicit `first_block_dynamic_chunk_size=0` as forced static chunking, and do not silently turn an existing static request into dynamic scheduling unless the request/CLI can distinguish auto from forced static.
-- Next scheduler-specific step: wire the opt-in auto policy into the miner-generated CUDA path for covered scenarios, then validate with focused tests, a clean CUDA build, the golden hash, and a short miner-equivalent Hash API benchmark. Preserve explicit CLI static and manual dynamic chunk behavior.
+- Next scheduler-specific step: run a post-integration short miner-equivalent Hash API benchmark, then use the next optimization cycle to inspect whether `input_ms` remains dominated by first-block preparation or whether setup/finalization should become the next bottleneck.
 - Improve architecture boundaries that let CUDA backend state, difficulty-derived setup, or timing metadata be reused safely without activation or runner lifetime regressions.
 
 ## Phase Plan

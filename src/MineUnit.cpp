@@ -107,6 +107,7 @@ hashapi::HashApiResult MineUnit::batchCompute(std::string salt, std::string keyP
 	request.batch_size = batchSize;
 	request.device_id = backend_.getDeviceInfo().index;
 	request.allow_xuni = is_within_five_minutes_of_hour();
+	request.first_block_dynamic_chunk_auto = true;
 	return hashBackend_.runBatch(request);
 }
 
