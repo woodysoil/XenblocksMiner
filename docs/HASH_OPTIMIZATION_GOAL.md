@@ -50,7 +50,7 @@ Current observations:
 
 - Generated batch paths can be dominated by `input_ms`, which includes CPU-side key generation and Argon2 first-block input preparation.
 - After CUDA first-block preparation was parallelized across CPU worker threads for generated-key batches, `input_ms` still dominates larger batch paths, but viable batch sizes shifted upward.
-- Repeated main-target-only scans on a CUDA-capable local GPU support d1/b512 as the conservative low-difficulty default. Treat this as local evidence only, not a universal hardware limit.
+- Repeated main-target-only scans on a CUDA-capable local GPU support d1/b512 and d8/b2048 as current conservative low-difficulty defaults. Treat this as local evidence only, not a universal hardware limit.
 - Miner auto batch selection now applies conservative low-difficulty candidates only when no manual batch limit is configured; unsupported difficulty ranges still fall back to the memory-limited batch size.
 - d64 batch-size scans have been noisy and should not be used to change defaults without stronger repeated evidence.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
@@ -364,6 +364,7 @@ Known useful changes already made:
 - main-target-only benchmark mode for measuring normal mining without secondary XUNI matching
 - per-attempt benchmark timing summaries and full recommendation candidate reporting
 - d1 CUDA default batch size raised to 512 when no explicit user batch-size limit is configured
+- d8 CUDA default batch size raised to 2048 when no explicit user batch-size limit is configured
 
 Rejected or risky experiments:
 
