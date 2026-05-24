@@ -374,6 +374,7 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "matches": len(result.get("matches", [])),
         "ok": bool(result.get("ok")),
         "error": result.get("error", ""),
+        "process_exit_code": result.get("process_exit_code", 0),
     }
 
 
@@ -591,12 +592,31 @@ def run_hash_command(command: list[str]) -> dict[str, Any]:
             "stdout": completed.stdout,
             "stderr": completed.stderr,
         }
+    if completed.returncode != 0:
+        result = {
+            **result,
+            "ok": False,
+            "error": str(result.get("error") or f"process exited with code {completed.returncode}"),
+            "process_exit_code": completed.returncode,
+        }
 
     return {
         "exit_code": completed.returncode,
         "wall_elapsed_ms": elapsed_ms,
         "result": result,
     }
+
+
+def run_failure_errors(runs: list[dict[str, Any]]) -> list[str]:
+    errors: list[str] = []
+    for run in runs:
+        exit_code = int(run.get("exit_code", 0) or 0)
+        result = run.get("result") or {}
+        if exit_code != 0:
+            errors.append(str(result.get("error") or f"process exited with code {exit_code}"))
+        elif not result.get("ok"):
+            errors.append(str(result.get("error") or "hash-benchmark failed"))
+    return errors
 
 
 def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[str, Any]:
@@ -616,6 +636,15 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
     selected_result = iterations[selected_index]["result"] if iterations else {}
     all_runs = warmup_runs + iterations
     ok = bool(all_runs) and all(item["exit_code"] == 0 and item["result"].get("ok") for item in all_runs)
+    if not ok:
+        aggregate["ok"] = False
+        errors = [str(aggregate.get("error") or ""), *run_failure_errors(all_runs)]
+        aggregate["error"] = "; ".join(dict.fromkeys(error for error in errors if error))
+        aggregate["process_exit_codes"] = [
+            int(item["exit_code"])
+            for item in all_runs
+            if int(item.get("exit_code", 0) or 0) != 0
+        ]
 
     return {
         "scenario": asdict(scenario),

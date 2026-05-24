@@ -305,6 +305,31 @@ def test_summarize_iterations_reports_sequence_metadata():
     assert aggregate["difficulty_changes"] == 3
 
 
+def test_summarize_iterations_marks_nonzero_process_exit_invalid():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-crash",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        repeat=2,
+    )
+    ok_summary = _summary(100.0, attempts=100)
+    crashed_summary = {
+        **_summary(120.0, attempts=120),
+        "ok": False,
+        "error": "process exited with code 3221225477",
+        "process_exit_code": 3221225477,
+    }
+
+    aggregate = benchmark.summarize_iterations(scenario, [ok_summary, crashed_summary])
+
+    assert aggregate["ok"] is False
+    assert aggregate["attempts"] == 100
+    assert aggregate["hashrate"] == 100.0
+    assert aggregate["error"] == "process exited with code 3221225477"
+
+
 def test_summarize_iterations_reports_fixed_key_mode():
     scenario = benchmark.BenchmarkScenario(
         name="cuda-fixed",
@@ -560,6 +585,26 @@ def test_build_recommendations_ignores_fixed_key_runs():
     assert len(recommendations["candidates_by_difficulty"][0]["candidates"]) == 1
 
 
+def test_build_recommendations_ignores_process_exit_failures():
+    runs = [
+        {
+            "summary": {
+                **_summary(500.0, ok=False),
+                "name": "d8-crashed",
+                "difficulty": 8,
+                "batch_size": 2048,
+                "process_exit_code": 3221225477,
+                "error": "process exited with code 3221225477",
+            }
+        }
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["batch_size_by_difficulty"] == []
+    assert recommendations["candidates_by_difficulty"] == []
+
+
 def test_build_sanitized_report_drops_private_fields():
     fixed_key = "0" * 64
     report = {
@@ -677,6 +722,98 @@ def test_run_scenario_records_warmup_iterations_and_selects_median_result(monkey
     assert result["summary"]["median_hashrate"] == 103.0
     assert result["summary"]["timings"]["compute_ms"] == 103.0
     assert result["exit_code"] == 0
+
+
+def test_run_scenario_treats_nonzero_exit_with_valid_json_as_failure(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run(command, text, capture_output, check):
+        calls["count"] += 1
+        return SimpleNamespace(
+            returncode=3221225477,
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "backend": "cuda",
+                    "device_id": 0,
+                    "batch_size": 2048,
+                    "attempts": 2048,
+                    "elapsed_ms": 1000.0,
+                    "hashrate": 2048.0,
+                    "timings": {"compute_ms": 1.0},
+                    "matches": [],
+                    "error": "",
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-crash",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        warmup=1,
+        repeat=2,
+    )
+
+    result = benchmark.run_scenario(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert calls["count"] == 3
+    assert result["exit_code"] == 2
+    assert result["summary"]["ok"] is False
+    assert result["summary"]["attempts"] == 0
+    assert "process exited with code 3221225477" in result["summary"]["error"]
+    assert result["iterations"][0]["result"]["ok"] is False
+    assert result["iterations"][0]["result"]["process_exit_code"] == 3221225477
+
+
+def test_run_scenario_treats_warmup_nonzero_exit_as_summary_failure(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run(command, text, capture_output, check):
+        calls["count"] += 1
+        returncode = 3221225477 if calls["count"] == 1 else 0
+        return SimpleNamespace(
+            returncode=returncode,
+            stdout=json.dumps(
+                {
+                    "ok": True,
+                    "backend": "cuda",
+                    "device_id": 0,
+                    "batch_size": 2048,
+                    "attempts": 2048,
+                    "elapsed_ms": 1000.0,
+                    "hashrate": 2048.0,
+                    "timings": {"compute_ms": 1.0},
+                    "matches": [],
+                    "error": "",
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(benchmark.subprocess, "run", fake_run)
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-warmup-crash",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        warmup=1,
+        repeat=1,
+    )
+
+    result = benchmark.run_scenario(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert result["exit_code"] == 2
+    assert result["summary"]["ok"] is False
+    assert result["summary"]["attempts"] == 2048
+    assert result["summary"]["hashrate"] == 2048.0
+    assert result["summary"]["process_exit_codes"] == [3221225477]
+    assert "process exited with code 3221225477" in result["summary"]["error"]
 
 
 def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
