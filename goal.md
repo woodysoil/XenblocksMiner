@@ -107,8 +107,10 @@ This section should be refreshed whenever it would prevent duplicated work after
 - The branch can be ahead of the remote during autonomous work. Ahead commits are retained local progress unless the user explicitly asks to squash, reorder, push, or rewrite history.
 - The Hash API extraction is already usable for isolated optimization. The current stable automation surface is the CLI adapter: `hash-one`, `hash-batch`, and `hash-benchmark`.
 - "CLI API" means those command-line Hash API entrypoints. It is not the frontend, websocket layer, marketplace API, wallet flow, or hosted HTTP API.
-- Current trusted Release continuity evidence for generated-key CUDA d8/b2048 is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence is still useful continuity context but should not override newer trusted evidence.
-- Current timing evidence still points at CPU-side generated input and first-block preparation as the dominant bottleneck for the d8/b2048 generated-key path.
+- Current trusted Release continuity evidence for generated-key CUDA d8/b2048 static/default behavior is about `79.2k H/s` median with normal benchmark trust. Older `78.3k H/s` evidence is still useful continuity context but should not override newer trusted evidence.
+- Current accepted optimization evidence supports the automatic first-block dynamic chunk policy for covered generated-key CUDA d8 batches. The latest longer same-settings confirmation reached about `87.16k H/s` median at d8/b2048, about `+8.1%` over the matching static run, with normal benchmark trust.
+- Latest detailed post-auto timing evidence is diagnostic rather than a final performance claim: d8/b1024 auto reached about `82.50k H/s` median with `0.89%` spread, and d8/b2048 auto reached about `89.54k H/s` median with `0.48%` spread in a short repeat-2 detailed run.
+- Current timing evidence still points at CPU-side generated input and first-block preparation as the dominant bottleneck for the d8/b1024 and d8/b2048 generated-key path. Post-auto detailed timing still shows `input_ms` at about `57-59%` of wall time and `first_block_ms` at about `53-54%`.
 - The first-block scheduling metadata slice is complete. Hash API JSON and benchmark summaries now expose `first_block_worker_count` and `first_block_chunk_size`; commit `a19d069` validated it with focused tests, a clean Release CUDA rebuild, the golden CUDA hash, and a short CUDA smoke.
 - After the metadata slice, a clean-binary d8/b2048 refresh produced about `61.99k H/s` median with normal benchmark trust and automatic first-block scheduling metadata. Treat it as current clean-binary local evidence, but do not replace the higher trusted `79.2k H/s` best result without a newer stable confirmation.
 - Detailed post-metadata timing still shows `input_ms` and `first_block_ms` as dominant. The first default optimization track remains generated input and first-block preparation unless newer detailed timings contradict it.
@@ -116,8 +118,9 @@ This section should be refreshed whenever it would prevent duplicated work after
 - Detailed first-block scheduling timing also exposes thread launch time, worker start skew, and worker finish span. Use those fields to decide whether scheduler work should target thread creation/start latency, worker-loop balance, or post-worker join overhead.
 - Latest finish-overhead diagnostics show first-block wall time is almost entirely explained by worker-local work and the latest worker finish, while post-worker join/accounting overhead is small. Do not spend the next optimization cycle on post-join cleanup; focus on worker start skew, worker-local digest cost, or a safer first-block architecture measurement instead.
 - Dynamic first-block chunk scheduling is available as an explicit benchmark knob. The default `first_block_dynamic_chunk_size=0` still means static chunking. Current local evidence supports chunk `32` at d8/b1024 and chunk `16` or `32` at d8/b2048, with chunk `16` best in the latest b2048 confirmation. Do not silently change explicit static requests; design any default or auto policy with clear override semantics.
-- The first automatic dynamic chunk policy should be opt-in through `first_block_dynamic_chunk_auto`, not a miner default. Manual nonzero chunk sizes take precedence, and auto-disabled `0` remains forced static chunking.
-- The opt-in auto policy now selects chunk `32` for generated-key d8 CUDA batches with at least 1024 attempts. Longer same-settings confirmation was stable and positive for b1024 and b2048. Miner-generated CUDA batches now opt into this policy while explicit CLI static and manual dynamic chunk behavior remains preserved.
+- The automatic dynamic chunk policy remains request-level opt-in through `first_block_dynamic_chunk_auto`. Manual nonzero chunk sizes take precedence, and auto-disabled `0` remains forced static chunking for explicit CLI/manual paths.
+- The auto policy now selects chunk `32` for generated-key d8 CUDA batches with at least 1024 attempts. Longer same-settings confirmation was stable and positive for b1024 and b2048. Miner-generated CUDA batches opt into this policy while explicit CLI static and manual dynamic chunk behavior remains preserved.
+- The next default optimization target is no longer adding the auto chunk policy. Start from post-auto detailed timing and inspect first-block digest/preparation structure, generated input materialization, or a carefully measured finalization path if newer timings show `finalize_ms` overtaking first-block cost.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 
@@ -651,10 +654,11 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 7. Run a short main-target CUDA benchmark.
 8. Run or load repeated d8/b2048 and d8/b1024 baselines because recent useful evidence used both scenarios.
 9. Use detailed timings to confirm the current dominant bottleneck, especially `input_ms`, key generation, first-block preparation, setup, transfers, compute, and finalization.
-10. For the next scheduler-specific code step, inspect request parsing and CUDA tuning helpers, then add the smallest testable automatic dynamic-chunk policy while preserving explicit static `0` semantics.
-11. Do not retry rejected pinned host staging, CUDA activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.
-12. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
-13. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
+10. For the next code step, use post-auto detailed timing to choose one measurable Track C or Track D slice. Prefer first-block digest/preparation structure, generated input materialization, or carefully isolated finalization work over more scheduler policy work unless newer evidence points back to scheduling.
+11. Do not spend the next cycle on post-worker join/accounting cleanup; post-auto detailed timing shows post-worker overhead is small relative to first-block worker-local work.
+12. Do not retry rejected pinned host staging, CUDA activation caching, salt decode, digestLong static constants, `_rotr64`, sigma table, or first-block lane fast-path experiments unless the implementation shape has materially changed.
+13. Prefer input preparation and setup/measurement improvements before speculative CUDA kernel rewrites.
+14. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
 
 Known accepted and rejected experiments are documented in `docs/HASH_OPTIMIZATION_GOAL.md`. Do not retry rejected experiments unless the implementation shape has materially changed and the new attempt includes correctness checks.
 
