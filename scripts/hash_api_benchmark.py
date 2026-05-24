@@ -727,6 +727,8 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "device_id": int(summary.get("device_id", 0)),
             "difficulty": int(summary.get("difficulty", 0)),
             "batch_size": int(summary.get("batch_size", 0)),
+            "first_block_worker_count": int(summary.get("first_block_worker_count", 0) or 0),
+            "first_block_chunk_size": int(summary.get("first_block_chunk_size", 0) or 0),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "min_hashrate": float(summary.get("min_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "max_hashrate": float(summary.get("max_hashrate", summary.get("hashrate", 0.0)) or 0.0),

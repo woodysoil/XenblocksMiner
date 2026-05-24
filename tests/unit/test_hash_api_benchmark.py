@@ -17,6 +17,8 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "difficulty": 1,
         "batch_size": 2,
         "attempts": attempts,
+        "first_block_worker_count": 0,
+        "first_block_chunk_size": 0,
         "elapsed_ms": 1000.0,
         "hashrate": hashrate,
         "timings": timings or {},
@@ -728,6 +730,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "name": "d1-b128",
                 "difficulty": 1,
                 "batch_size": 128,
+                "first_block_worker_count": 4,
+                "first_block_chunk_size": 32,
                 "hashrate_spread_pct": 5.0,
                 "timing_analysis": {"dominant_stage": "input_ms", "dominant_stage_pct": 75.0},
             }
@@ -759,6 +763,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 1,
             "batch_size": 128,
+            "first_block_worker_count": 4,
+            "first_block_chunk_size": 32,
             "median_hashrate": 150.0,
             "min_hashrate": 150.0,
             "max_hashrate": 150.0,
@@ -775,6 +781,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 8,
             "batch_size": 64,
+            "first_block_worker_count": 0,
+            "first_block_chunk_size": 0,
             "median_hashrate": 120.0,
             "min_hashrate": 120.0,
             "max_hashrate": 120.0,
@@ -790,6 +798,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     assert recommendations["candidates_by_difficulty"][0]["difficulty"] == 1
     assert [item["batch_size"] for item in recommendations["candidates_by_difficulty"][0]["candidates"]] == [64, 128]
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["stable"] is True
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_worker_count"] == 4
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size"] == 32
 
 
 def test_build_recommendations_prefers_stable_candidate_over_noisy_higher_median():
