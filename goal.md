@@ -12,6 +12,22 @@ This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.
 
 The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, and the documented completion rule.
 
+## Long-Run State Model
+
+Treat this file as the stable entrypoint and `docs/HASH_OPTIMIZATION_GOAL.md` as the detailed state ledger. A long-running `/goal` agent should keep enough state in committed English text that another agent can resume without private terminal history.
+
+Every accepted or rejected performance iteration should update the detailed goal document when the result changes future decisions. The update should answer:
+
+- what scenario was measured
+- which bottleneck was targeted
+- what changed
+- which correctness checks passed
+- what the before/after median throughput was, if this was a performance code change
+- whether the result is accepted, rejected, or measurement-only
+- what the next measurable experiment should be
+
+Do not store private raw reports in git. Store raw JSON and stdout only under ignored local benchmark directories, then summarize public-safe findings in docs or commit bodies when the finding matters.
+
 ## Active Goal Objective
 
 Run an autonomous, long-lived optimization loop for the extracted Hash API and CUDA backend. The practical target is to reduce time per real hash attempt as far as possible for the fixed workload:
@@ -34,6 +50,7 @@ This goal follows the strongest Codex Goal shape and is designed for unattended 
 - Boundaries: focus on `src/hashapi/`, CUDA backend files, Argon2/Blake2b hot paths, benchmark scripts, tests, and narrowly related integration code.
 - Iteration policy: choose the next experiment from measured timing bottlenecks, validate correctness before trusting speed, commit useful stable slices, then immediately continue to the next measurable bottleneck.
 - Blocked stop condition: stop only when a listed stop condition is reached, no defensible optimization path remains, required tooling is unavailable, or public history rewrite decisions need the user.
+- State policy: keep the goal files, commit messages, and benchmark summaries useful to future automation while keeping local paths, usernames, hostnames, private hardware identifiers, secrets, and raw reports out of tracked history.
 
 The agent should not ask for approval during normal local optimization cycles. Builds, tests, CUDA smoke checks, benchmark runs, ignored local artifacts, scoped source edits, scoped documentation edits, and small validated commits are expected parts of the loop.
 
@@ -119,6 +136,7 @@ This checkpoint exists so a long-running `/goal` session can resume without rein
 - That CLI surface is the current stable driver for AI optimization loops, benchmarks, correctness checks, and future embedding work.
 - It is not the marketplace, wallet, frontend, websocket, or hosted HTTP platform API.
 - Local commits ahead of the remote branch are retained local progress. Do not assume they were lost; verify with `git status -sb` and `git log`.
+- The current benchmark harness can scan difficulty, batch size, and CUDA first-block worker caps. First-block worker caps are tuning parameters for measurement, not a default behavior change unless stable repeated evidence supports it.
 - Recent timing evidence shows generated CUDA d8/b2048 work is usually CPU-side dominated by `input_ms`, especially first-block preparation, while `setup_ms` and transfer timings are still useful secondary targets.
 - Recent rejected experiments include CUDA activation caching, pinned host staging buffers, a lanes==1 first-block fast path, and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
 - If there is no newer evidence, the next default work is to refresh d8/b2048 and d8/b1024 CUDA baselines, inspect detailed `input_ms` and first-block timing, then choose the smallest input/setup/backend-boundary improvement that preserves the Hash API contract.
@@ -202,6 +220,8 @@ Pause only for the stop conditions in this file. Do not pause just because a bui
 
 When a command takes a long time, let it run to completion and continue from the result. Do not ask the user to approve routine rebuilds, CUDA checks, or repeated benchmarks.
 
+If a local command fails because a dependency or CUDA build is unavailable, record the blocker in English, fall back to the narrowest available validation, and continue with measurement/tooling/code work that does not require the unavailable dependency. Stop only when no useful next step remains.
+
 ## Privacy And Public History
 
 This is a public open-source repository. Keep docs and git history clean.
@@ -268,8 +288,9 @@ Use this queue as the default order when no newer evidence is available:
 7. If `compute_ms` dominates, inspect CUDA allocation churn, transfer cost, launch geometry, memory behavior, occupancy, and kernel timing.
 8. If `finalize_ms` dominates, use the nested finalization timings before changing hash finalization, base64 encoding, matching, or result collection.
 9. When single-scenario gains flatten, run variable-`m=diff` and batch-scan scenarios to avoid overfitting one local setting.
-10. After stable cross-scenario evidence exists, add or improve autotuning based on public CUDA device properties and measured stability.
-11. Keep accepted and rejected experiments documented so future long-running agents do not repeat failed work.
+10. Use first-block worker-cap scans as a diagnostic axis when `first_block_ms` or `input_ms` dominates, but keep automatic worker behavior as the default unless longer repeated evidence is stable.
+11. After stable cross-scenario evidence exists, add or improve autotuning based on public CUDA device properties and measured stability.
+12. Keep accepted and rejected experiments documented so future long-running agents do not repeat failed work.
 
 A structural cleanup can be the next iteration if it directly enables one of these work items or improves the reliability of future measurements.
 
@@ -363,6 +384,12 @@ Stable main-target scan:
 
 ```bash
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable-main-target.json
+```
+
+First-block worker-cap diagnostic scan:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 4 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 8 --scan-batch-size 1024 --scan-batch-size 2048 --scan-first-block-workers 0 --scan-first-block-workers 4 --scan-first-block-workers 8 --output .benchmarks/first-block-worker-scan.json --sanitized-output .benchmarks/first-block-worker-scan-summary.json
 ```
 
 Before/after comparison:
