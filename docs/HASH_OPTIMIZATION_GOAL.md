@@ -40,6 +40,7 @@ Current progress:
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
+- Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.

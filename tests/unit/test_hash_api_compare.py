@@ -14,13 +14,17 @@ def _run(
     hashrate: float,
     ok: bool = True,
     timings: dict | None = None,
+    timing_per_attempt: dict | None = None,
     spread_pct: float = 2.0,
+    difficulty_sequence: list[int] | None = None,
 ) -> dict:
+    sequence = difficulty_sequence or []
     return {
         "scenario": {
             "name": name,
             "backend": "cuda",
             "difficulty": 1,
+            "difficulty_sequence": sequence,
             "batch_size": 64,
             "seconds": 3,
             "device": 0,
@@ -40,12 +44,16 @@ def _run(
             "min_hashrate": hashrate - 1,
             "max_hashrate": hashrate + 1,
             "hashrate_spread_pct": spread_pct,
+            "difficulty_mode": "sequence" if sequence else "fixed",
+            "difficulty_sequence": sequence,
+            "difficulty_changes": sum(1 for index in range(1, len(sequence)) if sequence[index] != sequence[index - 1]),
             "matches": 0,
             "ok": ok,
             "error": "" if ok else "failed",
             "warmup": 1,
             "repeat": 3,
             "timings": timings or {},
+            "timing_per_attempt": timing_per_attempt or {},
         },
     }
 
@@ -105,6 +113,34 @@ def test_compare_reports_includes_timing_deltas():
     assert timing_deltas["compute_ms"]["delta_ms"] == 1.0
 
 
+def test_compare_reports_includes_timing_per_attempt_deltas():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, timing_per_attempt={"input_ms": 0.010, "compute_ms": 0.005})),
+        _report(_run("cuda-a", 120.0, timing_per_attempt={"input_ms": 0.008, "compute_ms": 0.006})),
+    )
+
+    timing_deltas = result["comparisons"][0]["timing_per_attempt_deltas"]
+
+    assert timing_deltas["input_ms"]["before_ms_per_attempt"] == 0.010
+    assert timing_deltas["input_ms"]["after_ms_per_attempt"] == 0.008
+    assert timing_deltas["input_ms"]["delta_ms_per_attempt"] == -0.002
+    assert timing_deltas["input_ms"]["change_pct"] == -20.0
+    assert timing_deltas["compute_ms"]["delta_ms_per_attempt"] == 0.001
+
+
+def test_compare_reports_includes_difficulty_sequence_metadata():
+    result = compare.compare_reports(
+        _report(_run("cuda-seq", 100.0, difficulty_sequence=[1, 8, 1, 8])),
+        _report(_run("cuda-seq", 120.0, difficulty_sequence=[1, 8, 1, 8])),
+    )
+
+    item = result["comparisons"][0]
+
+    assert item["difficulty_mode"] == "sequence"
+    assert item["difficulty_sequence"] == [1, 8, 1, 8]
+    assert item["difficulty_changes"] == 3
+
+
 def test_compare_reports_reports_missing_scenarios():
     result = compare.compare_reports(
         _report(_run("before-only", 100.0)),
@@ -145,16 +181,32 @@ def test_main_outputs_json_and_fails_on_regression(tmp_path, capsys):
 
 def test_format_text_outputs_automation_friendly_rows():
     result = compare.compare_reports(
-        _report(_run("cuda-a", 100.0, timings={"input_ms": 10.0, "compute_ms": 5.0})),
-        _report(_run("cuda-a", 105.0, timings={"input_ms": 7.0, "compute_ms": 6.0})),
+        _report(
+            _run(
+                "cuda-a",
+                100.0,
+                timings={"input_ms": 10.0, "compute_ms": 5.0},
+                timing_per_attempt={"input_ms": 0.010, "compute_ms": 0.005},
+            )
+        ),
+        _report(
+            _run(
+                "cuda-a",
+                105.0,
+                timings={"input_ms": 7.0, "compute_ms": 6.0},
+                timing_per_attempt={"input_ms": 0.007, "compute_ms": 0.006},
+            )
+        ),
     )
 
     text = compare.format_text(result)
 
     assert text.splitlines()[0].startswith("scenario,status,before_hashrate")
     assert "cuda-a,improved,100.000000,105.000000,5.000000,5.000" in text
+    assert ",fixed,0," in text
     assert "2.000,2.000" in text
     assert "input_ms:-3.000ms" in text
+    assert "input_ms:-0.003000ms/attempt" in text
 
 
 def test_format_text_escapes_csv_fields():

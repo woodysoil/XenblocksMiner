@@ -66,7 +66,11 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "min_hashrate": _float_value(summary, "min_hashrate", _float_value(summary, "hashrate", 0.0)),
         "max_hashrate": _float_value(summary, "max_hashrate", _float_value(summary, "hashrate", 0.0)),
         "hashrate_spread_pct": _float_value(summary, "hashrate_spread_pct", 0.0),
+        "difficulty_mode": str(summary.get("difficulty_mode") or scenario.get("difficulty_mode") or "fixed"),
+        "difficulty_sequence": summary.get("difficulty_sequence") or scenario.get("difficulty_sequence") or [],
+        "difficulty_changes": _int_value(summary, "difficulty_changes", _int_value(scenario, "difficulty_changes", 0)),
         "timings": summary.get("timings", {}),
+        "timing_per_attempt": summary.get("timing_per_attempt", {}),
         "matches": _int_value(summary, "matches", 0),
         "ok": bool(summary.get("ok")),
         "error": str(summary.get("error") or ""),
@@ -102,6 +106,27 @@ def compare_timings(before: dict[str, Any] | None, after: dict[str, Any] | None)
             "before_ms": before_value,
             "after_ms": after_value,
             "delta_ms": after_value - before_value,
+            "change_pct": _percent_change(before_value, after_value),
+        }
+
+    return comparison
+
+
+def compare_timing_per_attempt(
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
+) -> dict[str, dict[str, float | None]]:
+    before_timings = (before or {}).get("timing_per_attempt") or {}
+    after_timings = (after or {}).get("timing_per_attempt") or {}
+    comparison: dict[str, dict[str, float | None]] = {}
+
+    for key in sorted(set(before_timings) | set(after_timings)):
+        before_value = _float_value(before_timings, key, 0.0)
+        after_value = _float_value(after_timings, key, 0.0)
+        comparison[key] = {
+            "before_ms_per_attempt": before_value,
+            "after_ms_per_attempt": after_value,
+            "delta_ms_per_attempt": after_value - before_value,
             "change_pct": _percent_change(before_value, after_value),
         }
 
@@ -165,11 +190,15 @@ def compare_reports(
                 "backend": (after or before or {}).get("backend", ""),
                 "device_id": (after or before or {}).get("device_id", 0),
                 "difficulty": (after or before or {}).get("difficulty", 0),
+                "difficulty_mode": (after or before or {}).get("difficulty_mode", "fixed"),
+                "difficulty_sequence": (after or before or {}).get("difficulty_sequence", []),
+                "difficulty_changes": (after or before or {}).get("difficulty_changes", 0),
                 "batch_size": (after or before or {}).get("batch_size", 0),
                 "seconds": (after or before or {}).get("seconds", 0),
                 "warmup": (after or before or {}).get("warmup", 0),
                 "repeat": (after or before or {}).get("repeat", 1),
                 "timing_deltas": compare_timings(before, after),
+                "timing_per_attempt_deltas": compare_timing_per_attempt(before, after),
                 "before": before,
                 "after": after,
             }
@@ -208,6 +237,8 @@ def format_text(report: Report) -> str:
             "change_pct",
             "backend",
             "difficulty",
+            "difficulty_mode",
+            "difficulty_changes",
             "batch_size",
             "before_spread_pct",
             "after_spread_pct",
@@ -215,6 +246,7 @@ def format_text(report: Report) -> str:
             "warmup",
             "repeat",
             "dominant_timing_delta",
+            "dominant_timing_per_attempt_delta",
         ]
     )
     for item in report["comparisons"]:
@@ -227,6 +259,16 @@ def format_text(report: Report) -> str:
                 key=lambda pair: abs(float(pair[1].get("delta_ms") or 0.0)),
             )
             dominant_timing_delta = f"{dominant_stage}:{float(dominant_delta.get('delta_ms') or 0.0):.3f}ms"
+        per_attempt_deltas = item.get("timing_per_attempt_deltas") or {}
+        dominant_per_attempt_delta = ""
+        if per_attempt_deltas:
+            dominant_stage, dominant_delta = max(
+                per_attempt_deltas.items(),
+                key=lambda pair: abs(float(pair[1].get("delta_ms_per_attempt") or 0.0)),
+            )
+            dominant_per_attempt_delta = (
+                f"{dominant_stage}:{float(dominant_delta.get('delta_ms_per_attempt') or 0.0):.6f}ms/attempt"
+            )
         writer.writerow(
             [
                 item["name"],
@@ -237,6 +279,8 @@ def format_text(report: Report) -> str:
                 change,
                 str(item["backend"]),
                 str(item["difficulty"]),
+                str(item["difficulty_mode"]),
+                str(item["difficulty_changes"]),
                 str(item["batch_size"]),
                 f"{item['before_spread_pct']:.3f}",
                 f"{item['after_spread_pct']:.3f}",
@@ -244,6 +288,7 @@ def format_text(report: Report) -> str:
                 str(item["warmup"]),
                 str(item["repeat"]),
                 dominant_timing_delta,
+                dominant_per_attempt_delta,
             ]
         )
     return output.getvalue().rstrip("\n")
