@@ -75,6 +75,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
             "detailed_timings",
             _bool_value(scenario, "detailed_timings", False),
         ),
+        "first_block_workers": _int_value(summary, "first_block_workers", _int_value(scenario, "first_block_workers", 0)),
         "attempts": _int_value(summary, "attempts", 0),
         "elapsed_ms": _float_value(summary, "elapsed_ms", 0.0),
         "hashrate": _float_value(summary, "hashrate", 0.0),
@@ -110,6 +111,7 @@ def run_config_key(run: dict[str, Any]) -> tuple[Any, ...]:
         run["repeat"],
         run["allow_xuni"],
         run["detailed_timings"],
+        run["first_block_workers"],
     )
 
 
@@ -138,6 +140,7 @@ def format_run_key(key: RunKey) -> str:
         repeat,
         allow_xuni,
         detailed_timings,
+        first_block_workers,
     ) = key
     if difficulty_mode == "sequence":
         difficulty_label = "x".join(str(item) for item in difficulty_sequence)
@@ -148,7 +151,7 @@ def format_run_key(key: RunKey) -> str:
     return (
         f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size}:"
         f"{key_mode}:changes{difficulty_changes}:s{seconds}:w{warmup}:r{repeat}:"
-        f"{xuni_label}:{detail_label}"
+        f"{xuni_label}:{detail_label}:fbw{first_block_workers}"
     )
 
 
@@ -309,6 +312,7 @@ def compare_reports(
                 "seconds": (after or before or {}).get("seconds", 0),
                 "warmup": (after or before or {}).get("warmup", 0),
                 "repeat": (after or before or {}).get("repeat", 1),
+                "first_block_workers": (after or before or {}).get("first_block_workers", 0),
                 "timing_deltas": compare_timings(before, after),
                 "timing_per_attempt_deltas": compare_timing_per_attempt(before, after),
                 "nested_stage_pct_deltas": compare_nested_stage_pct(before, after),

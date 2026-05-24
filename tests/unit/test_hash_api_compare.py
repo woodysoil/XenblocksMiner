@@ -19,6 +19,7 @@ def _run(
     spread_pct: float = 2.0,
     difficulty_sequence: list[int] | None = None,
     key_mode: str = "generated",
+    first_block_workers: int = 0,
 ) -> dict:
     sequence = difficulty_sequence or []
     return {
@@ -33,6 +34,7 @@ def _run(
             "device": 0,
             "warmup": 1,
             "repeat": 3,
+            "first_block_workers": first_block_workers,
         },
         "summary": {
             "name": name,
@@ -59,6 +61,7 @@ def _run(
             "timings": timings or {},
             "timing_per_attempt": timing_per_attempt or {},
             "timing_analysis": {"nested_stage_pct": nested_stage_pct or {}},
+            "first_block_workers": first_block_workers,
         },
     }
 
@@ -228,6 +231,19 @@ def test_compare_reports_config_match_separates_different_settings():
 
     statuses = sorted(item["status"] for item in result["comparisons"])
     assert statuses == ["missing-after", "missing-before"]
+
+
+def test_compare_reports_config_match_separates_first_block_workers():
+    result = compare.compare_reports(
+        _report(_run("auto-workers", 100.0, first_block_workers=0)),
+        _report(_run("four-workers", 110.0, first_block_workers=4)),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+    assert {item["first_block_workers"] for item in result["comparisons"]} == {0, 4}
+    assert any("fbw4" in item["match_key"] for item in result["comparisons"])
 
 
 def test_compare_reports_rejects_duplicate_names():

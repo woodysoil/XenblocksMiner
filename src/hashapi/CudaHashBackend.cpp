@@ -41,7 +41,7 @@ void fillPasswordBlock(ComputeBackend& backend,
     }
 }
 
-std::size_t firstBlockWorkerCount(std::size_t attempts)
+std::size_t firstBlockWorkerCount(std::size_t attempts, std::size_t worker_cap)
 {
     if (attempts < kMinParallelFirstBlockAttempts) {
         return 1;
@@ -52,16 +52,21 @@ std::size_t firstBlockWorkerCount(std::size_t attempts)
         return 1;
     }
 
-    return std::min<std::size_t>(attempts, hardware_threads);
+    std::size_t worker_count = std::min<std::size_t>(attempts, hardware_threads);
+    if (worker_cap > 0) {
+        worker_count = std::min(worker_count, worker_cap);
+    }
+    return std::max<std::size_t>(1, worker_count);
 }
 
 void fillPasswordBlocks(ComputeBackend& backend,
                         const Argon2Params& params,
                         const std::vector<std::string>& passwords,
+                        std::size_t worker_cap,
                         Argon2FirstBlockTimings* timings)
 {
     const std::size_t attempts = passwords.size();
-    const std::size_t worker_count = firstBlockWorkerCount(attempts);
+    const std::size_t worker_count = firstBlockWorkerCount(attempts, worker_cap);
     if (worker_count <= 1) {
         for (std::size_t i = 0; i < attempts; ++i) {
             fillPasswordBlock(backend, params, i, passwords[i], timings);
@@ -225,7 +230,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         password_storage_.clear();
         password_storage_.reserve(attempts);
 
-        if (firstBlockWorkerCount(attempts) <= 1) {
+        if (firstBlockWorkerCount(attempts, request.first_block_workers) <= 1) {
             if (single_key) {
                 const auto keygen_start = std::chrono::steady_clock::now();
                 password_storage_.push_back(fixed_key);
@@ -260,7 +265,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             result.timings.keygen_ms = elapsedMillis(keygen_start, std::chrono::steady_clock::now());
 
             const auto first_block_start = std::chrono::steady_clock::now();
-            fillPasswordBlocks(compute_backend, params, password_storage_, detailed_first_block_timings);
+            fillPasswordBlocks(compute_backend, params, password_storage_, request.first_block_workers, detailed_first_block_timings);
             result.timings.first_block_ms = elapsedMillis(first_block_start, std::chrono::steady_clock::now());
         }
         result.timings.first_block_initial_hash_cpu_ms = first_block_timings.initial_hash_ms;

@@ -46,6 +46,7 @@ Current progress:
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
+- CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior.
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
 - Hash API benchmark summaries mark any nonzero benchmark subprocess exit as invalid even when stdout contains parseable JSON, so crashy optimization experiments cannot enter recommendations.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
@@ -64,6 +65,7 @@ Current observations:
 - A newer d8 b1024/b2048 confirmation on the CUDA-capable local GPU found b1024 slightly faster by median and stable, while b2048 was slightly lower and just above the stability threshold. Treat b1024 as the current safer local A/B scenario, but do not change the miner default from b2048 until repeated evidence converges across longer runs or another GPU class.
 - Detailed setup timing shows setup can matter in short runs, with CUDA activation usually the largest setup subfield. Direct activation caching was tested and rejected because benchmark subprocesses became unstable.
 - Detailed first-block timing shows first-block digest work is a major CPU-side cost in generated-key batches. Because parallel first-block timing can sum worker-local CPU time, do not treat nested detailed fields as additive wall-clock components.
+- An initial first-block worker-cap scan showed the new tuning surface is useful for exploration: d8/b1024 explicit caps were competitive with or faster than the noisy auto baseline, while d8/b2048 had noisy or unstable capped runs. Treat this as a candidate-search signal only; do not change defaults without longer stable confirmation.
 - H2D and D2H transfer timings are measurable but not currently the dominant d8/b2048 bottleneck. Pinned host staging was tested and rejected for the current implementation because the same-settings throughput comparison regressed, so revisit it only as part of a broader transfer-overlap or buffer-lifetime redesign.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.

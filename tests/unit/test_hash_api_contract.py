@@ -37,6 +37,7 @@ def test_hash_api_request_fields_exist():
         "device_id",
         "allow_xuni",
         "detailed_timings",
+        "first_block_workers",
     ]:
         assert field in content
 

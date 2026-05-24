@@ -25,6 +25,7 @@ struct HashApiRequest {
     int device_id = 0;
     bool allow_xuni = true;
     bool detailed_timings = false;
+    std::size_t first_block_workers = 0;
 };
 
 struct HashApiMatch {

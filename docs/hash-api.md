@@ -52,6 +52,7 @@ Core files:
 - `batch_size`: number of generated-key attempts for batch paths.
 - `device_id`: non-negative device identifier.
 - `allow_xuni`: enables secondary `XUNI\d` match detection.
+- `first_block_workers`: optional CUDA first-block worker-thread cap. `0` keeps automatic worker-count behavior.
 
 ### Result
 
@@ -109,6 +110,7 @@ xenblocksMiner hash-one --salt <hex> --key <64-hex> --backend cpu --difficulty 1
 xenblocksMiner hash-batch --salt <hex> --backend cuda --device 0 --prefix <hex> --pattern XEN11 --batch-size 10 --difficulty 1024 --json
 xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --prefix <hex> --seconds 30 --batch-size 10 --difficulty 1024 --json
 xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --seconds 30 --batch-size 512 --difficulty-sequence 1,8,1,8 --json
+xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --seconds 30 --batch-size 2048 --difficulty 8 --first-block-workers 4 --json
 ```
 
 The standalone CLI target uses the same commands through `hashapi-cli`:
@@ -238,7 +240,7 @@ Use `--recommendations-only` when an automation step only needs the selected tun
 
 For larger GPUs or deeper tuning, use repeated `--scan-difficulty` and `--scan-batch-size` options to generate a custom matrix without editing the script.
 
-Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing, per-attempt timing, and nested stage-percentage deltas, preserves variable-difficulty metadata, and marks improved, regressed, and unchanged scenarios as noisy when either run's spread exceeds the configured threshold. By default, comparison matches runs by scenario name. Use `--match-by config` when two reports describe the same comparable benchmark settings but use different scenario names. Config matching includes backend, device, difficulty mode and sequence, key mode, batch size, seconds, warm-up, repeat, XUNI mode, and detailed-timing mode.
+Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing, per-attempt timing, and nested stage-percentage deltas, preserves variable-difficulty metadata, and marks improved, regressed, and unchanged scenarios as noisy when either run's spread exceeds the configured threshold. By default, comparison matches runs by scenario name. Use `--match-by config` when two reports describe the same comparable benchmark settings but use different scenario names. Config matching includes backend, device, difficulty mode and sequence, key mode, batch size, seconds, warm-up, repeat, XUNI mode, detailed-timing mode, and first-block worker cap.
 
 Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the normal main-target path without secondary XUNI matching.
 

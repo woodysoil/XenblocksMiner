@@ -69,6 +69,7 @@ class BenchmarkScenario:
     repeat: int = 1
     allow_xuni: bool = True
     detailed_timings: bool = False
+    first_block_workers: int = 0
 
 
 def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
@@ -132,6 +133,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         repeat=max(1, int(parts.get("repeat", str(default_repeat)))),
         allow_xuni=parts.get("allow_xuni", "true").lower() not in {"0", "false", "no"},
         detailed_timings=parts.get("detailed_timings", "false").lower() in {"1", "true", "yes"},
+        first_block_workers=max(0, int(parts.get("first_block_workers", "0"))),
     )
 
 
@@ -582,6 +584,7 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "pattern",
         "key_mode",
         "detailed_timings",
+        "first_block_workers",
     )
     sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
     if "key_mode" not in sanitized:
@@ -652,6 +655,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         command.append("--no-xuni")
     if scenario.detailed_timings:
         command.append("--detailed-timings")
+    if scenario.first_block_workers > 0:
+        command.extend(["--first-block-workers", str(scenario.first_block_workers)])
     return command
 
 

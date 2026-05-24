@@ -24,9 +24,9 @@ void printUsage()
 {
     std::cout
         << "Hash API commands:\n"
-        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--json]\n"
-        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--json]\n";
+        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n"
+        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n"
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -157,6 +157,7 @@ HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& a
     request.device_id = static_cast<int>(getUIntArg(args, "--device", 0));
     request.allow_xuni = getArg(args, "--no-xuni") != "true";
     request.detailed_timings = getArg(args, "--detailed-timings") == "true";
+    request.first_block_workers = getSizeArg(args, "--first-block-workers", 0);
     return request;
 }
 

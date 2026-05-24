@@ -528,6 +528,14 @@ def test_parse_scenario_supports_detailed_timings():
     assert scenario.detailed_timings is True
 
 
+def test_parse_scenario_supports_first_block_workers():
+    scenario = benchmark.parse_scenario(
+        "name=diag,backend=cuda,difficulty=8,batch_size=2048,seconds=1,first_block_workers=4"
+    )
+
+    assert scenario.first_block_workers == 4
+
+
 def test_build_hash_command_adds_detailed_timings_flag():
     scenario = benchmark.BenchmarkScenario(
         name="diag",
@@ -541,6 +549,22 @@ def test_build_hash_command_adds_detailed_timings_flag():
     command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
 
     assert "--detailed-timings" in command
+
+
+def test_build_hash_command_adds_first_block_workers_when_set():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        first_block_workers=4,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--first-block-workers" in command
+    assert command[command.index("--first-block-workers") + 1] == "4"
 
 
 def test_summarize_iterations_reports_median_timing_per_attempt():
