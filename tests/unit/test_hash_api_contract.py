@@ -131,6 +131,16 @@ def test_cuda_hash_api_backend_exists():
     assert "src/hashapi/CudaHashBackend.cpp" in cmake
 
 
+def test_cuda_hash_api_reuses_initialization_by_segment_blocks():
+    header = read("src/hashapi/CudaHashBackend.h")
+    implementation = read("src/hashapi/CudaHashBackend.cpp")
+
+    assert "initialized_segment_blocks_" in header
+    assert "initialized_difficulty_" not in header
+    assert "initialized_difficulty_" not in implementation
+    assert "initialized_segment_blocks_ == segment_blocks" in implementation
+
+
 def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     content = read("src/hashapi/HashApiCli.cpp")
     assert 'request.backend == "cuda"' in content

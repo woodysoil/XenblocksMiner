@@ -126,13 +126,11 @@ const ComputeBackend& CudaHashBackend::backend() const
 
 void CudaHashBackend::ensureInitialized(ComputeBackend& backend,
                                         const Argon2Params& params,
-                                        std::size_t batch_size,
-                                        std::uint32_t difficulty)
+                                        std::size_t batch_size)
 {
     const auto segment_blocks = params.getSegmentBlocks();
     if (initialized_ &&
         initialized_batch_size_ == batch_size &&
-        initialized_difficulty_ == difficulty &&
         initialized_segment_blocks_ == segment_blocks) {
         return;
     }
@@ -141,7 +139,6 @@ void CudaHashBackend::ensureInitialized(ComputeBackend& backend,
                  1, 1, segment_blocks);
     initialized_ = true;
     initialized_batch_size_ = batch_size;
-    initialized_difficulty_ = difficulty;
     initialized_segment_blocks_ = segment_blocks;
 }
 
@@ -187,7 +184,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         Argon2Params params(argon2::ARGON2_ID, argon2::ARGON2_VERSION_13,
                             kDefaultHashLength, salt, nullptr, 0, nullptr, 0,
                             1, request.difficulty, 1);
-        ensureInitialized(compute_backend, params, attempts, request.difficulty);
+        ensureInitialized(compute_backend, params, attempts);
         result.timings.setup_ms = elapsedMillis(setup_start, std::chrono::steady_clock::now());
 
         const auto input_start = std::chrono::steady_clock::now();
