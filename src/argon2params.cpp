@@ -15,6 +15,12 @@ static void store32(void *dst, std::uint32_t v)
     *out++ = static_cast<std::uint8_t>(v);
 }
 
+static std::uint8_t *append32(std::uint8_t *dst, std::uint32_t v)
+{
+    store32(dst, v);
+    return dst + sizeof(std::uint32_t);
+}
+
 Argon2Params::Argon2Params(
     argon2::Type type,
     argon2::Version version,
@@ -88,9 +94,39 @@ void Argon2Params::initialHash(
         void *out, const void *pwd, std::size_t pwdLen) const
 {
     Blake2b blake;
-    std::uint8_t value[sizeof(std::uint32_t)];
 
     blake.init(argon2::ARGON2_PREHASH_DIGEST_LENGTH);
+
+    if (secretLen == 0 && adLen == 0) {
+        std::uint8_t header[7 * sizeof(std::uint32_t)];
+        std::uint8_t *cursor = header;
+        cursor = append32(cursor, lanes);
+        cursor = append32(cursor, outLen);
+        cursor = append32(cursor, m_cost);
+        cursor = append32(cursor, t_cost);
+        cursor = append32(cursor, version);
+        cursor = append32(cursor, type);
+        cursor = append32(cursor, static_cast<std::uint32_t>(pwdLen));
+        blake.update(header, sizeof(header));
+        blake.update(pwd, pwdLen);
+
+        std::string hexSalt = hex_to_bytes(salt);
+        std::uint8_t salt_length[sizeof(std::uint32_t)];
+        store32(salt_length, static_cast<std::uint32_t>(hexSalt.length()));
+        blake.update(salt_length, sizeof(salt_length));
+        blake.update(hexSalt.c_str(), hexSalt.length());
+
+        std::uint8_t empty_lengths[2 * sizeof(std::uint32_t)];
+        cursor = empty_lengths;
+        cursor = append32(cursor, secretLen);
+        append32(cursor, adLen);
+        blake.update(empty_lengths, sizeof(empty_lengths));
+
+        blake.final(out, argon2::ARGON2_PREHASH_DIGEST_LENGTH);
+        return;
+    }
+
+    std::uint8_t value[sizeof(std::uint32_t)];
 
     store32(value, lanes);      blake.update(value, sizeof(value));
     store32(value, outLen);     blake.update(value, sizeof(value));
