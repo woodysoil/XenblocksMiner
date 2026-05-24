@@ -53,6 +53,31 @@ def default_scenarios(seconds: int, backend: str, device: int, warmup: int, repe
     return preset_scenarios("smoke", seconds, backend, device, warmup, repeat)
 
 
+def scan_scenarios(
+    difficulties: list[int],
+    batch_sizes: list[int],
+    seconds: int,
+    backend: str,
+    device: int,
+    warmup: int,
+    repeat: int,
+) -> list[BenchmarkScenario]:
+    return [
+        BenchmarkScenario(
+            name=f"{backend}-scan-d{difficulty}-b{batch_size}",
+            backend=backend,
+            difficulty=difficulty,
+            batch_size=batch_size,
+            seconds=seconds,
+            device=device,
+            warmup=warmup,
+            repeat=repeat,
+        )
+        for difficulty in difficulties
+        for batch_size in batch_sizes
+    ]
+
+
 def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmup: int, repeat: int) -> list[BenchmarkScenario]:
     if preset == "smoke":
         return [
@@ -349,6 +374,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
     parser.add_argument("--recommendations-only", action="store_true", help="Print only report recommendations as JSON.")
     parser.add_argument(
+        "--scan-difficulty",
+        action="append",
+        type=int,
+        default=[],
+        help="Add a difficulty value for generated batch-size scan scenarios. Requires --scan-batch-size.",
+    )
+    parser.add_argument(
+        "--scan-batch-size",
+        action="append",
+        type=int,
+        default=[],
+        help="Add a batch size for generated scan scenarios. Requires --scan-difficulty.",
+    )
+    parser.add_argument(
         "--preset",
         action="append",
         choices=PRESET_NAMES,
@@ -375,6 +414,20 @@ def main(argv: list[str]) -> int:
         scenarios.extend(
             parse_scenario(item, default_warmup=args.warmup, default_repeat=args.repeat) for item in args.scenario
         )
+        if args.scan_difficulty or args.scan_batch_size:
+            if not args.scan_difficulty or not args.scan_batch_size:
+                raise ValueError("--scan-difficulty and --scan-batch-size must be used together")
+            scenarios.extend(
+                scan_scenarios(
+                    args.scan_difficulty,
+                    args.scan_batch_size,
+                    args.seconds,
+                    args.backend,
+                    args.device,
+                    args.warmup,
+                    args.repeat,
+                )
+            )
         if not scenarios:
             scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
         ensure_unique_scenario_names(scenarios)

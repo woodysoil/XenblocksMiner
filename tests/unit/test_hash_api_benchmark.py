@@ -105,6 +105,31 @@ def test_preset_scenarios_builds_batch_scan_matrix():
     assert all(scenario.repeat == 2 for scenario in scenarios)
 
 
+def test_scan_scenarios_builds_custom_matrix():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[1, 8],
+        batch_sizes=[512, 1024],
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-scan-d1-b512",
+        "cuda-scan-d1-b1024",
+        "cuda-scan-d8-b512",
+        "cuda-scan-d8-b1024",
+    ]
+    assert [scenario.difficulty for scenario in scenarios] == [1, 1, 8, 8]
+    assert [scenario.batch_size for scenario in scenarios] == [512, 1024, 512, 1024]
+    assert all(scenario.seconds == 3 for scenario in scenarios)
+    assert all(scenario.device == 1 for scenario in scenarios)
+    assert all(scenario.warmup == 2 for scenario in scenarios)
+    assert all(scenario.repeat == 4 for scenario in scenarios)
+
+
 def test_ensure_unique_scenario_names_rejects_duplicates():
     scenario = benchmark.BenchmarkScenario(
         name="duplicate",
@@ -389,6 +414,70 @@ def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
     assert exit_code == 0
     assert captured_names == ["cuda-smoke-b1-d1", "cuda-batch-b8-d1", "manual"]
     assert json.loads(output.read_text(encoding="utf-8"))["presets"] == ["smoke"]
+
+
+def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
+    captured_names = []
+
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured_names.append(scenario.name)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scan-difficulty",
+            "1",
+            "--scan-difficulty",
+            "8",
+            "--scan-batch-size",
+            "512",
+            "--scan-batch-size",
+            "1024",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_names == ["cuda-scan-d1-b512", "cuda-scan-d1-b1024", "cuda-scan-d8-b512", "cuda-scan-d8-b1024"]
+
+
+def test_main_rejects_partial_custom_scan(capsys):
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--scan-difficulty",
+            "1",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "--scan-difficulty and --scan-batch-size must be used together" in capsys.readouterr().err
 
 
 def test_main_rejects_duplicate_scenario_names(capsys):

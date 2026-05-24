@@ -194,6 +194,8 @@ Reusable presets include `smoke`, `warm-short`, `cuda-compare`, and `batch-scan`
 
 Use `--recommendations-only` when an automation step only needs the selected tuning recommendations on stdout while still optionally writing the full report with `--output`.
 
+For larger GPUs or deeper tuning, use repeated `--scan-difficulty` and `--scan-batch-size` options to generate a custom matrix without editing the script.
+
 ## Local Hash Service
 
 The optional local service is a separate FastAPI app under `server/hash_api/`. It is not registered on the marketplace platform server and does not depend on marketplace routers, MQTT, leases, wallets, settlement, or SQLite.
