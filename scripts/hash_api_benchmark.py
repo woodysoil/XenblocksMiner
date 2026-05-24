@@ -15,7 +15,7 @@ from typing import Any
 
 
 DEFAULT_SALT = "aabbccddeeff0011"
-PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan", "difficulty-sequence")
+PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan", "difficulty-sequence", "isolation")
 DEFAULT_STABLE_SPREAD_PCT = 10.0
 NESTED_TIMING_FIELDS = frozenset({"kernel_ms", "finalize_hash_ms", "argon2_finalize_ms", "base64_ms", "match_ms"})
 
@@ -192,6 +192,31 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
             warmup,
             repeat,
         )
+
+    if preset == "isolation":
+        return [
+            BenchmarkScenario(
+                name=f"{backend}-isolation-generated-d8-b2048",
+                backend=backend,
+                difficulty=8,
+                batch_size=2048,
+                seconds=seconds,
+                device=device,
+                warmup=warmup,
+                repeat=repeat,
+            ),
+            BenchmarkScenario(
+                name=f"{backend}-isolation-fixed-d8-b1",
+                backend=backend,
+                difficulty=8,
+                batch_size=1,
+                seconds=seconds,
+                key="0" * 64,
+                device=device,
+                warmup=warmup,
+                repeat=repeat,
+            ),
+        ]
 
     if preset == "warm-short":
         pairs = [(1, 1), (1, 64), (8, 64)]

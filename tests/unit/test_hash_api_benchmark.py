@@ -178,6 +178,29 @@ def test_preset_scenarios_builds_difficulty_sequence_matrix():
     assert all(scenario.repeat == 2 for scenario in scenarios)
 
 
+def test_preset_scenarios_builds_isolation_matrix():
+    scenarios = benchmark.preset_scenarios(
+        "isolation",
+        seconds=4,
+        backend="cuda",
+        device=1,
+        warmup=1,
+        repeat=3,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-isolation-generated-d8-b2048",
+        "cuda-isolation-fixed-d8-b1",
+    ]
+    assert [scenario.key for scenario in scenarios] == ["", "0" * 64]
+    assert [scenario.batch_size for scenario in scenarios] == [2048, 1]
+    assert all(scenario.difficulty == 8 for scenario in scenarios)
+    assert all(scenario.seconds == 4 for scenario in scenarios)
+    assert all(scenario.device == 1 for scenario in scenarios)
+    assert all(scenario.warmup == 1 for scenario in scenarios)
+    assert all(scenario.repeat == 3 for scenario in scenarios)
+
+
 def test_scan_scenarios_builds_custom_matrix():
     scenarios = benchmark.scan_scenarios(
         difficulties=[1, 8],

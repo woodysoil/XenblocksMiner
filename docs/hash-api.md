@@ -208,11 +208,13 @@ The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scen
 
 Raw benchmark reports are intended for ignored local artifact directories because they may include local binary paths, command lines, hardware probe output, salts, prefixes, and raw run details. Use `--sanitized-output <path>` when a run should also produce a public-safe summary. The sanitized report uses schema `xenblocks.hashapi.benchmark-summary.v1` and keeps only scenario metadata, aggregate summaries, and recommendations while omitting local paths, host and hardware details, commands, raw iterations, salts, prefixes, and raw results.
 
-Reusable presets include `smoke`, `warm-short`, `cuda-compare`, and `batch-scan`. Use `batch-scan` before hard-coding batch assumptions on a new GPU; it compares medium and large batch sizes for low difficulties while keeping raw reports under ignored local benchmark directories.
+Reusable presets include `smoke`, `warm-short`, `cuda-compare`, `batch-scan`, `difficulty-sequence`, and `isolation`. Use `batch-scan` before hard-coding batch assumptions on a new GPU; it compares medium and large batch sizes for low difficulties while keeping raw reports under ignored local benchmark directories.
 
 Use `--difficulty-sequence` with `--sequence-batch-size` to measure the cost of `m = difficulty` changes while the benchmark CLI reuses one backend lifecycle. For example, compare a same-difficulty sequence such as `1,1,1,1` against an alternating sequence such as `1,8,1,8` with the same batch size, seconds, warm-up, repeat count, backend, and device. The `difficulty-sequence` preset provides a small reusable matrix for this measurement. Manual `--scenario` entries are comma-separated, so use `difficulty_sequence=1|8|1|8` inside a manual scenario.
 
 Use `key=<64-hex>` inside a manual scenario to benchmark the fixed-key path repeatedly. This is useful for isolating CUDA compute and finalization from generated-key preparation overhead.
+
+Use `--preset isolation` to run a generated-key d8/b2048 scenario next to a fixed-key d8/b1 scenario. This is the quickest standard split between generated-key/first-block preparation and fixed-key CUDA compute/finalization behavior.
 
 Use `--recommendations-only` when an automation step only needs the selected tuning recommendations on stdout while still optionally writing the full report with `--output`.
 
