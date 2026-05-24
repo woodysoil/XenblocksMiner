@@ -728,6 +728,12 @@ Before/after comparison:
 python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --fail-on-regression --min-change-pct 1
 ```
 
+If two reports used different scenario names for the same backend, device, difficulty, batch size, seconds, warm-up, repeat, key mode, XUNI mode, and detailed-timing mode, compare by configuration instead of by name:
+
+```bash
+python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --match-by config --fail-on-regression --min-change-pct 1
+```
+
 Transfer-focused d8/b2048 checkpoint:
 
 ```bash
