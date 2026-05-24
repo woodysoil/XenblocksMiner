@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import statistics
 import subprocess
 import sys
 import time
@@ -26,9 +27,11 @@ class BenchmarkScenario:
     prefix: str = ""
     pattern: str = "XEN11"
     device: int = 0
+    warmup: int = 0
+    repeat: int = 1
 
 
-def parse_scenario(text: str) -> BenchmarkScenario:
+def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) -> BenchmarkScenario:
     parts = dict(part.split("=", 1) for part in text.split(",") if part)
     name = parts.get("name") or f"{parts.get('backend', 'cpu')}-d{parts.get('difficulty', '1')}-b{parts.get('batch_size', '1')}"
     return BenchmarkScenario(
@@ -40,10 +43,12 @@ def parse_scenario(text: str) -> BenchmarkScenario:
         prefix=parts.get("prefix", ""),
         pattern=parts.get("pattern", "XEN11"),
         device=int(parts.get("device", "0")),
+        warmup=int(parts.get("warmup", str(default_warmup))),
+        repeat=max(1, int(parts.get("repeat", str(default_repeat)))),
     )
 
 
-def default_scenarios(seconds: int, backend: str, device: int) -> list[BenchmarkScenario]:
+def default_scenarios(seconds: int, backend: str, device: int, warmup: int, repeat: int) -> list[BenchmarkScenario]:
     return [
         BenchmarkScenario(
             name=f"{backend}-smoke-b1-d1",
@@ -52,6 +57,8 @@ def default_scenarios(seconds: int, backend: str, device: int) -> list[Benchmark
             batch_size=1,
             seconds=seconds,
             device=device,
+            warmup=warmup,
+            repeat=repeat,
         ),
         BenchmarkScenario(
             name=f"{backend}-batch-b8-d1",
@@ -60,6 +67,8 @@ def default_scenarios(seconds: int, backend: str, device: int) -> list[Benchmark
             batch_size=8,
             seconds=seconds,
             device=device,
+            warmup=warmup,
+            repeat=repeat,
         ),
     ]
 
@@ -110,7 +119,32 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
     }
 
 
-def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[str, Any]:
+def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    ok_summaries = [item for item in summaries if item["ok"]]
+    hashrates = [float(item["hashrate"]) for item in ok_summaries]
+    errors = [item["error"] for item in summaries if item["error"]]
+    aggregate = {
+        "name": scenario.name,
+        "backend": summaries[0]["backend"] if summaries else scenario.backend,
+        "device_id": summaries[0]["device_id"] if summaries else scenario.device,
+        "difficulty": scenario.difficulty,
+        "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
+        "attempts": sum(int(item["attempts"]) for item in ok_summaries),
+        "elapsed_ms": sum(float(item["elapsed_ms"]) for item in ok_summaries),
+        "hashrate": statistics.median(hashrates) if hashrates else 0.0,
+        "median_hashrate": statistics.median(hashrates) if hashrates else 0.0,
+        "min_hashrate": min(hashrates) if hashrates else 0.0,
+        "max_hashrate": max(hashrates) if hashrates else 0.0,
+        "matches": sum(int(item["matches"]) for item in ok_summaries),
+        "ok": len(ok_summaries) == len(summaries) and bool(summaries),
+        "error": "; ".join(errors),
+        "warmup": scenario.warmup,
+        "repeat": scenario.repeat,
+    }
+    return aggregate
+
+
+def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> list[str]:
     command = [
         str(binary),
         "hash-benchmark",
@@ -132,7 +166,10 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
     ]
     if scenario.prefix:
         command.extend(["--prefix", scenario.prefix])
+    return command
 
+
+def run_hash_command(command: list[str]) -> dict[str, Any]:
     started_at = time.time()
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     elapsed_ms = (time.time() - started_at) * 1000.0
@@ -148,12 +185,39 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
         }
 
     return {
-        "scenario": asdict(scenario),
-        "summary": summarize_result(scenario, result),
-        "command": command,
         "exit_code": completed.returncode,
         "wall_elapsed_ms": elapsed_ms,
         "result": result,
+    }
+
+
+def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[str, Any]:
+    command = build_hash_command(binary, salt, scenario)
+    warmup_runs = [run_hash_command(command) for _ in range(scenario.warmup)]
+    iterations = [run_hash_command(command) for _ in range(scenario.repeat)]
+    iteration_summaries = [summarize_result(scenario, item["result"]) for item in iterations]
+    aggregate = summarize_iterations(scenario, iteration_summaries)
+    selected_index = 0
+    if iteration_summaries:
+        selected_index = max(
+            range(len(iteration_summaries)),
+            key=lambda index: iteration_summaries[index]["hashrate"] if iteration_summaries[index]["ok"] else -1,
+        )
+    selected_result = iterations[selected_index]["result"] if iterations else {}
+    all_runs = warmup_runs + iterations
+    ok = bool(all_runs) and all(item["exit_code"] == 0 and item["result"].get("ok") for item in all_runs)
+
+    return {
+        "scenario": asdict(scenario),
+        "summary": aggregate,
+        "aggregate": aggregate,
+        "command": command,
+        "exit_code": 0 if ok else 2,
+        "wall_elapsed_ms": sum(float(item["wall_elapsed_ms"]) for item in all_runs),
+        "warmup_runs": warmup_runs,
+        "iterations": iterations,
+        "iteration_summaries": iteration_summaries,
+        "result": selected_result,
     }
 
 
@@ -164,6 +228,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", default="cpu", help="Default backend for built-in scenarios.")
     parser.add_argument("--device", default=0, type=int, help="Default device id for built-in scenarios.")
     parser.add_argument("--seconds", default=5, type=int, help="Seconds per built-in scenario.")
+    parser.add_argument("--warmup", default=0, type=int, help="Warm-up runs per scenario before measured repeats.")
+    parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
+    parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
     parser.add_argument(
         "--scenario",
         action="append",
@@ -175,9 +242,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
-    scenarios = [parse_scenario(item) for item in args.scenario]
+    scenarios = [parse_scenario(item, default_warmup=args.warmup, default_repeat=args.repeat) for item in args.scenario]
     if not scenarios:
-        scenarios = default_scenarios(args.seconds, args.backend, args.device)
+        scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
 
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
@@ -194,7 +261,11 @@ def main(argv: list[str]) -> int:
         "runs": [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios],
     }
 
-    print(json.dumps(report, indent=2, sort_keys=True))
+    output = json.dumps(report, indent=2, sort_keys=True)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    print(output)
     return 0 if all(run["exit_code"] == 0 and run["result"].get("ok") for run in report["runs"]) else 2
 
 
