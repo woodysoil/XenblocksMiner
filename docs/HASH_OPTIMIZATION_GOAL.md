@@ -35,11 +35,13 @@ Known current capabilities:
 Current progress:
 
 - Reusable Hash API extraction is complete enough for isolated optimization work.
+- The extracted automation surface is the command-line Hash API: `hash-one`, `hash-batch`, and `hash-benchmark`. Treat these as CLI entrypoints for reproducible optimization, not as frontend, websocket, marketplace, or hosted HTTP platform APIs.
 - Benchmark presets, warm-up runs, repeated runs, median/min/max summaries, output files, comparison tooling, recommendation output, and custom scan matrices are in place.
 - Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - CUDA timing metadata reports nested sub-measurements such as `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`, so future tuning can distinguish transfers, kernel time, hash finalization, encoding, and target matching from their parent stages.
+- Optional `--detailed-timings` also splits CUDA setup timing and first-block CPU timing for diagnosis. These detailed fields are nested diagnostic timing, not additive wall time.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
@@ -58,6 +60,9 @@ Current observations:
 - d64 batch-size scans have been noisy and should not be used to change defaults without stronger repeated evidence.
 - Later 10-second d64 scans still conflicted between b1024 and b2048 stability versus median throughput, so keep the d64 default conservative until repeated evidence converges.
 - A short d8 scan found b4096 as a fast candidate, but a 10-second d8/b4096 confirmation later had a benchmark subprocess access-violation exit and slower/noisier valid samples, so keep the d8 default at b2048 unless a future stable confirmation removes that instability.
+- Detailed setup timing shows setup can matter in short runs, with CUDA activation usually the largest setup subfield. Direct activation caching was tested and rejected because benchmark subprocesses became unstable.
+- Detailed first-block timing shows first-block digest work is a major CPU-side cost in generated-key batches. Because parallel first-block timing can sum worker-local CPU time, do not treat nested detailed fields as additive wall-clock components.
+- H2D and D2H transfer timings are measurable but not currently the dominant d8/b2048 bottleneck. Pinned host staging is still a reasonable isolated experiment because it is local to buffer allocation and transfer behavior.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 
@@ -135,23 +140,25 @@ Start here after reading this file:
 
 1. Verify the worktree is clean or identify unrelated dirty files.
 2. Confirm docs and recent commits contain no local paths, usernames, hostnames, secrets, raw benchmark reports, or private hardware identifiers.
-3. Run the focused Hash API unit tests.
-4. Build the smoke CLI or full CUDA binary that is already configured locally.
-5. Run the golden CUDA hash check when a CUDA binary is available.
-6. Run a short main-target CUDA benchmark to confirm the binary and benchmark harness still work.
-7. Run or load a repeated d8/b2048 baseline because recent accepted and rejected experiments used that scenario.
-8. Inspect timing metadata and choose one bottleneck:
+3. Confirm local progress with `git log --oneline`; if the branch is ahead of the remote, treat those commits as retained local work unless the user explicitly asks to squash, reorder, push, or rewrite them.
+4. Run the focused Hash API unit tests.
+5. Build the smoke CLI or full CUDA binary that is already configured locally.
+6. Run the golden CUDA hash check when a CUDA binary is available.
+7. Run a short main-target CUDA benchmark to confirm the binary and benchmark harness still work.
+8. Run or load a repeated d8/b2048 baseline because recent accepted and rejected experiments used that scenario.
+9. If no newer evidence supersedes this checkpoint, record a d8/b2048 CUDA transfer baseline with `--detailed-timings`, then test pinned host staging buffers inside `KernelRunner`.
+10. Inspect timing metadata and choose one bottleneck:
    - high `input_ms`: reduce CPU-side key generation, salt/key preparation, or first-block setup overhead
    - high `keygen_ms`: optimize random key generation, prefix handling, or generated-key memory layout
    - high `first_block_ms`: use `--detailed-timings` to split initial prehash and digest expansion, then improve safe Argon2 first-block preparation and CPU parallelism
    - high `setup_ms`: use `--detailed-timings` to split normalization, activation, device info, parameter construction, and backend initialization before caching difficulty-derived or device-derived setup safely
    - high `compute_ms`: inspect CUDA allocation, copy, launch geometry, memory behavior, and kernel occupancy
    - high `finalize_ms`: use `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` to choose between hash finalization, encoding, matching, result collection, or JSON work outside the timed hot path
-9. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
-10. Make one scoped change.
-11. Validate correctness.
-12. Re-run the same benchmark and compare median warm throughput first.
-13. Commit if the result is correct, materially useful, and privacy-clean.
+11. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
+12. Make one scoped change.
+13. Validate correctness.
+14. Re-run the same benchmark and compare median warm throughput first.
+15. Commit if the result is correct, materially useful, and privacy-clean.
 
 If the previous step is only a benchmark harness or documentation improvement, validate with the focused Python tests and `git diff --check`. A full CUDA benchmark is still preferred when the change affects performance interpretation.
 
@@ -179,6 +186,8 @@ Use ignored local directories for raw benchmark output:
 - `benchmark-results/`
 
 Do not commit raw benchmark reports unless they have been intentionally sanitized and are useful to future contributors. Raw reports can contain binary paths, hardware details, command lines, and timing noise that should not become permanent project history.
+
+Raw benchmark JSON must remain untracked. Sanitized summaries may be committed only when they have been reviewed for local paths, usernames, hostnames, hardware identifiers, secrets, wallet data, and personal addresses.
 
 When a report is worth preserving publicly, summarize it in a commit body or a small doc section with:
 
@@ -380,6 +389,8 @@ Known useful changes already made:
 - Fixed-key CUDA requests now avoid constructing the generated-key random generator; isolation confirmation kept generated d8/b2048 stable at about 66.96k H/s median and improved fixed-key d8/b1 to about 4.41k H/s median with 0.8% spread
 - `Blake2b::final` writes full 64-byte outputs directly into the destination buffer instead of staging through a temporary copy; local d8/b2048 generated CUDA confirmation stayed correct and reached 52.4k H/s median, with noisy but lower per-attempt first-block/finalize timings than the keygen baseline
 - Argon2 initial hash setup now batches fixed 32-bit metadata into stack buffers for the no-secret/no-associated-data mining path, reducing local d8/b2048 generated CUDA `first_block_ms` per attempt from about 0.01148 ms to about 0.00820 ms and reaching 67.1k H/s median with 3.7% spread
+- detailed CUDA transfer, first-block, and setup timing fields are available for diagnosis while the default non-detailed path avoids extra timing overhead
+- benchmark comparison can classify noisy unchanged runs when the median change is below threshold but spread is too high to treat the result as stable
 
 Rejected or risky experiments:
 
@@ -716,6 +727,12 @@ Before/after comparison:
 python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --fail-on-regression --min-change-pct 1
 ```
 
+Transfer-focused d8/b2048 checkpoint:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --scenario name=cuda-transfer-before-d8-b2048,backend=cuda,difficulty=8,batch_size=2048,seconds=2,device=0,detailed_timings=true --warmup 1 --repeat 3 --no-xuni --output .benchmarks/transfer-before.json --sanitized-output .benchmarks/transfer-before-summary.json
+```
+
 ## Benchmark Reporting Rules
 
 Each optimization commit should include enough information to understand whether it helped:
@@ -736,16 +753,17 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 Work through this backlog before attempting high-risk kernel rewrites:
 
 1. Maintain a current local CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
-2. Run stable custom batch-size scans for common difficulty ranges.
-3. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
-4. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
-5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
-6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
-7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
-8. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
-9. Tune launch parameters only after CPU-side overhead is under control.
-10. Add optional autotuning once enough benchmark data justifies it.
-11. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
+2. Evaluate pinned host staging buffers inside `KernelRunner` after recording a same-settings transfer baseline; accept only if correctness holds and transfer or throughput evidence is useful.
+3. Run stable custom batch-size scans for common difficulty ranges.
+4. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
+5. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
+6. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
+7. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
+8. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
+9. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
+10. Tune launch parameters only after CPU-side overhead is under control.
+11. Add optional autotuning once enough benchmark data justifies it.
+12. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
 
 Every backlog item must still follow the correctness and reporting rules above.
 
@@ -846,4 +864,5 @@ Recommended first action after this revision:
 3. Run the golden CUDA hash check.
 4. Run a short main-target CUDA benchmark.
 5. Run or load a repeated d8/b2048 baseline.
-6. Use the timing breakdown to choose between input generation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
+6. If no newer checkpoint exists, run the transfer-focused d8/b2048 benchmark and then evaluate pinned host staging buffers in `KernelRunner`.
+7. Use the timing breakdown to choose between input generation, setup caching, allocation reuse, launch tuning, or matching/finalization work.

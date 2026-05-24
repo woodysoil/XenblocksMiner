@@ -110,6 +110,19 @@ Expected current shape:
 
 If the current structure blocks optimization, refactor the Hash API/backend boundary first. Do not drift into frontend, marketplace, wallet, lease, devfee, authentication, or broad platform work while this goal is active.
 
+## Current Checkpoint
+
+This checkpoint exists so a long-running `/goal` session can resume without reinterpreting the project direction.
+
+- The Hash API extraction is complete enough for isolated optimization work.
+- "CLI API" means the command-line Hash API automation surface: `hash-one`, `hash-batch`, and `hash-benchmark`.
+- That CLI surface is the current stable driver for AI optimization loops, benchmarks, correctness checks, and future embedding work.
+- It is not the marketplace, wallet, frontend, websocket, or hosted HTTP platform API.
+- Local commits ahead of the remote branch are retained local progress. Do not assume they were lost; verify with `git status -sb` and `git log`.
+- Recent timing evidence shows generated CUDA d8/b2048 work is usually CPU-side dominated by `input_ms`, especially first-block preparation, while `setup_ms` and transfer timings are still useful secondary targets.
+- Recent rejected experiments include CUDA activation caching and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
+- If there is no newer evidence, the next default experiment is to record a transfer-focused d8/b2048 CUDA baseline and then evaluate pinned host staging buffers inside `KernelRunner`.
+
 ## Architecture Direction
 
 If the current layout makes serious optimization difficult, improve the structure before chasing micro-optimizations. Acceptable structural work includes:
@@ -364,15 +377,16 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 
 1. Verify `git status -sb`.
 2. Confirm docs and recent commits contain no local paths or private machine details.
-3. If timing instrumentation changes are dirty, validate them with focused tests, a CUDA golden hash check, and a short benchmark, then commit the measurement slice if it is correct.
+3. Confirm local commits are still present with `git log`; do not treat ahead-of-remote commits as lost work.
 4. Run focused Hash API unit tests.
 5. Build the available smoke CLI or full CUDA binary.
 6. Run the golden CUDA hash check when a CUDA binary is available.
 7. Run a short main-target CUDA benchmark.
 8. Run or load a repeated d8/b2048 baseline because recent useful evidence used that scenario.
-9. Inspect timing metadata and pick the next bottleneck.
-10. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
-11. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
+9. If no newer checkpoint supersedes it, record a d8/b2048 transfer baseline with detailed timings, then test pinned host staging buffers in `KernelRunner`.
+10. Inspect timing metadata and pick the next bottleneck.
+11. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
+12. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
 
 Known accepted and rejected experiments are documented in `docs/HASH_OPTIMIZATION_GOAL.md`. Do not retry rejected experiments unless the implementation shape has materially changed and the new attempt includes correctness checks.
 
