@@ -149,6 +149,7 @@ def test_mine_unit_routes_batch_compute_through_hash_api():
     assert "hashapi::CudaHashBackend hashBackend_" in header
     assert "hashapi::HashApiResult batchCompute" in header
     assert "hashBackend_.runBatch(request)" in implementation
+    assert "request.allow_xuni = is_within_five_minutes_of_hour()" in implementation
     assert "submitMatches" in implementation
     assert "std::vector<HashItem>" not in header
 
