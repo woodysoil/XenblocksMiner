@@ -54,6 +54,7 @@ Current progress:
 - Benchmark `timing_analysis` includes `nested_stage_pct` so optimization agents can read nested diagnostics as percentages of their parent stage without treating them as additive wall time.
 - Optional `--detailed-timings` also splits CUDA setup timing and first-block CPU timing for diagnosis. These detailed fields are nested diagnostic timing, not additive wall time.
 - Detailed first-block diagnostics include `first_block_max_worker_ms`, which records the slowest worker-local wall time during parallel first-block preparation and helps separate scheduling/imbalance from aggregate digest CPU time.
+- Benchmark timing analysis derives `first_block_worker_wall_to_wall` and `first_block_scheduling_overhead_ms` from detailed first-block worker timing, so agents can see how much first-block wall time remains outside the slowest worker-local loop.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, top-level and nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API comparison tooling can match by config while ignoring only detailed-timing mode with `--ignore-detailed-timings`, which helps compare default and diagnostic reports for the same scenario without changing other matching fields.
@@ -483,6 +484,7 @@ Measurement cautions:
 - Measurement-only update: comparison text output now includes `first_block_workers`, `first_block_worker_count`, and `first_block_chunk_size`, so before/after CSV-style reports expose both the requested cap and the selected first-block scheduling shape without requiring JSON output.
 - Measurement-only update: benchmark summaries and recommendation entries now include `first_block_workers`, `first_block_worker_count`, and `first_block_chunk_size`, so batch-size and worker-cap scans preserve both the requested cap and selected first-block schedule in selected and candidate rows.
 - Measurement-only update: detailed first-block timing now includes `first_block_max_worker_ms`, allowing agents to compare the slowest worker-local wall time against `first_block_ms` and aggregate first-block CPU time without adding default benchmark overhead.
+- Measurement-only update: benchmark timing analysis now derives first-block worker-wall ratio and scheduling-overhead fields from existing detailed timings. This does not add new CUDA timing overhead.
 - A clean Release CUDA rebuild was needed after adding fields to `HashApiResult`; an incremental rebuild produced corrupted aggregate JSON fields before the clean rebuild. For future `HashApiResult` layout changes, prefer clean rebuild validation before trusting CLI benchmark output.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
