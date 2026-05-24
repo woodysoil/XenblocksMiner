@@ -1,14 +1,27 @@
 # Codex Goal: Continuous Hash Throughput Optimization
 
-## Use This With `/goal`
+## Goal Command
 
-Start or resume the long-running work with:
+Use this exact command when starting or recreating the long-running goal:
 
 ```text
-/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed p/s=1, and variable m=difficulty. Work autonomously through benchmark, optimize, validate, and commit cycles. Preserve exact argon2id-xen semantics. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet private data, or local hardware identifiers.
+/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed p/s=1, and variable m=difficulty until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet private data, or local hardware identifiers.
 ```
 
-This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual and experiment ledger.
+This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual, phase plan, and experiment ledger.
+
+The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, and the documented completion rule.
+
+## Goal Contract
+
+This goal follows the strongest Codex Goal shape:
+
+- Outcome: maximize real Hash API CUDA hashing throughput, with an aspirational 1000% improvement target, then continue until plateau or practical hardware-limit evidence is documented.
+- Verification surface: focused Hash API tests, CUDA golden hash checks, machine-readable benchmark JSON, before/after comparison output, and committed diffs.
+- Constraints: preserve exact `argon2id-xen` semantics, Hash API compatibility, mining result fields, target matching, privacy rules, and public-repo hygiene.
+- Boundaries: focus on `src/hashapi/`, CUDA backend files, Argon2/Blake2b hot paths, benchmark scripts, tests, and narrowly related integration code.
+- Iteration policy: choose the next experiment from measured timing bottlenecks, validate correctness before trusting speed, commit useful stable slices, and revert or document rejected experiments.
+- Blocked stop condition: stop only when a listed stop condition is reached, no defensible optimization path remains, required tooling is unavailable, or public history rewrite decisions need the user.
 
 ## Outcome
 
@@ -19,6 +32,20 @@ Optimize the extracted Hash API and CUDA hashing path until one of these is true
 - profiler evidence shows the implementation is near the practical hardware limit for the tested GPU class
 
 Until one of those outcomes is proven, keep iterating.
+
+## Progress Accounting
+
+Maintain progress against a named baseline rather than against memory or terminal prose.
+
+- Baseline: the earliest trustworthy machine-readable CUDA benchmark for the selected scenario after the Hash API extraction, or a new documented baseline if no trustworthy report exists.
+- Best result: the highest confirmed median warm throughput for the same scenario and correctness surface.
+- Improvement: `(best_median_hps - baseline_median_hps) / baseline_median_hps * 100`.
+- Main scenario for continuity: generated-key CUDA, main-target-only, difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, with the same seconds value for before/after comparisons.
+- Supplemental scenarios: difficulty `1`, `64`, `256`, and `1024`, variable-difficulty sequences, and batch-size scans when the main scenario no longer explains the bottleneck.
+
+Do not claim the 1000% target from a single noisy run. Confirm large claims with repeated runs or a stable scan, and keep the raw report ignored unless a sanitized summary is intentionally committed.
+
+Plateau evidence requires at least three consecutive well-scoped optimization attempts against the current dominant bottleneck with less than 3% confirmed improvement, plus a short note in `docs/HASH_OPTIMIZATION_GOAL.md` explaining the remaining bottleneck and why risk is now higher than expected gain.
 
 ## Fixed Workload
 
@@ -60,6 +87,34 @@ Expected current shape:
 - timing metadata that separates validation, setup, input generation, compute, finalization, matching, and per-attempt costs
 
 If the current structure blocks optimization, refactor the Hash API/backend boundary first. Do not drift into frontend, marketplace, wallet, lease, devfee, authentication, or broad platform work while this goal is active.
+
+## Per-Iteration Evidence
+
+Every completed iteration should leave enough evidence for the next agent to continue without guessing:
+
+- current commit or dirty state
+- benchmark scenario name
+- backend, difficulty, batch size, seconds, warm-up count, repeat count, and XUNI setting
+- before and after median warm throughput when comparing performance code
+- min/max spread or a clear note that the run is smoke-only
+- dominant timing field from benchmark metadata
+- correctness commands that passed
+- conclusion: accepted, rejected, or measurement-only
+
+Keep raw reports in ignored local artifact directories. Commit concise public-safe summaries only when they explain a decision or prevent future repeated work.
+
+## Resume Behavior
+
+On every resume, context compaction, or new `/goal` run:
+
+1. Treat `goal.md` as the entrypoint and `docs/HASH_OPTIMIZATION_GOAL.md` as the authoritative detailed plan.
+2. Run `git status -sb`.
+3. Read the latest benchmark/optimization commits.
+4. Check whether there is a dirty experiment from a previous agent.
+5. If the dirty experiment is known rejected and belongs to the current goal, revert only that experiment.
+6. If the dirty change appears user-authored or unrelated, leave it alone.
+7. Load or recreate the latest trustworthy baseline before editing performance-sensitive code.
+8. Continue with the next smallest measurable step.
 
 ## Hardware Direction
 
@@ -241,15 +296,16 @@ python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.jso
 Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 
 1. Verify `git status -sb`.
-2. Confirm docs and recent commits contain no local paths or private machine details.
-3. Run focused Hash API unit tests.
-4. Build the available smoke CLI or full CUDA binary.
-5. Run the golden CUDA hash check when a CUDA binary is available.
-6. Run a short main-target CUDA benchmark.
-7. Run or load a repeated d8/b2048 baseline because recent useful evidence used that scenario.
-8. Inspect timing metadata and pick the next bottleneck.
-9. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
-10. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
+2. If `src/argon2params.cpp` contains only the rejected direct hex parser experiment, revert it and do not commit it.
+3. Confirm docs and recent commits contain no local paths or private machine details.
+4. Run focused Hash API unit tests.
+5. Build the available smoke CLI or full CUDA binary.
+6. Run the golden CUDA hash check when a CUDA binary is available.
+7. Run a short main-target CUDA benchmark.
+8. Run or load a repeated d8/b2048 baseline because recent useful evidence used that scenario.
+9. Inspect timing metadata and pick the next bottleneck.
+10. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
+11. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
 
 Known accepted and rejected experiments are documented in `docs/HASH_OPTIMIZATION_GOAL.md`. Do not retry rejected experiments unless the implementation shape has materially changed and the new attempt includes correctness checks.
 
