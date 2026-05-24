@@ -426,6 +426,7 @@ Rejected or risky experiments:
 - caching the resolved CUDA device id inside `CudaHashBackend` preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke had warmup and repeated subprocess exits with code 3221226356, so keep per-batch device info lookup unless backend lifetime handling is redesigned
 - replacing salt hex decoding's `substr` plus `std::stoi` path with direct nibble decoding preserved the golden CUDA hash, but a d8/b2048 generated CUDA comparison was unchanged at +0.76% median with an unstable 13.2% after-run spread, so keep the simpler decoder unless salt handling is redesigned more broadly
 - caching CUDA activation inside a `CudaHashBackend` object for the current thread preserved the golden CUDA hash but reproduced benchmark subprocess access-violation exits with code 3221226356 in warmup/measured d8/b2048 generated runs, so keep per-batch `activate()` unless CUDA backend lifetime and shutdown ordering are redesigned
+- replacing `KernelRunner` host staging buffers with `cudaMallocHost` pinned host allocations preserved the golden CUDA hash and reduced H2D/D2H timing in a generated CUDA d8/b2048 A/B run, but the same 10-second repeat-3 comparison regressed median throughput from 42.5k H/s to 35.7k H/s with noisy spreads, so keep ordinary host buffers unless a broader transfer-overlap design changes the tradeoff
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
