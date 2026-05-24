@@ -35,6 +35,22 @@ NESTED_TIMING_FIELDS = frozenset(
         "match_ms",
     }
 )
+NESTED_TIMING_PARENTS = {
+    "kernel_ms": "compute_ms",
+    "host_to_device_ms": "compute_ms",
+    "device_to_host_ms": "compute_ms",
+    "setup_normalize_cpu_ms": "setup_ms",
+    "setup_activate_cpu_ms": "setup_ms",
+    "setup_device_info_cpu_ms": "setup_ms",
+    "setup_params_cpu_ms": "setup_ms",
+    "setup_backend_init_cpu_ms": "setup_ms",
+    "first_block_initial_hash_cpu_ms": "first_block_ms",
+    "first_block_digest_cpu_ms": "first_block_ms",
+    "finalize_hash_ms": "finalize_ms",
+    "argon2_finalize_ms": "finalize_ms",
+    "base64_ms": "finalize_ms",
+    "match_ms": "finalize_ms",
+}
 
 
 @dataclass(frozen=True)
@@ -345,10 +361,18 @@ def median_timings(summaries: list[dict[str, Any]]) -> dict[str, float]:
 def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     total_ms = float(timings.get("total_ms", 0.0) or 0.0)
     shares: dict[str, float] = {}
+    nested_shares: dict[str, float] = {}
     for key, value in timings.items():
         if key == "total_ms" or key in NESTED_TIMING_FIELDS or total_ms <= 0.0:
             continue
         shares[key] = float(value) / total_ms * 100.0
+
+    for key, parent in NESTED_TIMING_PARENTS.items():
+        value = float(timings.get(key, 0.0) or 0.0)
+        parent_value = float(timings.get(parent, 0.0) or 0.0)
+        if parent_value <= 0.0:
+            continue
+        nested_shares[key] = value / parent_value * 100.0
 
     dominant_stage = ""
     dominant_stage_ms = 0.0
@@ -364,6 +388,7 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
         "dominant_stage_ms": dominant_stage_ms,
         "dominant_stage_pct": dominant_stage_pct,
         "stage_pct": shares,
+        "nested_stage_pct": nested_shares,
     }
 
 

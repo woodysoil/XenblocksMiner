@@ -498,6 +498,26 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert "base64_ms" not in analysis["stage_pct"]
     assert "match_ms" not in analysis["stage_pct"]
     assert analysis["stage_pct"]["finalize_ms"] == 30.0
+    assert analysis["nested_stage_pct"]["first_block_initial_hash_cpu_ms"] == 60.0
+    assert analysis["nested_stage_pct"]["first_block_digest_cpu_ms"] == 40.0
+    assert analysis["nested_stage_pct"]["setup_activate_cpu_ms"] == 0.2 / 5.5 * 100.0
+    assert analysis["nested_stage_pct"]["kernel_ms"] == 9.0 / 4.0 * 100.0
+    assert analysis["nested_stage_pct"]["finalize_hash_ms"] == 8.0 / 3.0 * 100.0
+    assert analysis["nested_stage_pct"]["argon2_finalize_ms"] == 200.0
+
+
+def test_timing_analysis_omits_nested_percentages_without_parent_timing():
+    analysis = benchmark.timing_analysis(
+        {
+            "compute_ms": 0.0,
+            "kernel_ms": 9.0,
+            "first_block_ms": 0.0,
+            "first_block_digest_cpu_ms": 2.0,
+            "total_ms": 10.0,
+        }
+    )
+
+    assert analysis["nested_stage_pct"] == {}
 
 
 def test_parse_scenario_supports_detailed_timings():

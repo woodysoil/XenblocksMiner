@@ -41,6 +41,7 @@ Current progress:
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
 - CUDA timing metadata reports nested sub-measurements such as `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`, so future tuning can distinguish transfers, kernel time, hash finalization, encoding, and target matching from their parent stages.
+- Benchmark `timing_analysis` includes `nested_stage_pct` so optimization agents can read nested diagnostics as percentages of their parent stage without treating them as additive wall time.
 - Optional `--detailed-timings` also splits CUDA setup timing and first-block CPU timing for diagnosis. These detailed fields are nested diagnostic timing, not additive wall time.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
