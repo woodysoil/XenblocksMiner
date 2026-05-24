@@ -5,7 +5,7 @@
 Use this exact command when starting or recreating the long-running goal:
 
 ```text
-/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed p/s=1, and variable m=difficulty until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet private data, or local hardware identifiers.
+/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s/p=1 are fixed and only m=difficulty may change between sessions. Keep iterating until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet private data, or local hardware identifiers.
 ```
 
 This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual, phase plan, and experiment ledger.
@@ -20,7 +20,7 @@ This goal follows the strongest Codex Goal shape:
 - Verification surface: focused Hash API tests, CUDA golden hash checks, machine-readable benchmark JSON, before/after comparison output, and committed diffs.
 - Constraints: preserve exact `argon2id-xen` semantics, Hash API compatibility, mining result fields, target matching, privacy rules, and public-repo hygiene.
 - Boundaries: focus on `src/hashapi/`, CUDA backend files, Argon2/Blake2b hot paths, benchmark scripts, tests, and narrowly related integration code.
-- Iteration policy: choose the next experiment from measured timing bottlenecks, validate correctness before trusting speed, commit useful stable slices, and revert or document rejected experiments.
+- Iteration policy: choose the next experiment from measured timing bottlenecks, validate correctness before trusting speed, commit useful stable slices, then immediately continue to the next measurable bottleneck.
 - Blocked stop condition: stop only when a listed stop condition is reached, no defensible optimization path remains, required tooling is unavailable, or public history rewrite decisions need the user.
 
 ## Outcome
@@ -52,11 +52,13 @@ Plateau evidence requires at least three consecutive well-scoped optimization at
 The optimization target is the real mining hash workload:
 
 - `t = 1` is fixed
-- `p = 1` / `s = 1` is fixed
-- `m = difficulty` / `diff` is variable and may change between benchmark or mining sessions
+- `s = 1` and `p = 1` are fixed as represented by the current implementation
+- `m = difficulty` / `diff` is the only workload parameter expected to vary between benchmark or mining sessions
 - salt, key, prefix, difficulty, matching, and result semantics must stay compatible with the current Hash API contract
 
 The primary metric is warm steady-state CUDA attempts per second. The secondary metric is milliseconds per valid hash attempt, especially for generated-key mining batches.
+
+Optimize same-difficulty warm loops first because they are the easiest to compare. Then confirm that the architecture also handles variable `m=diff` sequences without repeated setup or allocation costs dominating the run.
 
 ## Non-Negotiable Correctness Rules
 
@@ -116,6 +118,8 @@ On every resume, context compaction, or new `/goal` run:
 7. Load or recreate the latest trustworthy baseline before editing performance-sensitive code.
 8. Continue with the next smallest measurable step.
 
+If a dirty measurement-only change is already present, finish its validation and commit it before starting a new optimization experiment. Measurement improvements are useful when they make later performance decisions more reliable, even if they do not directly raise hashrate.
+
 ## Hardware Direction
 
 Optimize on the current CUDA-capable local GPU first. Keep the design ready for RTX 3050-class and higher-end CUDA GPUs later.
@@ -147,6 +151,8 @@ Work without asking for approval for normal local development:
 - make small validated commits
 
 Pause only for the stop conditions in this file. Do not pause just because a build, test, or benchmark takes time.
+
+When a command takes a long time, let it run to completion and continue from the result. Do not ask the user to approve routine rebuilds, CUDA checks, or repeated benchmarks.
 
 ## Privacy And Public History
 
@@ -296,8 +302,8 @@ python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.jso
 Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 
 1. Verify `git status -sb`.
-2. If `src/argon2params.cpp` contains only the rejected direct hex parser experiment, revert it and do not commit it.
-3. Confirm docs and recent commits contain no local paths or private machine details.
+2. Confirm docs and recent commits contain no local paths or private machine details.
+3. If timing instrumentation changes are dirty, validate them with focused tests, a CUDA golden hash check, and a short benchmark, then commit the measurement slice if it is correct.
 4. Run focused Hash API unit tests.
 5. Build the available smoke CLI or full CUDA binary.
 6. Run the golden CUDA hash check when a CUDA binary is available.
