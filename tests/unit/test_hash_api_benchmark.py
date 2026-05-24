@@ -576,6 +576,54 @@ def test_timing_analysis_omits_nested_percentages_without_parent_timing():
     assert analysis["nested_stage_pct"] == {}
 
 
+def test_collect_build_metadata_reads_public_safe_cmake_cache(tmp_path, monkeypatch):
+    cache = tmp_path / "CMakeCache.txt"
+    cache.write_text(
+        "\n".join(
+            [
+                "CMAKE_BUILD_TYPE:STRING=Release",
+                "CMAKE_CUDA_ARCHITECTURES:STRING=75;80;86",
+                "CMAKE_CUDA_COMPILER:FILEPATH=<private-cuda>/bin/nvcc.exe",
+                "CMAKE_GENERATOR:INTERNAL=Ninja",
+                "VCPKG_TARGET_TRIPLET:STRING=x64-windows",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_compiler_metadata(compiler):
+        assert compiler.endswith("nvcc.exe")
+        return {
+            "basename": "nvcc.exe",
+            "available": True,
+            "release": "12.8",
+            "version": "12.8.93",
+        }
+
+    monkeypatch.setattr(benchmark, "cuda_compiler_metadata", fake_compiler_metadata)
+
+    metadata = benchmark.collect_build_metadata(cache)
+
+    assert metadata["provided"] is True
+    assert metadata["available"] is True
+    assert metadata["generator"] == "Ninja"
+    assert metadata["build_type"] == "Release"
+    assert metadata["cuda_architectures"] == ["75", "80", "86"]
+    assert metadata["vcpkg_target_triplet"] == "x64-windows"
+    assert metadata["cuda_compiler"]["basename"] == "nvcc.exe"
+    assert metadata["cuda_compiler"]["release"] == "12.8"
+
+
+def test_collect_build_metadata_handles_missing_cache(tmp_path):
+    metadata = benchmark.collect_build_metadata(tmp_path / "missing")
+
+    assert metadata == {
+        "provided": True,
+        "available": False,
+        "error": "CMakeCache.txt not found",
+    }
+
+
 def test_parse_scenario_supports_detailed_timings():
     scenario = benchmark.parse_scenario(
         "name=diag,backend=cuda,difficulty=8,batch_size=2048,seconds=1,detailed_timings=true"
@@ -841,6 +889,18 @@ def test_build_sanitized_report_drops_private_fields():
         "created_at_unix": 123.0,
         "host": {"system": "Windows", "machine": "private-host"},
         "hardware": {"nvidia_smi": {"stdout": "0, Private GPU, 999.99, 4096 MiB"}},
+        "build": {
+            "provided": True,
+            "available": True,
+            "build_type": "Release",
+            "cuda_architectures": ["75", "86"],
+            "cuda_compiler": {
+                "path": "<private-cuda>/bin/nvcc.exe",
+                "basename": "nvcc.exe",
+                "release": "12.8",
+                "version": "12.8.93",
+            },
+        },
         "binary": r"D:\private\miner.exe",
         "salt": "private-salt",
         "presets": ["warm-short"],
@@ -876,6 +936,13 @@ def test_build_sanitized_report_drops_private_fields():
 
     assert sanitized["schema"] == "xenblocks.hashapi.benchmark-summary.v1"
     assert sanitized["source_schema"] == "xenblocks.hashapi.benchmark.v1"
+    assert sanitized["build"]["build_type"] == "Release"
+    assert sanitized["build"]["cuda_architectures"] == ["75", "86"]
+    assert sanitized["build"]["cuda_compiler"] == {
+        "basename": "nvcc.exe",
+        "release": "12.8",
+        "version": "12.8.93",
+    }
     assert sanitized["privacy"]["sanitized"] is True
     assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
     assert sanitized["runs"][0]["scenario"]["difficulty_sequence"] == [1, 8, 1, 8]
@@ -895,6 +962,7 @@ def test_build_sanitized_report_drops_private_fields():
         r"D:\private",
         "private-host",
         "Private GPU",
+        "<private-cuda>",
         "private-salt",
         "deadbeef",
         fixed_key,
@@ -1092,6 +1160,66 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
     assert json.loads(capsys.readouterr().out)["runs"][0]["summary"]["hashrate"] == 42.0
+
+
+def test_main_records_build_cache_metadata(monkeypatch, tmp_path, capsys):
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_build_metadata(cache_path):
+        assert cache_path == tmp_path / "build"
+        return {
+            "provided": True,
+            "available": True,
+            "build_type": "Release",
+            "cuda_architectures": ["86"],
+        }
+
+    def fake_run_scenario(binary, salt, scenario):
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "collect_build_metadata", fake_build_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+    sanitized_output = tmp_path / "summary.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--build-cache",
+            str(tmp_path / "build"),
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--output",
+            str(output),
+            "--sanitized-output",
+            str(sanitized_output),
+        ]
+    )
+
+    assert exit_code == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    sanitized = json.loads(sanitized_output.read_text(encoding="utf-8"))
+    assert report["build"]["build_type"] == "Release"
+    assert report["build"]["cuda_architectures"] == ["86"]
+    assert sanitized["build"]["build_type"] == "Release"
+    assert sanitized["build"]["cuda_architectures"] == ["86"]
+    capsys.readouterr()
 
 
 def test_main_can_disable_xuni_for_all_scenarios(monkeypatch, tmp_path):

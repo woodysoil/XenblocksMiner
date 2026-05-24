@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import re
 import statistics
 import subprocess
 import sys
@@ -327,6 +328,91 @@ def run_metadata_command(command: list[str]) -> dict[str, Any]:
     }
 
 
+def parse_cmake_cache(cache_path: Path) -> dict[str, str]:
+    cache_file = cache_path if cache_path.name == "CMakeCache.txt" else cache_path / "CMakeCache.txt"
+    if not cache_file.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for line in cache_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("//", "#")) or "=" not in line:
+            continue
+        key_type, value = line.split("=", 1)
+        key = key_type.split(":", 1)[0]
+        values[key] = value.strip()
+    return values
+
+
+def parse_nvcc_version_output(output: str) -> dict[str, str]:
+    release_match = re.search(r"release\s+([^,\s]+)", output)
+    version_match = re.search(r"\bV(\d+(?:\.\d+)+)\b", output)
+    metadata: dict[str, str] = {}
+    if release_match:
+        metadata["release"] = release_match.group(1)
+    if version_match:
+        metadata["version"] = version_match.group(1)
+    return metadata
+
+
+def cuda_compiler_metadata(compiler: str) -> dict[str, Any]:
+    if not compiler:
+        return {}
+
+    metadata: dict[str, Any] = {
+        "basename": compiler.replace("\\", "/").rsplit("/", 1)[-1],
+    }
+    try:
+        completed = subprocess.run([compiler, "--version"], text=True, capture_output=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        metadata["available"] = False
+        return metadata
+
+    metadata["available"] = completed.returncode == 0
+    if completed.returncode == 0:
+        metadata.update(parse_nvcc_version_output(f"{completed.stdout}\n{completed.stderr}"))
+    return metadata
+
+
+def collect_build_metadata(cache_path: Path | None) -> dict[str, Any]:
+    if cache_path is None:
+        return {"provided": False}
+
+    cache = parse_cmake_cache(cache_path)
+    if not cache:
+        return {
+            "provided": True,
+            "available": False,
+            "error": "CMakeCache.txt not found",
+        }
+
+    raw_architectures = cache.get("CMAKE_CUDA_ARCHITECTURES", "")
+    metadata: dict[str, Any] = {
+        "provided": True,
+        "available": True,
+    }
+    for output_key, cache_key in (
+        ("generator", "CMAKE_GENERATOR"),
+        ("build_type", "CMAKE_BUILD_TYPE"),
+        ("configuration_types", "CMAKE_CONFIGURATION_TYPES"),
+        ("vcpkg_target_triplet", "VCPKG_TARGET_TRIPLET"),
+    ):
+        value = cache.get(cache_key, "")
+        if value:
+            metadata[output_key] = value
+    if raw_architectures:
+        metadata["cuda_architectures_raw"] = raw_architectures
+        metadata["cuda_architectures"] = [
+            item
+            for item in re.split(r"[;,]\s*", raw_architectures)
+            if item
+        ]
+    compiler = cuda_compiler_metadata(cache.get("CMAKE_CUDA_COMPILER", ""))
+    if compiler:
+        metadata["cuda_compiler"] = compiler
+    return metadata
+
+
 def collect_hardware_metadata() -> dict[str, Any]:
     return {
         "nvidia_smi": run_metadata_command(
@@ -621,11 +707,43 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
+def sanitize_build_metadata(build: Any) -> dict[str, Any]:
+    if not isinstance(build, dict):
+        return {"provided": False}
+
+    safe: dict[str, Any] = {}
+    for key in (
+        "provided",
+        "available",
+        "error",
+        "generator",
+        "build_type",
+        "configuration_types",
+        "vcpkg_target_triplet",
+        "cuda_architectures",
+        "cuda_architectures_raw",
+    ):
+        if key in build:
+            safe[key] = build[key]
+
+    compiler = build.get("cuda_compiler")
+    if isinstance(compiler, dict):
+        safe_compiler = {
+            key: compiler[key]
+            for key in ("basename", "available", "release", "version")
+            if key in compiler
+        }
+        if safe_compiler:
+            safe["cuda_compiler"] = safe_compiler
+    return safe or {"provided": False}
+
+
 def build_sanitized_report(report: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": "xenblocks.hashapi.benchmark-summary.v1",
         "source_schema": report.get("schema", ""),
         "created_at_unix": report.get("created_at_unix"),
+        "build": sanitize_build_metadata(report.get("build")),
         "privacy": {
             "sanitized": True,
             "omitted_fields": [
@@ -772,6 +890,11 @@ def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[s
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path, help="Path to xenblocksMiner or hashapi-cli.")
+    parser.add_argument(
+        "--build-cache",
+        type=Path,
+        help="Optional CMake build directory or CMakeCache.txt used to record public-safe build metadata.",
+    )
     parser.add_argument("--salt", default=DEFAULT_SALT, help="Hex salt used by all benchmark scenarios.")
     parser.add_argument("--backend", default="cpu", help="Default backend for built-in scenarios.")
     parser.add_argument("--device", default=0, type=int, help="Default device id for built-in scenarios.")
@@ -907,6 +1030,7 @@ def main(argv: list[str]) -> int:
             "machine": platform.machine(),
             "python": platform.python_version(),
         },
+        "build": collect_build_metadata(args.build_cache),
         "hardware": collect_hardware_metadata(),
         "binary": str(args.binary),
         "salt": args.salt,

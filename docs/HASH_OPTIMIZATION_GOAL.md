@@ -52,6 +52,7 @@ Current progress:
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
 - Hash API benchmark summaries mark any nonzero benchmark subprocess exit as invalid even when stdout contains parseable JSON, so crashy optimization experiments cannot enter recommendations.
 - Hash API benchmark recommendations expose `report_ok`, run counts, and invalid scenario names so automation can reject partial scan matrices before acting on surviving tuning candidates.
+- Hash API benchmark reports can include public-safe build metadata via `--build-cache <build-dir>` so optimization agents can distinguish Release/Debug, CUDA architecture sets, generator, vcpkg triplet, and CUDA compiler version without committing local paths.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.
 - Do not start risky CUDA kernel rewrites until benchmark and timing data show that CPU-side setup, input generation, and allocation overhead are no longer the dominant bottlenecks.
