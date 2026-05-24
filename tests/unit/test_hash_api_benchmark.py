@@ -177,6 +177,8 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["max_hashrate"] == 30.0
     assert aggregate["hashrate_spread_pct"] == 100.0
     assert aggregate["attempts"] == 60
+    assert aggregate["elapsed_ms"] == 3000.0
+    assert aggregate["ms_per_attempt"] == 50.0
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
     assert aggregate["ok"] is True
@@ -203,6 +205,8 @@ def test_summarize_iterations_reports_median_timing_breakdown():
 
     assert aggregate["timings"]["compute_ms"] == 4.0
     assert aggregate["timings"]["input_ms"] == 2.0
+    assert aggregate["timing_per_attempt"]["compute_ms"] == 4.0
+    assert aggregate["timing_per_attempt"]["input_ms"] == 2.0
     assert aggregate["timing_analysis"]["dominant_stage"] == "compute_ms"
     assert aggregate["timing_analysis"]["dominant_stage_ms"] == 4.0
     assert aggregate["timing_analysis"]["dominant_stage_pct"] == 0.0
@@ -235,6 +239,28 @@ def test_summarize_iterations_reports_timing_stage_percentages():
     assert aggregate["timing_analysis"]["stage_pct"]["compute_ms"] == 30.0
     assert aggregate["timing_analysis"]["stage_pct"]["input_ms"] == 70.0
     assert "total_ms" not in aggregate["timing_analysis"]["stage_pct"]
+
+
+def test_summarize_iterations_reports_median_timing_per_attempt():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-test",
+        backend="cuda",
+        difficulty=1,
+        batch_size=2,
+        seconds=1,
+        repeat=3,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [
+            _summary(10.0, attempts=10, timings={"input_ms": 100.0}),
+            _summary(20.0, attempts=20, timings={"input_ms": 100.0}),
+            _summary(30.0, attempts=50, timings={"input_ms": 100.0}),
+        ],
+    )
+
+    assert aggregate["timing_per_attempt"]["input_ms"] == 5.0
 
 
 def test_build_recommendations_selects_best_batch_per_difficulty():

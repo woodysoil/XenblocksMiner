@@ -235,6 +235,33 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     }
 
 
+def timing_per_attempt(timings: dict[str, float], attempts: int) -> dict[str, float]:
+    if attempts <= 0:
+        return {}
+    return {key: value / attempts for key, value in timings.items()}
+
+
+def median_timing_per_attempt(summaries: list[dict[str, Any]]) -> dict[str, float]:
+    keys = sorted(
+        {
+            key
+            for summary in summaries
+            for key in summary.get("timings", {})
+        }
+    )
+    medians: dict[str, float] = {}
+    for key in keys:
+        values = []
+        for summary in summaries:
+            attempts = int(summary.get("attempts", 0) or 0)
+            per_attempt = timing_per_attempt(summary.get("timings", {}), attempts)
+            if key in per_attempt:
+                values.append(per_attempt[key])
+        if values:
+            medians[key] = statistics.median(values)
+    return medians
+
+
 def hashrate_spread_pct(min_hashrate: float, max_hashrate: float, median_hashrate: float) -> float:
     if median_hashrate <= 0.0:
         return 0.0
@@ -266,20 +293,24 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
     min_hashrate = min(hashrates) if hashrates else 0.0
     max_hashrate = max(hashrates) if hashrates else 0.0
     timings = median_timings(ok_summaries)
+    attempts = sum(int(item["attempts"]) for item in ok_summaries)
+    elapsed_ms = sum(float(item["elapsed_ms"]) for item in ok_summaries)
     aggregate = {
         "name": scenario.name,
         "backend": summaries[0]["backend"] if summaries else scenario.backend,
         "device_id": summaries[0]["device_id"] if summaries else scenario.device,
         "difficulty": scenario.difficulty,
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
-        "attempts": sum(int(item["attempts"]) for item in ok_summaries),
-        "elapsed_ms": sum(float(item["elapsed_ms"]) for item in ok_summaries),
+        "attempts": attempts,
+        "elapsed_ms": elapsed_ms,
+        "ms_per_attempt": elapsed_ms / attempts if attempts > 0 else 0.0,
         "hashrate": median_hashrate,
         "median_hashrate": median_hashrate,
         "min_hashrate": min_hashrate,
         "max_hashrate": max_hashrate,
         "hashrate_spread_pct": hashrate_spread_pct(min_hashrate, max_hashrate, median_hashrate),
         "timings": timings,
+        "timing_per_attempt": median_timing_per_attempt(ok_summaries),
         "timing_analysis": timing_analysis(timings),
         "matches": sum(int(item["matches"]) for item in ok_summaries),
         "ok": len(ok_summaries) == len(summaries) and bool(summaries),
