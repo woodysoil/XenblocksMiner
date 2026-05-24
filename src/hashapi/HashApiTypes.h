@@ -34,6 +34,15 @@ struct HashApiMatch {
     bool is_superblock = false;
 };
 
+struct HashApiTimings {
+    double validation_ms = 0.0;
+    double setup_ms = 0.0;
+    double input_ms = 0.0;
+    double compute_ms = 0.0;
+    double finalize_ms = 0.0;
+    double total_ms = 0.0;
+};
+
 struct HashApiResult {
     std::string request_id;
     bool ok = false;
@@ -45,6 +54,7 @@ struct HashApiResult {
     std::size_t attempts = 0;
     double elapsed_ms = 0.0;
     double hashrate = 0.0;
+    HashApiTimings timings;
     std::string hash;
     std::vector<HashApiMatch> matches;
 };

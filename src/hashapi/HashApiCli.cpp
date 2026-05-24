@@ -76,6 +76,16 @@ std::size_t getSizeArg(const std::unordered_map<std::string, std::string>& args,
     return static_cast<std::size_t>(std::stoull(it->second));
 }
 
+void addTimings(HashApiTimings& target, const HashApiTimings& source)
+{
+    target.validation_ms += source.validation_ms;
+    target.setup_ms += source.setup_ms;
+    target.input_ms += source.input_ms;
+    target.compute_ms += source.compute_ms;
+    target.finalize_ms += source.finalize_ms;
+    target.total_ms += source.total_ms;
+}
+
 HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& args)
 {
     HashApiRequest request;
@@ -212,6 +222,7 @@ int runBenchmark(HashApiRequest request, std::uint32_t seconds, bool json)
         }
         aggregate.ok = true;
         aggregate.attempts += current.attempts;
+        addTimings(aggregate.timings, current.timings);
         aggregate.matches.insert(aggregate.matches.end(), current.matches.begin(), current.matches.end());
     }
 

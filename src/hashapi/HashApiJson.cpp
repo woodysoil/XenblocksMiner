@@ -55,6 +55,20 @@ std::string toJson(const HashApiMatch& match)
     return out.str();
 }
 
+std::string toJson(const HashApiTimings& timings)
+{
+    std::ostringstream out;
+    out << "{"
+        << "\"validation_ms\":" << timings.validation_ms << ","
+        << "\"setup_ms\":" << timings.setup_ms << ","
+        << "\"input_ms\":" << timings.input_ms << ","
+        << "\"compute_ms\":" << timings.compute_ms << ","
+        << "\"finalize_ms\":" << timings.finalize_ms << ","
+        << "\"total_ms\":" << timings.total_ms
+        << "}";
+    return out.str();
+}
+
 std::string toJson(const HashApiResult& result)
 {
     std::ostringstream out;
@@ -69,6 +83,7 @@ std::string toJson(const HashApiResult& result)
         << "\"attempts\":" << result.attempts << ","
         << "\"elapsed_ms\":" << result.elapsed_ms << ","
         << "\"hashrate\":" << result.hashrate << ","
+        << "\"timings\":" << toJson(result.timings) << ","
         << "\"hash\":" << quote(result.hash) << ","
         << "\"matches\":[";
 

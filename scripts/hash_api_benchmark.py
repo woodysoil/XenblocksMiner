@@ -138,6 +138,39 @@ def collect_hardware_metadata() -> dict[str, Any]:
     }
 
 
+def summarize_timings(timings: Any) -> dict[str, float]:
+    if not isinstance(timings, dict):
+        return {}
+
+    summary: dict[str, float] = {}
+    for key, value in timings.items():
+        try:
+            summary[str(key)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return summary
+
+
+def median_timings(summaries: list[dict[str, Any]]) -> dict[str, float]:
+    keys = sorted(
+        {
+            key
+            for summary in summaries
+            for key in summary.get("timings", {})
+        }
+    )
+    medians: dict[str, float] = {}
+    for key in keys:
+        values = [
+            float(summary["timings"][key])
+            for summary in summaries
+            if key in summary.get("timings", {})
+        ]
+        if values:
+            medians[key] = statistics.median(values)
+    return medians
+
+
 def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": scenario.name,
@@ -148,6 +181,7 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "attempts": result.get("attempts", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
         "hashrate": result.get("hashrate", 0.0),
+        "timings": summarize_timings(result.get("timings", {})),
         "matches": len(result.get("matches", [])),
         "ok": bool(result.get("ok")),
         "error": result.get("error", ""),
@@ -170,6 +204,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "median_hashrate": statistics.median(hashrates) if hashrates else 0.0,
         "min_hashrate": min(hashrates) if hashrates else 0.0,
         "max_hashrate": max(hashrates) if hashrates else 0.0,
+        "timings": median_timings(ok_summaries),
         "matches": sum(int(item["matches"]) for item in ok_summaries),
         "ok": len(ok_summaries) == len(summaries) and bool(summaries),
         "error": "; ".join(errors),

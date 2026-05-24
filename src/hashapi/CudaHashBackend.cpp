@@ -16,6 +16,12 @@
 namespace hashapi {
 namespace {
 
+double elapsedMillis(std::chrono::steady_clock::time_point start,
+                     std::chrono::steady_clock::time_point end)
+{
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
 void fillPasswordBlock(ComputeBackend& backend,
                        const Argon2Params& params,
                        std::size_t index,
@@ -89,6 +95,7 @@ void CudaHashBackend::ensureInitialized(ComputeBackend& backend,
 
 HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 {
+    const auto total_start = std::chrono::steady_clock::now();
     HashApiResult result;
     result.request_id = request.request_id;
     result.algorithm = request.algorithm;
@@ -96,24 +103,30 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
     result.device_id = request.device_id;
     result.batch_size = request.batch_size;
 
+    const auto validation_start = std::chrono::steady_clock::now();
     const auto errors = validateRequest(request);
+    result.timings.validation_ms = elapsedMillis(validation_start, std::chrono::steady_clock::now());
     if (!errors.empty()) {
         result.error = joinErrors(errors);
+        result.timings.total_ms = elapsedMillis(total_start, std::chrono::steady_clock::now());
         return result;
     }
     if (request.backend != "cuda") {
         result.error = "CudaHashBackend requires backend=cuda";
+        result.timings.total_ms = elapsedMillis(total_start, std::chrono::steady_clock::now());
         return result;
     }
 
     const auto start = std::chrono::steady_clock::now();
-    const std::string salt = normalizeHex(request.salt_hex);
-    const std::string prefix = normalizeHex(request.key_prefix);
-    const std::string fixed_key = normalizeHex(request.key);
-    const bool single_key = !fixed_key.empty();
-    const std::size_t attempts = single_key ? 1 : request.batch_size;
 
     try {
+        const auto setup_start = std::chrono::steady_clock::now();
+        const std::string salt = normalizeHex(request.salt_hex);
+        const std::string prefix = normalizeHex(request.key_prefix);
+        const std::string fixed_key = normalizeHex(request.key);
+        const bool single_key = !fixed_key.empty();
+        const std::size_t attempts = single_key ? 1 : request.batch_size;
+
         auto& compute_backend = backend();
         compute_backend.activate();
         const auto device_info = compute_backend.getDeviceInfo();
@@ -123,7 +136,9 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
                             kDefaultHashLength, salt, nullptr, 0, nullptr, 0,
                             1, request.difficulty, 1);
         ensureInitialized(compute_backend, params, attempts, request.difficulty);
+        result.timings.setup_ms = elapsedMillis(setup_start, std::chrono::steady_clock::now());
 
+        const auto input_start = std::chrono::steady_clock::now();
         password_storage_.clear();
         password_storage_.reserve(attempts);
         RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
@@ -133,10 +148,14 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             fillPasswordBlock(compute_backend, params, i, key);
             password_storage_.push_back(key);
         }
+        result.timings.input_ms = elapsedMillis(input_start, std::chrono::steady_clock::now());
 
+        const auto compute_start = std::chrono::steady_clock::now();
         compute_backend.run();
         compute_backend.finish();
+        result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 
+        const auto finalize_start = std::chrono::steady_clock::now();
         for (std::size_t i = 0; i < attempts; ++i) {
             const std::string hash = finalizeHash(compute_backend, params, i);
             const std::string& key = password_storage_[i];
@@ -145,6 +164,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             }
             appendMatches(request, result, key, hash, i);
         }
+        result.timings.finalize_ms = elapsedMillis(finalize_start, std::chrono::steady_clock::now());
 
         result.ok = true;
         result.attempts = attempts;
@@ -154,7 +174,8 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
     }
 
     const auto end = std::chrono::steady_clock::now();
-    result.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+    result.elapsed_ms = elapsedMillis(start, end);
+    result.timings.total_ms = elapsedMillis(total_start, end);
     if (result.elapsed_ms > 0.0 && result.attempts > 0) {
         result.hashrate = static_cast<double>(result.attempts) / (result.elapsed_ms / 1000.0);
     }

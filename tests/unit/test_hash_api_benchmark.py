@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import scripts.hash_api_benchmark as benchmark
 
 
-def _summary(hashrate: float, attempts: int = 1, ok: bool = True) -> dict:
+def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict | None = None) -> dict:
     return {
         "name": "cuda-test",
         "backend": "cuda",
@@ -19,6 +19,7 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True) -> dict:
         "attempts": attempts,
         "elapsed_ms": 1000.0,
         "hashrate": hashrate,
+        "timings": timings or {},
         "matches": 0,
         "ok": ok,
         "error": "" if ok else "failed",
@@ -120,6 +121,29 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["ok"] is True
 
 
+def test_summarize_iterations_reports_median_timing_breakdown():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-test",
+        backend="cuda",
+        difficulty=1,
+        batch_size=2,
+        seconds=1,
+        repeat=3,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [
+            _summary(10.0, timings={"compute_ms": 3.0, "input_ms": 1.0}),
+            _summary(30.0, timings={"compute_ms": 5.0, "input_ms": 2.0}),
+            _summary(20.0, timings={"compute_ms": 4.0, "input_ms": 9.0}),
+        ],
+    )
+
+    assert aggregate["timings"]["compute_ms"] == 4.0
+    assert aggregate["timings"]["input_ms"] == 2.0
+
+
 def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypatch):
     calls = {"count": 0}
 
@@ -137,6 +161,7 @@ def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypa
                     "attempts": 2,
                     "elapsed_ms": 1000.0,
                     "hashrate": hashrate,
+                    "timings": {"compute_ms": hashrate},
                     "matches": [],
                     "error": "",
                 }
@@ -163,6 +188,7 @@ def test_run_scenario_records_warmup_iterations_and_selects_best_result(monkeypa
     assert result["result"]["hashrate"] == 103.0
     assert result["summary"]["min_hashrate"] == 102.0
     assert result["summary"]["max_hashrate"] == 103.0
+    assert result["summary"]["timings"]["compute_ms"] == 102.5
     assert result["exit_code"] == 0
 
 

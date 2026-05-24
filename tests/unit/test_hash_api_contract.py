@@ -15,6 +15,7 @@ def test_hash_api_type_contract_exists():
     for token in [
         "struct HashApiRequest",
         "struct HashApiMatch",
+        "struct HashApiTimings",
         "struct HashApiResult",
         "class IHashBackend",
         "virtual HashApiResult runBatch",
@@ -85,6 +86,27 @@ def test_hash_api_json_uses_standard_library_only():
     content = read("src/hashapi/HashApiJson.h")
     assert "nlohmann/json.hpp" not in content
     assert "std::string toJson" in content
+
+
+def test_hash_api_result_exposes_machine_readable_timings():
+    types = read("src/hashapi/HashApiTypes.h")
+    json_impl = read("src/hashapi/HashApiJson.cpp")
+    docs = read("docs/hash-api.md")
+
+    for field in [
+        "validation_ms",
+        "setup_ms",
+        "input_ms",
+        "compute_ms",
+        "finalize_ms",
+        "total_ms",
+    ]:
+        assert field in types
+        assert field in json_impl
+        assert field in docs
+    assert "timings" in json_impl
+    assert "toJson(result.timings)" in json_impl
+    assert "`timings`" in docs
 
 
 def test_cuda_hash_api_backend_exists():

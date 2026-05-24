@@ -65,6 +65,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "median_hashrate": _float_value(summary, "median_hashrate", _float_value(summary, "hashrate", 0.0)),
         "min_hashrate": _float_value(summary, "min_hashrate", _float_value(summary, "hashrate", 0.0)),
         "max_hashrate": _float_value(summary, "max_hashrate", _float_value(summary, "hashrate", 0.0)),
+        "timings": summary.get("timings", {}),
         "matches": _int_value(summary, "matches", 0),
         "ok": bool(summary.get("ok")),
         "error": str(summary.get("error") or ""),

@@ -67,10 +67,13 @@ Core files:
 - `attempts`
 - `elapsed_ms`
 - `hashrate`
+- `timings`
 - `hash`
 - `matches`
 
 `hash` is populated for fixed-key `hash-one` requests.
+
+`timings` is a machine-readable millisecond breakdown for optimization. Current fields are `validation_ms`, `setup_ms`, `input_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -135,6 +138,14 @@ Example success shape:
   "attempts": 1,
   "elapsed_ms": 12.3,
   "hashrate": 81.3,
+  "timings": {
+    "validation_ms": 0.1,
+    "setup_ms": 0.2,
+    "input_ms": 0.0,
+    "compute_ms": 12.0,
+    "finalize_ms": 0.0,
+    "total_ms": 12.4
+  },
   "hash": "$argon2id$...",
   "matches": []
 }
@@ -154,6 +165,14 @@ Example failure shape:
   "attempts": 0,
   "elapsed_ms": 0.0,
   "hashrate": 0.0,
+  "timings": {
+    "validation_ms": 0.1,
+    "setup_ms": 0.0,
+    "input_ms": 0.0,
+    "compute_ms": 0.0,
+    "finalize_ms": 0.0,
+    "total_ms": 0.1
+  },
   "hash": "",
   "matches": []
 }
