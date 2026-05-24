@@ -53,6 +53,7 @@ Core files:
 - `device_id`: non-negative device identifier.
 - `allow_xuni`: enables secondary `XUNI\d` match detection.
 - `first_block_workers`: optional CUDA first-block worker-thread cap. `0` keeps automatic worker-count behavior.
+- `first_block_dynamic_chunk_size`: optional CUDA first-block dynamic scheduling chunk size. `0` keeps the default static chunking behavior; nonzero values are for benchmark-only scheduler experiments.
 
 ### Result
 
@@ -66,6 +67,7 @@ Core files:
 - `device_id`
 - `batch_size`
 - `attempts`
+- `first_block_dynamic_chunk_size`
 - `first_block_worker_count`
 - `first_block_chunk_size`
 - `elapsed_ms`
@@ -76,7 +78,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`first_block_worker_count` and `first_block_chunk_size` describe the CUDA first-block scheduling shape selected for the request, including automatic worker selection when `first_block_workers` is `0`. `timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block diagnostics `first_block_initial_hash_cpu_ms`, `first_block_digest_cpu_ms`, `first_block_max_worker_ms`, `first_block_thread_launch_ms`, `first_block_max_worker_start_ms`, `first_block_worker_start_span_ms`, `first_block_max_worker_finish_ms`, and `first_block_worker_finish_span_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time; `first_block_max_worker_ms` is the slowest worker-local wall time observed for the batch, while the worker start and finish fields help separate thread launch latency, worker-loop work, and post-worker join overhead. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
+`first_block_worker_count`, `first_block_chunk_size`, and `first_block_dynamic_chunk_size` describe the CUDA first-block scheduling shape selected for the request, including automatic worker selection when `first_block_workers` is `0`. Static first-block chunking remains the default when `first_block_dynamic_chunk_size` is `0`; nonzero dynamic chunk sizes are an explicit tuning surface for measuring worker start skew and load-balance effects. `timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report nested sub-measurements: `kernel_ms`, `host_to_device_ms`, and `device_to_host_ms` inside `compute_ms`, plus `finalize_hash_ms`, `argon2_finalize_ms`, `base64_ms`, and `match_ms` inside `finalize_ms`. When `--detailed-timings` is enabled, CUDA results also report diagnostic setup counters `setup_normalize_cpu_ms`, `setup_activate_cpu_ms`, `setup_device_info_cpu_ms`, `setup_params_cpu_ms`, and `setup_backend_init_cpu_ms`, plus first-block diagnostics `first_block_initial_hash_cpu_ms`, `first_block_digest_cpu_ms`, `first_block_max_worker_ms`, `first_block_thread_launch_ms`, `first_block_max_worker_start_ms`, `first_block_worker_start_span_ms`, `first_block_max_worker_finish_ms`, and `first_block_worker_finish_span_ms`. First-block CPU-time counters can exceed `first_block_ms` on parallel first-block preparation because they sum worker-local CPU time, not wall time; `first_block_max_worker_ms` is the slowest worker-local wall time observed for the batch, while the worker start and finish fields help separate thread launch latency, worker-loop work, and post-worker join overhead. The default path leaves detailed fields at `0.0` to avoid extra hot-path timing overhead. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -113,6 +115,7 @@ xenblocksMiner hash-batch --salt <hex> --backend cuda --device 0 --prefix <hex> 
 xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --prefix <hex> --seconds 30 --batch-size 10 --difficulty 1024 --json
 xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --seconds 30 --batch-size 512 --difficulty-sequence 1,8,1,8 --json
 xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --seconds 30 --batch-size 2048 --difficulty 8 --first-block-workers 4 --json
+xenblocksMiner hash-benchmark --salt <hex> --backend cuda --device 0 --seconds 30 --batch-size 2048 --difficulty 8 --first-block-dynamic-chunk-size 64 --json
 ```
 
 The standalone CLI target uses the same commands through `hashapi-cli`:
@@ -141,6 +144,9 @@ Example success shape:
   "device_id": 0,
   "batch_size": 1,
   "attempts": 1,
+  "first_block_dynamic_chunk_size": 0,
+  "first_block_worker_count": 0,
+  "first_block_chunk_size": 0,
   "elapsed_ms": 12.3,
   "hashrate": 81.3,
   "timings": {
@@ -190,6 +196,9 @@ Example failure shape:
   "device_id": 0,
   "batch_size": 1,
   "attempts": 0,
+  "first_block_dynamic_chunk_size": 0,
+  "first_block_worker_count": 0,
+  "first_block_chunk_size": 0,
   "elapsed_ms": 0.0,
   "hashrate": 0.0,
   "timings": {
@@ -253,9 +262,9 @@ Use `--preset isolation` to run a generated-key d8/b2048 scenario next to a fixe
 
 Use `--recommendations-only` when an automation step only needs the selected tuning recommendations on stdout while still optionally writing the full report with `--output`.
 
-For larger GPUs or deeper tuning, use repeated `--scan-difficulty`, `--scan-batch-size`, and `--scan-first-block-workers` options to generate a custom matrix without editing the script. Add `--scan-detailed-timings` when the generated scan should include detailed CUDA setup and first-block diagnostic counters.
+For larger GPUs or deeper tuning, use repeated `--scan-difficulty`, `--scan-batch-size`, `--scan-first-block-workers`, and `--scan-first-block-dynamic-chunk-size` options to generate a custom matrix without editing the script. Add `--scan-detailed-timings` when the generated scan should include detailed CUDA setup and first-block diagnostic counters.
 
-Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing, per-attempt timing, top-level stage-percentage deltas, and nested stage-percentage deltas, preserves variable-difficulty metadata, first-block worker cap, selected worker count, and first-block chunk size, and marks improved, regressed, and unchanged scenarios as noisy when either run's spread exceeds the configured threshold. Comparison output includes report-quality metadata from `report_ok`, invalid run counts, and `benchmark_trust`; add `--fail-on-report-quality` when automation should reject partial or low-trust reports before accepting a performance conclusion. By default, comparison matches runs by scenario name. Use `--match-by config` when two reports describe the same comparable benchmark settings but use different scenario names. Config matching includes backend, device, difficulty mode and sequence, key mode, batch size, seconds, warm-up, repeat, XUNI mode, detailed-timing mode, and first-block worker cap. Add `--ignore-detailed-timings` with config matching only when comparing default-timing and detailed-timing reports for the same scenario.
+Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports total timing, per-attempt timing, top-level stage-percentage deltas, and nested stage-percentage deltas, preserves variable-difficulty metadata, first-block worker cap, first-block dynamic chunk size, selected worker count, and first-block chunk size, and marks improved, regressed, and unchanged scenarios as noisy when either run's spread exceeds the configured threshold. Comparison output includes report-quality metadata from `report_ok`, invalid run counts, and `benchmark_trust`; add `--fail-on-report-quality` when automation should reject partial or low-trust reports before accepting a performance conclusion. By default, comparison matches runs by scenario name. Use `--match-by config` when two reports describe the same comparable benchmark settings but use different scenario names. Config matching includes backend, device, difficulty mode and sequence, key mode, batch size, seconds, warm-up, repeat, XUNI mode, detailed-timing mode, first-block worker cap, and first-block dynamic chunk size. Add `--ignore-detailed-timings` with config matching only when comparing default-timing and detailed-timing reports for the same scenario.
 
 Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the normal main-target path without secondary XUNI matching.
 

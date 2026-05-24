@@ -26,6 +26,7 @@ struct HashApiRequest {
     bool allow_xuni = true;
     bool detailed_timings = false;
     std::size_t first_block_workers = 0;
+    std::size_t first_block_dynamic_chunk_size = 0;
 };
 
 struct HashApiMatch {
@@ -76,6 +77,7 @@ struct HashApiResult {
     int device_id = 0;
     std::size_t batch_size = 0;
     std::size_t attempts = 0;
+    std::size_t first_block_dynamic_chunk_size = 0;
     std::size_t first_block_worker_count = 0;
     std::size_t first_block_chunk_size = 0;
     double elapsed_ms = 0.0;

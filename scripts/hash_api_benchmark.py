@@ -83,6 +83,7 @@ class BenchmarkScenario:
     allow_xuni: bool = True
     detailed_timings: bool = False
     first_block_workers: int = 0
+    first_block_dynamic_chunk_size: int = 0
 
 
 def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
@@ -147,6 +148,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         allow_xuni=parts.get("allow_xuni", "true").lower() not in {"0", "false", "no"},
         detailed_timings=parts.get("detailed_timings", "false").lower() in {"1", "true", "yes"},
         first_block_workers=max(0, int(parts.get("first_block_workers", "0"))),
+        first_block_dynamic_chunk_size=max(0, int(parts.get("first_block_dynamic_chunk_size", "0"))),
     )
 
 
@@ -158,6 +160,7 @@ def scan_scenarios(
     difficulties: list[int],
     batch_sizes: list[int],
     first_block_workers: list[int],
+    first_block_dynamic_chunk_sizes: list[int],
     detailed_timings: bool,
     seconds: int,
     backend: str,
@@ -166,13 +169,12 @@ def scan_scenarios(
     repeat: int,
 ) -> list[BenchmarkScenario]:
     worker_caps = first_block_workers or [0]
+    dynamic_chunk_sizes = first_block_dynamic_chunk_sizes or [0]
     return [
         BenchmarkScenario(
-            name=(
-                f"{backend}-scan-d{difficulty}-b{batch_size}"
-                if worker_cap == 0
-                else f"{backend}-scan-d{difficulty}-b{batch_size}-fbw{worker_cap}"
-            ),
+            name=f"{backend}-scan-d{difficulty}-b{batch_size}"
+            + ("" if worker_cap == 0 else f"-fbw{worker_cap}")
+            + ("" if dynamic_chunk_size == 0 else f"-fbd{dynamic_chunk_size}"),
             backend=backend,
             difficulty=difficulty,
             batch_size=batch_size,
@@ -181,11 +183,13 @@ def scan_scenarios(
             warmup=warmup,
             repeat=repeat,
             first_block_workers=worker_cap,
+            first_block_dynamic_chunk_size=dynamic_chunk_size,
             detailed_timings=detailed_timings,
         )
         for difficulty in difficulties
         for batch_size in batch_sizes
         for worker_cap in worker_caps
+        for dynamic_chunk_size in dynamic_chunk_sizes
     ]
 
 
@@ -660,6 +664,7 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "batch_size": result.get("batch_size", scenario.batch_size),
         "attempts": result.get("attempts", 0),
         "first_block_workers": scenario.first_block_workers,
+        "first_block_dynamic_chunk_size": scenario.first_block_dynamic_chunk_size,
         "first_block_worker_count": result.get("first_block_worker_count", 0),
         "first_block_chunk_size": result.get("first_block_chunk_size", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
@@ -695,6 +700,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": attempts,
         "first_block_workers": scenario.first_block_workers,
+        "first_block_dynamic_chunk_size": scenario.first_block_dynamic_chunk_size,
         "first_block_worker_count": _median_int([item.get("first_block_worker_count", 0) for item in ok_summaries]),
         "first_block_chunk_size": _median_int([item.get("first_block_chunk_size", 0) for item in ok_summaries]),
         "elapsed_ms": elapsed_ms,
@@ -768,6 +774,7 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "difficulty": int(summary.get("difficulty", 0)),
             "batch_size": int(summary.get("batch_size", 0)),
             "first_block_workers": int(summary.get("first_block_workers", 0) or 0),
+            "first_block_dynamic_chunk_size": int(summary.get("first_block_dynamic_chunk_size", 0) or 0),
             "first_block_worker_count": int(summary.get("first_block_worker_count", 0) or 0),
             "first_block_chunk_size": int(summary.get("first_block_chunk_size", 0) or 0),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
@@ -828,6 +835,7 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "key_mode",
         "detailed_timings",
         "first_block_workers",
+        "first_block_dynamic_chunk_size",
     )
     sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
     if "key_mode" not in sanitized:
@@ -933,6 +941,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         command.append("--detailed-timings")
     if scenario.first_block_workers > 0:
         command.extend(["--first-block-workers", str(scenario.first_block_workers)])
+    if scenario.first_block_dynamic_chunk_size > 0:
+        command.extend(["--first-block-dynamic-chunk-size", str(scenario.first_block_dynamic_chunk_size)])
     return command
 
 
@@ -1091,6 +1101,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a CUDA first-block worker cap for generated scan scenarios. Use 0 for automatic worker count.",
     )
     parser.add_argument(
+        "--scan-first-block-dynamic-chunk-size",
+        action="append",
+        type=int,
+        default=[],
+        help="Add a CUDA first-block dynamic chunk size for generated scan scenarios. Use 0 for static chunking.",
+    )
+    parser.add_argument(
         "--scan-detailed-timings",
         action="store_true",
         help="Enable detailed timing diagnostics on generated scan scenarios.",
@@ -1148,6 +1165,7 @@ def main(argv: list[str]) -> int:
                     args.scan_difficulty,
                     args.scan_batch_size,
                     args.scan_first_block_workers,
+                    args.scan_first_block_dynamic_chunk_size,
                     args.scan_detailed_timings,
                     args.seconds,
                     args.backend,

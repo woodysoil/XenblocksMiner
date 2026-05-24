@@ -109,6 +109,11 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
             _bool_value(scenario, "detailed_timings", False),
         ),
         "first_block_workers": _int_value(summary, "first_block_workers", _int_value(scenario, "first_block_workers", 0)),
+        "first_block_dynamic_chunk_size": _int_value(
+            summary,
+            "first_block_dynamic_chunk_size",
+            _int_value(scenario, "first_block_dynamic_chunk_size", 0),
+        ),
         "first_block_worker_count": _int_value(summary, "first_block_worker_count", 0),
         "first_block_chunk_size": _int_value(summary, "first_block_chunk_size", 0),
         "attempts": _int_value(summary, "attempts", 0),
@@ -148,6 +153,7 @@ def run_config_key(run: dict[str, Any], ignore_detailed_timings: bool = False) -
         run["allow_xuni"],
         False if ignore_detailed_timings else run["detailed_timings"],
         run["first_block_workers"],
+        run["first_block_dynamic_chunk_size"],
     )
 
 
@@ -177,6 +183,7 @@ def format_run_key(key: RunKey) -> str:
         allow_xuni,
         detailed_timings,
         first_block_workers,
+        first_block_dynamic_chunk_size,
     ) = key
     if difficulty_mode == "sequence":
         difficulty_label = "x".join(str(item) for item in difficulty_sequence)
@@ -187,7 +194,7 @@ def format_run_key(key: RunKey) -> str:
     return (
         f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size}:"
         f"{key_mode}:changes{difficulty_changes}:s{seconds}:w{warmup}:r{repeat}:"
-        f"{xuni_label}:{detail_label}:fbw{first_block_workers}"
+        f"{xuni_label}:{detail_label}:fbw{first_block_workers}:fbd{first_block_dynamic_chunk_size}"
     )
 
 
@@ -381,6 +388,7 @@ def compare_reports(
                 "warmup": (after or before or {}).get("warmup", 0),
                 "repeat": (after or before or {}).get("repeat", 1),
                 "first_block_workers": (after or before or {}).get("first_block_workers", 0),
+                "first_block_dynamic_chunk_size": (after or before or {}).get("first_block_dynamic_chunk_size", 0),
                 "first_block_worker_count": (after or before or {}).get("first_block_worker_count", 0),
                 "first_block_chunk_size": (after or before or {}).get("first_block_chunk_size", 0),
                 "timing_deltas": compare_timings(before, after),
@@ -442,6 +450,7 @@ def format_text(report: Report) -> str:
             "warmup",
             "repeat",
             "first_block_workers",
+            "first_block_dynamic_chunk_size",
             "first_block_worker_count",
             "first_block_chunk_size",
             "dominant_timing_delta",
@@ -509,6 +518,7 @@ def format_text(report: Report) -> str:
                 str(item["warmup"]),
                 str(item["repeat"]),
                 str(item["first_block_workers"]),
+                str(item["first_block_dynamic_chunk_size"]),
                 str(item["first_block_worker_count"]),
                 str(item["first_block_chunk_size"]),
                 dominant_timing_delta,

@@ -38,6 +38,7 @@ def test_hash_api_request_fields_exist():
         "allow_xuni",
         "detailed_timings",
         "first_block_workers",
+        "first_block_dynamic_chunk_size",
     ]:
         assert field in content
 
@@ -164,6 +165,7 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
     docs = read("docs/hash-api.md")
 
     for field in [
+        "first_block_dynamic_chunk_size",
         "first_block_worker_count",
         "first_block_chunk_size",
     ]:
@@ -172,7 +174,9 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
         assert field in docs
 
     assert "firstBlockWorkerCount(attempts, request.first_block_workers)" in cuda_impl
-    assert "firstBlockChunkSize(attempts, result.first_block_worker_count)" in cuda_impl
+    assert "firstBlockSelectedChunkSize(" in cuda_impl
+    assert "request.first_block_dynamic_chunk_size" in cuda_impl
+    assert "next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed)" in cuda_impl
 
 
 def test_hash_api_base64_encoder_avoids_incremental_string_appends():
@@ -216,12 +220,14 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "parseDifficultySequence" in content
     assert "aggregate.hash = current.hash" in content
     assert "aggregate.hash.clear()" in content
+    assert "aggregate.first_block_dynamic_chunk_size = current.first_block_dynamic_chunk_size" in content
     assert "aggregate.first_block_worker_count = current.first_block_worker_count" in content
     assert "aggregate.first_block_chunk_size = current.first_block_chunk_size" in content
     assert "target.first_block_max_worker_ms += source.first_block_max_worker_ms" in content
     assert "target.first_block_thread_launch_ms += source.first_block_thread_launch_ms" in content
     assert "target.first_block_worker_finish_span_ms += source.first_block_worker_finish_span_ms" in content
     assert "--detailed-timings" in content
+    assert "--first-block-dynamic-chunk-size" in content
     assert "ex.what()" in content
     assert "cuda backend is not available in this build" in content
 

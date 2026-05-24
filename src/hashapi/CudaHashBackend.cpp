@@ -9,6 +9,7 @@
 #include "../argon2params.h"
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <exception>
@@ -67,10 +68,24 @@ std::size_t firstBlockChunkSize(std::size_t attempts, std::size_t worker_count)
     return (attempts + worker_count - 1) / worker_count;
 }
 
+std::size_t firstBlockSelectedChunkSize(std::size_t attempts,
+                                        std::size_t worker_count,
+                                        std::size_t dynamic_chunk_size)
+{
+    if (attempts == 0 || worker_count == 0) {
+        return 0;
+    }
+    if (dynamic_chunk_size > 0 && worker_count > 1) {
+        return std::min(attempts, dynamic_chunk_size);
+    }
+    return firstBlockChunkSize(attempts, worker_count);
+}
+
 void fillPasswordBlocks(ComputeBackend& backend,
                         const Argon2Params& params,
                         const std::vector<std::string>& passwords,
                         std::size_t worker_cap,
+                        std::size_t dynamic_chunk_size,
                         Argon2FirstBlockTimings* timings)
 {
     const std::size_t attempts = passwords.size();
@@ -82,19 +97,21 @@ void fillPasswordBlocks(ComputeBackend& backend,
         return;
     }
 
-    const std::size_t chunk_size = firstBlockChunkSize(attempts, worker_count);
+    const std::size_t chunk_size = firstBlockSelectedChunkSize(attempts, worker_count, dynamic_chunk_size);
     std::vector<Argon2FirstBlockTimings> worker_timings(timings == nullptr ? 0 : worker_count);
     std::vector<std::thread> workers;
     std::vector<double> worker_start_offsets(timings == nullptr ? 0 : worker_count);
     std::vector<double> worker_finish_offsets(timings == nullptr ? 0 : worker_count);
+    std::atomic<std::size_t> next_dynamic_index{0};
     const auto launch_start = timings == nullptr
         ? std::chrono::steady_clock::time_point{}
         : std::chrono::steady_clock::now();
     workers.reserve(worker_count);
     for (std::size_t worker = 0; worker < worker_count; ++worker) {
-        const std::size_t begin = worker * chunk_size;
-        const std::size_t end = std::min(attempts, begin + chunk_size);
-        if (begin >= end) {
+        const bool dynamic_chunks = dynamic_chunk_size > 0;
+        const std::size_t static_begin = worker * chunk_size;
+        const std::size_t static_end = std::min(attempts, static_begin + chunk_size);
+        if (!dynamic_chunks && static_begin >= static_end) {
             break;
         }
         workers.emplace_back([&backend,
@@ -103,10 +120,14 @@ void fillPasswordBlocks(ComputeBackend& backend,
                               &worker_timings,
                               &worker_start_offsets,
                               &worker_finish_offsets,
+                              &next_dynamic_index,
+                              dynamic_chunks,
                               timings,
                               worker,
-                              begin,
-                              end,
+                              static_begin,
+                              static_end,
+                              attempts,
+                              chunk_size,
                               launch_start]() {
             std::chrono::steady_clock::time_point worker_start;
             if (timings != nullptr) {
@@ -114,8 +135,21 @@ void fillPasswordBlocks(ComputeBackend& backend,
                 worker_start_offsets[worker] = elapsedMillis(launch_start, worker_start);
             }
             Argon2FirstBlockTimings* local_timings = timings == nullptr ? nullptr : &worker_timings[worker];
-            for (std::size_t i = begin; i < end; ++i) {
-                fillPasswordBlock(backend, params, i, passwords[i], local_timings);
+            if (dynamic_chunks) {
+                for (;;) {
+                    const std::size_t begin = next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed);
+                    if (begin >= attempts) {
+                        break;
+                    }
+                    const std::size_t end = std::min(attempts, begin + chunk_size);
+                    for (std::size_t i = begin; i < end; ++i) {
+                        fillPasswordBlock(backend, params, i, passwords[i], local_timings);
+                    }
+                }
+            } else {
+                for (std::size_t i = static_begin; i < static_end; ++i) {
+                    fillPasswordBlock(backend, params, i, passwords[i], local_timings);
+                }
             }
             if (local_timings != nullptr) {
                 const auto worker_finish = std::chrono::steady_clock::now();
@@ -251,7 +285,14 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         const bool single_key = !fixed_key.empty();
         const std::size_t attempts = single_key ? 1 : request.batch_size;
         result.first_block_worker_count = firstBlockWorkerCount(attempts, request.first_block_workers);
-        result.first_block_chunk_size = firstBlockChunkSize(attempts, result.first_block_worker_count);
+        result.first_block_dynamic_chunk_size = 0;
+        if (result.first_block_worker_count > 1 && request.first_block_dynamic_chunk_size > 0) {
+            result.first_block_dynamic_chunk_size = std::min(attempts, request.first_block_dynamic_chunk_size);
+        }
+        result.first_block_chunk_size = firstBlockSelectedChunkSize(
+            attempts,
+            result.first_block_worker_count,
+            result.first_block_dynamic_chunk_size);
 
         auto& compute_backend = backend();
         result.timings.setup_activate_cpu_ms = timed_setup_step([&]() {
@@ -316,7 +357,12 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             result.timings.keygen_ms = elapsedMillis(keygen_start, std::chrono::steady_clock::now());
 
             const auto first_block_start = std::chrono::steady_clock::now();
-            fillPasswordBlocks(compute_backend, params, password_storage_, request.first_block_workers, detailed_first_block_timings);
+            fillPasswordBlocks(compute_backend,
+                               params,
+                               password_storage_,
+                               request.first_block_workers,
+                               request.first_block_dynamic_chunk_size,
+                               detailed_first_block_timings);
             result.timings.first_block_ms = elapsedMillis(first_block_start, std::chrono::steady_clock::now());
         }
         result.timings.first_block_initial_hash_cpu_ms = first_block_timings.initial_hash_ms;

@@ -63,6 +63,7 @@ Current progress:
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
 - CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers` and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
+- CUDA Hash API scenarios can set `first_block_dynamic_chunk_size` / `--first-block-dynamic-chunk-size` to benchmark dynamic first-block chunk distribution. The default `0` keeps static chunking and current miner behavior; nonzero values are explicit experiments for worker start skew and load-balance diagnostics.
 - Hash API benchmark presets include an `isolation` matrix for comparing generated-key d8/b2048 throughput against fixed-key d8/b1 behavior before choosing between input-preparation, compute, and finalization work.
 - Hash API benchmark summaries mark any nonzero benchmark subprocess exit as invalid even when stdout contains parseable JSON, so crashy optimization experiments cannot enter recommendations.
 - Hash API benchmark recommendations expose `report_ok`, run counts, and invalid scenario names so automation can reject partial scan matrices before acting on surviving tuning candidates.
@@ -493,6 +494,8 @@ Measurement cautions:
 - Measurement-only update: detailed first-block timing now includes thread launch duration, latest worker start offset, worker start span, latest worker finish offset, and worker finish span. These fields are detailed-only diagnostics for scheduler experiments and do not add default benchmark timing overhead.
 - Measurement-only update: worker finish-span diagnostics now expose whether first-block wall time is explained by the last worker to finish or by post-worker join/accounting overhead, reducing the risk of misreading start skew as a scheduler optimization target.
 - Measurement-only update: benchmark timing analysis now derives first-block finish-wall ratio and post-worker overhead fields from existing detailed worker finish timing. This does not add new CUDA timing overhead.
+- Measurement-only update: first-block dynamic chunk sizing is now an explicit benchmark-only scheduling knob. It preserves default static chunking at `0` and lets future scans test whether smaller dynamic work chunks absorb worker start skew.
+- Measurement-only smoke: a short d8/b256 generated CUDA run confirmed the dynamic chunk knob executes and reports `first_block_dynamic_chunk_size` correctly with normal benchmark trust. Static chunking reached about `50.6k H/s`; dynamic chunk size `64` reached about `45.6k H/s`. Treat this as a functionality smoke only, not a tuning claim, because it used one short sample.
 - A clean Release CUDA rebuild was needed after adding fields to `HashApiResult`; an incremental rebuild produced corrupted aggregate JSON fields before the clean rebuild. For future `HashApiResult` layout changes, prefer clean rebuild validation before trusting CLI benchmark output.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
@@ -514,7 +517,7 @@ Good next experiment shapes:
 
 - Add measurement that separates first-block digest expansion from scheduling overhead more clearly without adding default benchmark overhead.
 - Reduce generated first-block preparation allocations or copies if inspection finds a hot local allocation that is not already rejected.
-- Improve first-block scheduling or worker chunking only behind an explicit benchmark knob until stable repeated evidence supports a default; do not optimize post-worker join/accounting overhead unless newer diagnostics contradict the finish-overhead run.
+- Improve first-block scheduling or worker chunking only behind an explicit benchmark knob such as `first_block_dynamic_chunk_size` until stable repeated evidence supports a default; do not optimize post-worker join/accounting overhead unless newer diagnostics contradict the finish-overhead run.
 - Improve architecture boundaries that let CUDA backend state, difficulty-derived setup, or timing metadata be reused safely without activation or runner lifetime regressions.
 
 ## Phase Plan

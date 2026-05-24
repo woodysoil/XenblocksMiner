@@ -24,9 +24,9 @@ void printUsage()
 {
     std::cout
         << "Hash API commands:\n"
-        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n"
-        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--json]\n";
+        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--json]\n"
+        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--json]\n"
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -164,6 +164,7 @@ HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& a
     request.allow_xuni = getArg(args, "--no-xuni") != "true";
     request.detailed_timings = getArg(args, "--detailed-timings") == "true";
     request.first_block_workers = getSizeArg(args, "--first-block-workers", 0);
+    request.first_block_dynamic_chunk_size = getSizeArg(args, "--first-block-dynamic-chunk-size", 0);
     return request;
 }
 
@@ -310,6 +311,7 @@ int runBenchmark(HashApiRequest request,
         }
         aggregate.ok = true;
         aggregate.attempts += current.attempts;
+        aggregate.first_block_dynamic_chunk_size = current.first_block_dynamic_chunk_size;
         aggregate.first_block_worker_count = current.first_block_worker_count;
         aggregate.first_block_chunk_size = current.first_block_chunk_size;
         addTimings(aggregate.timings, current.timings);

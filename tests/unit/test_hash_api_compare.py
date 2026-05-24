@@ -21,6 +21,7 @@ def _run(
     difficulty_sequence: list[int] | None = None,
     key_mode: str = "generated",
     first_block_workers: int = 0,
+    first_block_dynamic_chunk_size: int = 0,
     detailed_timings: bool = False,
     first_block_worker_count: int = 0,
     first_block_chunk_size: int = 0,
@@ -39,6 +40,7 @@ def _run(
             "warmup": 1,
             "repeat": 3,
             "first_block_workers": first_block_workers,
+            "first_block_dynamic_chunk_size": first_block_dynamic_chunk_size,
             "detailed_timings": detailed_timings,
         },
         "summary": {
@@ -70,6 +72,7 @@ def _run(
                 "nested_stage_pct": nested_stage_pct or {},
             },
             "first_block_workers": first_block_workers,
+            "first_block_dynamic_chunk_size": first_block_dynamic_chunk_size,
             "first_block_worker_count": first_block_worker_count,
             "first_block_chunk_size": first_block_chunk_size,
         },
@@ -311,6 +314,19 @@ def test_compare_reports_config_match_separates_first_block_workers():
     assert any("fbw4" in item["match_key"] for item in result["comparisons"])
 
 
+def test_compare_reports_config_match_separates_first_block_dynamic_chunk_size():
+    result = compare.compare_reports(
+        _report(_run("static-chunks", 100.0, first_block_dynamic_chunk_size=0)),
+        _report(_run("dynamic-chunks", 110.0, first_block_dynamic_chunk_size=64)),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+    assert {item["first_block_dynamic_chunk_size"] for item in result["comparisons"]} == {0, 64}
+    assert any("fbd64" in item["match_key"] for item in result["comparisons"])
+
+
 def test_compare_reports_config_match_separates_detailed_timing_mode_by_default():
     result = compare.compare_reports(
         _report(_run("default-timing", 100.0, detailed_timings=False)),
@@ -417,6 +433,7 @@ def test_format_text_outputs_automation_friendly_rows():
                 stage_pct={"setup_ms": 20.0, "input_ms": 60.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 300.0},
                 first_block_worker_count=4,
+                first_block_dynamic_chunk_size=64,
                 first_block_chunk_size=16,
             )
         ),
@@ -429,6 +446,7 @@ def test_format_text_outputs_automation_friendly_rows():
                 stage_pct={"setup_ms": 10.0, "input_ms": 70.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 240.0},
                 first_block_worker_count=8,
+                first_block_dynamic_chunk_size=64,
                 first_block_chunk_size=8,
             )
         ),
@@ -444,6 +462,7 @@ def test_format_text_outputs_automation_friendly_rows():
     header = rows[0]
     row = rows[1]
     assert row[header.index("first_block_workers")] == "0"
+    assert row[header.index("first_block_dynamic_chunk_size")] == "64"
     assert row[header.index("first_block_worker_count")] == "8"
     assert row[header.index("first_block_chunk_size")] == "8"
     assert "input_ms:-3.000ms" in text

@@ -18,6 +18,7 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "batch_size": 2,
         "attempts": attempts,
         "first_block_workers": 0,
+        "first_block_dynamic_chunk_size": 0,
         "first_block_worker_count": 0,
         "first_block_chunk_size": 0,
         "elapsed_ms": 1000.0,
@@ -231,6 +232,7 @@ def test_scan_scenarios_builds_custom_matrix():
         difficulties=[1, 8],
         batch_sizes=[512, 1024],
         first_block_workers=[],
+        first_block_dynamic_chunk_sizes=[],
         detailed_timings=False,
         seconds=3,
         backend="cuda",
@@ -258,6 +260,7 @@ def test_scan_scenarios_can_scan_first_block_workers():
         difficulties=[8],
         batch_sizes=[1024],
         first_block_workers=[0, 4],
+        first_block_dynamic_chunk_sizes=[],
         detailed_timings=False,
         seconds=3,
         backend="cuda",
@@ -273,11 +276,33 @@ def test_scan_scenarios_can_scan_first_block_workers():
     assert [scenario.first_block_workers for scenario in scenarios] == [0, 4]
 
 
+def test_scan_scenarios_can_scan_first_block_dynamic_chunks():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[8],
+        batch_sizes=[1024],
+        first_block_workers=[0],
+        first_block_dynamic_chunk_sizes=[0, 64],
+        detailed_timings=False,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-scan-d8-b1024",
+        "cuda-scan-d8-b1024-fbd64",
+    ]
+    assert [scenario.first_block_dynamic_chunk_size for scenario in scenarios] == [0, 64]
+
+
 def test_scan_scenarios_can_enable_detailed_timings():
     scenarios = benchmark.scan_scenarios(
         difficulties=[8],
         batch_sizes=[1024],
         first_block_workers=[0],
+        first_block_dynamic_chunk_sizes=[],
         detailed_timings=True,
         seconds=3,
         backend="cuda",
@@ -699,6 +724,14 @@ def test_parse_scenario_supports_first_block_workers():
     assert scenario.first_block_workers == 4
 
 
+def test_parse_scenario_supports_first_block_dynamic_chunk_size():
+    scenario = benchmark.parse_scenario(
+        "name=diag,backend=cuda,difficulty=8,batch_size=2048,seconds=1,first_block_dynamic_chunk_size=64"
+    )
+
+    assert scenario.first_block_dynamic_chunk_size == 64
+
+
 def test_build_hash_command_adds_detailed_timings_flag():
     scenario = benchmark.BenchmarkScenario(
         name="diag",
@@ -728,6 +761,22 @@ def test_build_hash_command_adds_first_block_workers_when_set():
 
     assert "--first-block-workers" in command
     assert command[command.index("--first-block-workers") + 1] == "4"
+
+
+def test_build_hash_command_adds_first_block_dynamic_chunk_size_when_set():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        first_block_dynamic_chunk_size=64,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--first-block-dynamic-chunk-size" in command
+    assert command[command.index("--first-block-dynamic-chunk-size") + 1] == "64"
 
 
 def test_summarize_iterations_reports_median_timing_per_attempt():
@@ -762,6 +811,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "difficulty": 1,
                 "batch_size": 128,
                 "first_block_workers": 4,
+                "first_block_dynamic_chunk_size": 64,
                 "first_block_worker_count": 4,
                 "first_block_chunk_size": 32,
                 "hashrate_spread_pct": 5.0,
@@ -796,6 +846,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 1,
             "batch_size": 128,
             "first_block_workers": 4,
+            "first_block_dynamic_chunk_size": 64,
             "first_block_worker_count": 4,
             "first_block_chunk_size": 32,
             "median_hashrate": 150.0,
@@ -815,6 +866,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 8,
             "batch_size": 64,
             "first_block_workers": 0,
+            "first_block_dynamic_chunk_size": 0,
             "first_block_worker_count": 0,
             "first_block_chunk_size": 0,
             "median_hashrate": 120.0,
@@ -833,6 +885,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     assert [item["batch_size"] for item in recommendations["candidates_by_difficulty"][0]["candidates"]] == [64, 128]
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["stable"] is True
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_workers"] == 4
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_dynamic_chunk_size"] == 64
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_worker_count"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size"] == 32
 
@@ -1713,6 +1766,10 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
             "512",
             "--scan-batch-size",
             "1024",
+            "--scan-first-block-dynamic-chunk-size",
+            "0",
+            "--scan-first-block-dynamic-chunk-size",
+            "64",
             "--scan-detailed-timings",
             "--output",
             str(output),
@@ -1720,8 +1777,17 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     )
 
     assert exit_code == 0
-    assert captured_names == ["cuda-scan-d1-b512", "cuda-scan-d1-b1024", "cuda-scan-d8-b512", "cuda-scan-d8-b1024"]
-    assert captured_detailed_timings == [True, True, True, True]
+    assert captured_names == [
+        "cuda-scan-d1-b512",
+        "cuda-scan-d1-b512-fbd64",
+        "cuda-scan-d1-b1024",
+        "cuda-scan-d1-b1024-fbd64",
+        "cuda-scan-d8-b512",
+        "cuda-scan-d8-b512-fbd64",
+        "cuda-scan-d8-b1024",
+        "cuda-scan-d8-b1024-fbd64",
+    ]
+    assert captured_detailed_timings == [True] * 8
 
 
 def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
