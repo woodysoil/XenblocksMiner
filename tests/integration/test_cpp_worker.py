@@ -111,6 +111,20 @@ def wait_for_condition(check_fn, timeout_sec=15, poll_sec=1) -> bool:
     return False
 
 
+def stop_process(proc: subprocess.Popen, timeout_sec: int = 10) -> None:
+    """Stop a subprocess in a cross-platform way."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        proc.terminate()
+    else:
+        proc.send_signal(signal.SIGINT)
+    try:
+        proc.wait(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 # ── Skip conditions ──────────────────────────────────────────────────────
 
 skip_no_cuda = pytest.mark.skipif(
@@ -122,6 +136,56 @@ skip_no_binary = pytest.mark.skipif(
     find_miner_binary() is None,
     reason="C++ miner binary not found (build it or set MINER_BIN)",
 )
+
+
+def run_hash_cli(*args: str) -> tuple[subprocess.CompletedProcess, dict]:
+    """Run a Hash API CLI command against the real miner binary."""
+    binary = find_miner_binary()
+    assert binary is not None, "Miner binary not found"
+    result = subprocess.run(
+        [binary, *args],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result, json.loads(result.stdout)
+
+
+@skip_no_binary
+class TestHashApiCliCpuBackend:
+    """Test the real Hash API CLI CPU/reference backend."""
+
+    def test_hash_one_matches_golden_argon2id_output(self):
+        result, payload = run_hash_cli(
+            "hash-one",
+            "--salt", "aabbccddeeff0011",
+            "--key", "0000000000000000000000000000000000000000000000000000000000000000",
+            "--backend", "cpu",
+            "--difficulty", "8",
+            "--json",
+        )
+
+        assert result.returncode == 0
+        assert payload["ok"] is True
+        assert payload["hash"] == (
+            "$argon2id$v=19$m=8,t=1,p=1$qrvM3e7/ABE$"
+            "Rs/bYUkZR8dczsQh/KvLAyJGThm8HtjnIJVJEkldK+TQtBLdGf2tULquitejKRO7URrkbgieR7Sq42k5mNYVdw"
+        )
+
+    def test_hash_one_rejects_cpu_difficulty_below_argon2_minimum(self):
+        result, payload = run_hash_cli(
+            "hash-one",
+            "--salt", "aabbccddeeff0011",
+            "--key", "0000000000000000000000000000000000000000000000000000000000000000",
+            "--backend", "cpu",
+            "--difficulty", "1",
+            "--json",
+        )
+
+        assert result.returncode != 0
+        assert payload["ok"] is False
+        assert payload["error"] == "cpu/reference difficulty must be at least 8"
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -143,7 +207,7 @@ def mock_server():
             "--db-path", DB_PATH,
         ],
         cwd=str(PROJECT_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )
 
@@ -156,11 +220,7 @@ def mock_server():
 
     yield proc
 
-    proc.send_signal(signal.SIGINT)
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    stop_process(proc, timeout_sec=5)
 
     for suffix in ["", "-wal", "-shm"]:
         path = DB_PATH + suffix
@@ -187,7 +247,7 @@ def miner_process(mock_server):
             "--donotupload",
         ],
         cwd=str(PROJECT_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
     )
 
@@ -203,11 +263,7 @@ def miner_process(mock_server):
 
     yield proc
 
-    proc.send_signal(signal.SIGINT)
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    stop_process(proc, timeout_sec=10)
 
 
 # ── Tests ────────────────────────────────────────────────────────────────
