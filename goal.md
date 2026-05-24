@@ -125,6 +125,7 @@ This section should be refreshed whenever it would prevent duplicated work after
 - A later d64/b2048 same-settings confirmation found manual dynamic chunk `16` stable and positive over static chunking, and a direct d64/b2048 auto confirmation selected chunk `16` at about `84.65k H/s` with `1.63%` spread. Unsupported higher difficulties remain static until stable evidence exists.
 - A clean current d8/b2048 generated CUDA auto refresh after the d64 policy commit reached about `86.95k H/s` median with `3.17%` spread and normal benchmark trust. A matching short detailed run reached about `88.91k H/s` median with `7.48%` spread; `input_ms` was about `58.94%`, `first_block_ms` about `54.39%`, `finalize_ms` about `29.58%`, and `keygen_ms` only about `3.97%`. Treat this as evidence against keygen-only work and against repeating rejected key-storage reuse experiments.
 - Reusing CUDA backend finalized-hash scratch storage across batches was tried after the current timing refresh. Focused tests, rebuild, and the CUDA golden hash passed, but the repeated d8/b2048 generated CUDA auto benchmark hung without writing a report and left a benchmark subprocess running. The experiment was reverted; do not retry this backend-lifetime finalization scratch shape without a broader lifetime/thread-safety redesign.
+- A clean miner-equivalent d8 auto batch-size window after the stale-binary rebuild found b3072 as the best stable candidate. A targeted d8 b2048/b3072 confirmation reached about `84.33k H/s` at b2048 and `92.32k H/s` at b3072 with `1.18%` b3072 spread, so the conservative d8 miner default is now b3072 while b2048 remains the continuity scenario for historical comparisons.
 - The next default optimization target is no longer adding the auto chunk policy. Start from post-auto detailed timing and inspect first-block digest/preparation structure, generated input materialization, or a carefully measured finalization path if newer timings show `finalize_ms` overtaking first-block cost.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
@@ -631,10 +632,8 @@ python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --de
 Stable main-target scan:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable-main-target.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-batch-size 3072 --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/batch-scan-stable-main-target.json
 ```
-
-Miner-equivalent generated CUDA batch scans should add `--scan-first-block-dynamic-chunk-auto` so the matrix uses the same backend-selected first-block chunk policy as mining batches.
 
 First-block worker-cap diagnostic scan:
 
