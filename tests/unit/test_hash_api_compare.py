@@ -26,8 +26,16 @@ def _run(
     detailed_timings: bool = False,
     first_block_worker_count: int = 0,
     first_block_chunk_size: int = 0,
+    first_block_dynamic_chunk_size_min: int | None = None,
+    first_block_dynamic_chunk_size_max: int | None = None,
+    first_block_chunk_size_min: int | None = None,
+    first_block_chunk_size_max: int | None = None,
 ) -> dict:
     sequence = difficulty_sequence or []
+    dynamic_min = first_block_dynamic_chunk_size if first_block_dynamic_chunk_size_min is None else first_block_dynamic_chunk_size_min
+    dynamic_max = first_block_dynamic_chunk_size if first_block_dynamic_chunk_size_max is None else first_block_dynamic_chunk_size_max
+    chunk_min = first_block_chunk_size if first_block_chunk_size_min is None else first_block_chunk_size_min
+    chunk_max = first_block_chunk_size if first_block_chunk_size_max is None else first_block_chunk_size_max
     return {
         "scenario": {
             "name": name,
@@ -78,6 +86,10 @@ def _run(
             "first_block_dynamic_chunk_auto": first_block_dynamic_chunk_auto,
             "first_block_worker_count": first_block_worker_count,
             "first_block_chunk_size": first_block_chunk_size,
+            "first_block_dynamic_chunk_size_min": dynamic_min,
+            "first_block_dynamic_chunk_size_max": dynamic_max,
+            "first_block_chunk_size_min": chunk_min,
+            "first_block_chunk_size_max": chunk_max,
         },
     }
 
@@ -459,6 +471,10 @@ def test_format_text_outputs_automation_friendly_rows():
                 first_block_dynamic_chunk_size=64,
                 first_block_dynamic_chunk_auto=True,
                 first_block_chunk_size=16,
+                first_block_dynamic_chunk_size_min=0,
+                first_block_dynamic_chunk_size_max=64,
+                first_block_chunk_size_min=16,
+                first_block_chunk_size_max=256,
             )
         ),
         _report(
@@ -473,6 +489,10 @@ def test_format_text_outputs_automation_friendly_rows():
                 first_block_dynamic_chunk_size=64,
                 first_block_dynamic_chunk_auto=True,
                 first_block_chunk_size=8,
+                first_block_dynamic_chunk_size_min=0,
+                first_block_dynamic_chunk_size_max=64,
+                first_block_chunk_size_min=8,
+                first_block_chunk_size_max=256,
             )
         ),
     )
@@ -491,6 +511,10 @@ def test_format_text_outputs_automation_friendly_rows():
     assert row[header.index("first_block_dynamic_chunk_auto")] == "true"
     assert row[header.index("first_block_worker_count")] == "8"
     assert row[header.index("first_block_chunk_size")] == "8"
+    assert row[header.index("first_block_dynamic_chunk_size_min")] == "0"
+    assert row[header.index("first_block_dynamic_chunk_size_max")] == "64"
+    assert row[header.index("first_block_chunk_size_min")] == "8"
+    assert row[header.index("first_block_chunk_size_max")] == "256"
     assert "input_ms:-3.000ms" in text
     assert "input_ms:-0.003000ms/attempt" in text
     assert "input_ms:10.000pp" in text

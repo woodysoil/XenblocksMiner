@@ -318,6 +318,10 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
             attempts,
             result.first_block_worker_count,
             result.first_block_dynamic_chunk_size);
+        result.first_block_dynamic_chunk_size_min = result.first_block_dynamic_chunk_size;
+        result.first_block_dynamic_chunk_size_max = result.first_block_dynamic_chunk_size;
+        result.first_block_chunk_size_min = result.first_block_chunk_size;
+        result.first_block_chunk_size_max = result.first_block_chunk_size;
 
         auto& compute_backend = backend();
         result.timings.setup_activate_cpu_ms = timed_setup_step([&]() {

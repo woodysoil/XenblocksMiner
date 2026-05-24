@@ -677,6 +677,22 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         ),
         "first_block_worker_count": result.get("first_block_worker_count", 0),
         "first_block_chunk_size": result.get("first_block_chunk_size", 0),
+        "first_block_dynamic_chunk_size_min": result.get(
+            "first_block_dynamic_chunk_size_min",
+            result.get("first_block_dynamic_chunk_size", 0),
+        ),
+        "first_block_dynamic_chunk_size_max": result.get(
+            "first_block_dynamic_chunk_size_max",
+            result.get("first_block_dynamic_chunk_size", 0),
+        ),
+        "first_block_chunk_size_min": result.get(
+            "first_block_chunk_size_min",
+            result.get("first_block_chunk_size", 0),
+        ),
+        "first_block_chunk_size_max": result.get(
+            "first_block_chunk_size_max",
+            result.get("first_block_chunk_size", 0),
+        ),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
         "hashrate": result.get("hashrate", 0.0),
         "timings": summarize_timings(result.get("timings", {})),
@@ -716,6 +732,18 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "first_block_dynamic_chunk_auto": scenario.first_block_dynamic_chunk_auto,
         "first_block_worker_count": _median_int([item.get("first_block_worker_count", 0) for item in ok_summaries]),
         "first_block_chunk_size": _median_int([item.get("first_block_chunk_size", 0) for item in ok_summaries]),
+        "first_block_dynamic_chunk_size_min": _median_int(
+            [item.get("first_block_dynamic_chunk_size_min", item.get("first_block_dynamic_chunk_size", 0)) for item in ok_summaries]
+        ),
+        "first_block_dynamic_chunk_size_max": _median_int(
+            [item.get("first_block_dynamic_chunk_size_max", item.get("first_block_dynamic_chunk_size", 0)) for item in ok_summaries]
+        ),
+        "first_block_chunk_size_min": _median_int(
+            [item.get("first_block_chunk_size_min", item.get("first_block_chunk_size", 0)) for item in ok_summaries]
+        ),
+        "first_block_chunk_size_max": _median_int(
+            [item.get("first_block_chunk_size_max", item.get("first_block_chunk_size", 0)) for item in ok_summaries]
+        ),
         "elapsed_ms": elapsed_ms,
         "ms_per_attempt": elapsed_ms / attempts if attempts > 0 else 0.0,
         "hashrate": median_hashrate,
@@ -791,6 +819,18 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "first_block_dynamic_chunk_auto": bool(summary.get("first_block_dynamic_chunk_auto", False)),
             "first_block_worker_count": int(summary.get("first_block_worker_count", 0) or 0),
             "first_block_chunk_size": int(summary.get("first_block_chunk_size", 0) or 0),
+            "first_block_dynamic_chunk_size_min": int(
+                summary.get("first_block_dynamic_chunk_size_min", summary.get("first_block_dynamic_chunk_size", 0)) or 0
+            ),
+            "first_block_dynamic_chunk_size_max": int(
+                summary.get("first_block_dynamic_chunk_size_max", summary.get("first_block_dynamic_chunk_size", 0)) or 0
+            ),
+            "first_block_chunk_size_min": int(
+                summary.get("first_block_chunk_size_min", summary.get("first_block_chunk_size", 0)) or 0
+            ),
+            "first_block_chunk_size_max": int(
+                summary.get("first_block_chunk_size_max", summary.get("first_block_chunk_size", 0)) or 0
+            ),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "min_hashrate": float(summary.get("min_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "max_hashrate": float(summary.get("max_hashrate", summary.get("hashrate", 0.0)) or 0.0),

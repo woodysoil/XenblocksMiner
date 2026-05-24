@@ -9,8 +9,8 @@ from types import SimpleNamespace
 import scripts.hash_api_benchmark as benchmark
 
 
-def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict | None = None) -> dict:
-    return {
+def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict | None = None, **extra) -> dict:
+    summary = {
         "name": "cuda-test",
         "backend": "cuda",
         "device_id": 0,
@@ -22,6 +22,10 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "first_block_dynamic_chunk_auto": False,
         "first_block_worker_count": 0,
         "first_block_chunk_size": 0,
+        "first_block_dynamic_chunk_size_min": 0,
+        "first_block_dynamic_chunk_size_max": 0,
+        "first_block_chunk_size_min": 0,
+        "first_block_chunk_size_max": 0,
         "elapsed_ms": 1000.0,
         "hashrate": hashrate,
         "timings": timings or {},
@@ -29,6 +33,8 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "ok": ok,
         "error": "" if ok else "failed",
     }
+    summary.update(extra)
+    return summary
 
 
 def _stub_metadata(monkeypatch):
@@ -454,13 +460,34 @@ def test_summarize_iterations_reports_sequence_metadata():
 
     aggregate = benchmark.summarize_iterations(
         scenario,
-        [_summary(10.0, attempts=10), _summary(20.0, attempts=20)],
+        [
+            _summary(
+                10.0,
+                attempts=10,
+                first_block_dynamic_chunk_size_min=0,
+                first_block_dynamic_chunk_size_max=32,
+                first_block_chunk_size_min=16,
+                first_block_chunk_size_max=256,
+            ),
+            _summary(
+                20.0,
+                attempts=20,
+                first_block_dynamic_chunk_size_min=0,
+                first_block_dynamic_chunk_size_max=32,
+                first_block_chunk_size_min=16,
+                first_block_chunk_size_max=256,
+            ),
+        ],
     )
 
     assert aggregate["difficulty"] == 1
     assert aggregate["difficulty_mode"] == "sequence"
     assert aggregate["difficulty_sequence"] == [1, 8, 1, 8]
     assert aggregate["difficulty_changes"] == 3
+    assert aggregate["first_block_dynamic_chunk_size_min"] == 0
+    assert aggregate["first_block_dynamic_chunk_size_max"] == 32
+    assert aggregate["first_block_chunk_size_min"] == 16
+    assert aggregate["first_block_chunk_size_max"] == 256
 
 
 def test_summarize_iterations_marks_nonzero_process_exit_invalid():
@@ -823,6 +850,10 @@ def test_summarize_result_uses_selected_dynamic_chunk_size():
             "first_block_dynamic_chunk_auto": True,
             "first_block_worker_count": 8,
             "first_block_chunk_size": 32,
+            "first_block_dynamic_chunk_size_min": 16,
+            "first_block_dynamic_chunk_size_max": 32,
+            "first_block_chunk_size_min": 16,
+            "first_block_chunk_size_max": 256,
             "elapsed_ms": 1000.0,
             "hashrate": 2048.0,
             "timings": {},
@@ -835,6 +866,10 @@ def test_summarize_result_uses_selected_dynamic_chunk_size():
     assert summary["first_block_dynamic_chunk_auto"] is True
     assert summary["first_block_dynamic_chunk_size"] == 32
     assert summary["first_block_chunk_size"] == 32
+    assert summary["first_block_dynamic_chunk_size_min"] == 16
+    assert summary["first_block_dynamic_chunk_size_max"] == 32
+    assert summary["first_block_chunk_size_min"] == 16
+    assert summary["first_block_chunk_size_max"] == 256
 
 
 def test_summarize_iterations_reports_median_timing_per_attempt():
@@ -873,6 +908,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "first_block_dynamic_chunk_auto": True,
                 "first_block_worker_count": 4,
                 "first_block_chunk_size": 32,
+                "first_block_dynamic_chunk_size_min": 64,
+                "first_block_dynamic_chunk_size_max": 64,
+                "first_block_chunk_size_min": 32,
+                "first_block_chunk_size_max": 32,
                 "hashrate_spread_pct": 5.0,
                 "timing_analysis": {"dominant_stage": "input_ms", "dominant_stage_pct": 75.0},
             }
@@ -909,6 +948,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "first_block_dynamic_chunk_auto": True,
             "first_block_worker_count": 4,
             "first_block_chunk_size": 32,
+            "first_block_dynamic_chunk_size_min": 64,
+            "first_block_dynamic_chunk_size_max": 64,
+            "first_block_chunk_size_min": 32,
+            "first_block_chunk_size_max": 32,
             "median_hashrate": 150.0,
             "min_hashrate": 150.0,
             "max_hashrate": 150.0,
@@ -930,6 +973,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "first_block_dynamic_chunk_auto": False,
             "first_block_worker_count": 0,
             "first_block_chunk_size": 0,
+            "first_block_dynamic_chunk_size_min": 0,
+            "first_block_dynamic_chunk_size_max": 0,
+            "first_block_chunk_size_min": 0,
+            "first_block_chunk_size_max": 0,
             "median_hashrate": 120.0,
             "min_hashrate": 120.0,
             "max_hashrate": 120.0,
@@ -950,6 +997,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_dynamic_chunk_auto"] is True
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_worker_count"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size"] == 32
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size_min"] == 32
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size_max"] == 32
 
 
 def test_build_recommendations_prefers_stable_candidate_over_noisy_higher_median():

@@ -170,6 +170,10 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
         "first_block_dynamic_chunk_auto",
         "first_block_worker_count",
         "first_block_chunk_size",
+        "first_block_dynamic_chunk_size_min",
+        "first_block_dynamic_chunk_size_max",
+        "first_block_chunk_size_min",
+        "first_block_chunk_size_max",
     ]:
         assert field in types
         assert field in json_impl
@@ -177,6 +181,7 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
 
     assert "firstBlockWorkerCount(attempts, request.first_block_workers)" in cuda_impl
     assert "firstBlockSelectedChunkSize(" in cuda_impl
+    assert "update_first_block_ranges(current)" in read("src/hashapi/HashApiCli.cpp")
     assert "request.first_block_dynamic_chunk_size" in cuda_impl
     assert "recommendedFirstBlockDynamicChunkSize" in cuda_impl
     assert "request.first_block_dynamic_chunk_auto" in cuda_impl

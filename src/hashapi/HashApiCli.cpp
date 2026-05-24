@@ -8,6 +8,7 @@
 #include "../CudaBackend.h"
 #endif
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <iostream>
@@ -302,6 +303,29 @@ int runBenchmark(HashApiRequest request,
     aggregate.backend = request.backend;
     aggregate.device_id = request.device_id;
     aggregate.batch_size = request.batch_size;
+    bool first_block_range_seen = false;
+    auto update_first_block_ranges = [&aggregate, &first_block_range_seen](const HashApiResult& current) {
+        if (!first_block_range_seen) {
+            aggregate.first_block_dynamic_chunk_size_min = current.first_block_dynamic_chunk_size;
+            aggregate.first_block_dynamic_chunk_size_max = current.first_block_dynamic_chunk_size;
+            aggregate.first_block_chunk_size_min = current.first_block_chunk_size;
+            aggregate.first_block_chunk_size_max = current.first_block_chunk_size;
+            first_block_range_seen = true;
+            return;
+        }
+        aggregate.first_block_dynamic_chunk_size_min = std::min(
+            aggregate.first_block_dynamic_chunk_size_min,
+            current.first_block_dynamic_chunk_size);
+        aggregate.first_block_dynamic_chunk_size_max = std::max(
+            aggregate.first_block_dynamic_chunk_size_max,
+            current.first_block_dynamic_chunk_size);
+        aggregate.first_block_chunk_size_min = std::min(
+            aggregate.first_block_chunk_size_min,
+            current.first_block_chunk_size);
+        aggregate.first_block_chunk_size_max = std::max(
+            aggregate.first_block_chunk_size_max,
+            current.first_block_chunk_size);
+    };
 
     const auto start = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
@@ -317,6 +341,7 @@ int runBenchmark(HashApiRequest request,
         aggregate.first_block_dynamic_chunk_auto = current.first_block_dynamic_chunk_auto;
         aggregate.first_block_worker_count = current.first_block_worker_count;
         aggregate.first_block_chunk_size = current.first_block_chunk_size;
+        update_first_block_ranges(current);
         addTimings(aggregate.timings, current.timings);
         if (!request.key.empty()) {
             aggregate.hash = current.hash;
