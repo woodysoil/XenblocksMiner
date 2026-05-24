@@ -89,6 +89,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "key_mode": str(summary.get("key_mode") or scenario.get("key_mode") or "generated"),
         "timings": summary.get("timings", {}),
         "timing_per_attempt": summary.get("timing_per_attempt", {}),
+        "stage_pct": (summary.get("timing_analysis") or {}).get("stage_pct", {}),
         "nested_stage_pct": (summary.get("timing_analysis") or {}).get("nested_stage_pct", {}),
         "matches": _int_value(summary, "matches", 0),
         "ok": bool(summary.get("ok")),
@@ -222,6 +223,27 @@ def compare_timing_per_attempt(
     return comparison
 
 
+def compare_stage_pct(
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
+) -> dict[str, dict[str, float | None]]:
+    before_percentages = (before or {}).get("stage_pct") or {}
+    after_percentages = (after or {}).get("stage_pct") or {}
+    comparison: dict[str, dict[str, float | None]] = {}
+
+    for key in sorted(set(before_percentages) | set(after_percentages)):
+        before_value = _float_value(before_percentages, key, 0.0)
+        after_value = _float_value(after_percentages, key, 0.0)
+        comparison[key] = {
+            "before_pct": before_value,
+            "after_pct": after_value,
+            "delta_pct_points": after_value - before_value,
+            "change_pct": _percent_change(before_value, after_value),
+        }
+
+    return comparison
+
+
 def compare_nested_stage_pct(
     before: dict[str, Any] | None,
     after: dict[str, Any] | None,
@@ -315,6 +337,7 @@ def compare_reports(
                 "first_block_workers": (after or before or {}).get("first_block_workers", 0),
                 "timing_deltas": compare_timings(before, after),
                 "timing_per_attempt_deltas": compare_timing_per_attempt(before, after),
+                "stage_pct_deltas": compare_stage_pct(before, after),
                 "nested_stage_pct_deltas": compare_nested_stage_pct(before, after),
                 "before": before,
                 "after": after,
@@ -366,6 +389,7 @@ def format_text(report: Report) -> str:
             "repeat",
             "dominant_timing_delta",
             "dominant_timing_per_attempt_delta",
+            "dominant_stage_pct_delta",
             "dominant_nested_stage_pct_delta",
         ]
     )
@@ -388,6 +412,16 @@ def format_text(report: Report) -> str:
             )
             dominant_per_attempt_delta = (
                 f"{dominant_stage}:{float(dominant_delta.get('delta_ms_per_attempt') or 0.0):.6f}ms/attempt"
+            )
+        stage_pct_deltas = item.get("stage_pct_deltas") or {}
+        dominant_stage_pct_delta = ""
+        if stage_pct_deltas:
+            dominant_stage, dominant_delta = max(
+                stage_pct_deltas.items(),
+                key=lambda pair: abs(float(pair[1].get("delta_pct_points") or 0.0)),
+            )
+            dominant_stage_pct_delta = (
+                f"{dominant_stage}:{float(dominant_delta.get('delta_pct_points') or 0.0):.3f}pp"
             )
         nested_pct_deltas = item.get("nested_stage_pct_deltas") or {}
         dominant_nested_pct_delta = ""
@@ -419,6 +453,7 @@ def format_text(report: Report) -> str:
                 str(item["repeat"]),
                 dominant_timing_delta,
                 dominant_per_attempt_delta,
+                dominant_stage_pct_delta,
                 dominant_nested_pct_delta,
             ]
         )
