@@ -78,6 +78,33 @@ def test_preset_scenarios_builds_warm_short_matrix():
     assert all(scenario.repeat == 5 for scenario in scenarios)
 
 
+def test_preset_scenarios_builds_batch_scan_matrix():
+    scenarios = benchmark.preset_scenarios(
+        "batch-scan",
+        seconds=2,
+        backend="cuda",
+        device=0,
+        warmup=1,
+        repeat=2,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-batch-scan-d1-b64",
+        "cuda-batch-scan-d1-b128",
+        "cuda-batch-scan-d1-b256",
+        "cuda-batch-scan-d1-b512",
+        "cuda-batch-scan-d8-b64",
+        "cuda-batch-scan-d8-b128",
+        "cuda-batch-scan-d8-b256",
+        "cuda-batch-scan-d8-b512",
+    ]
+    assert [scenario.difficulty for scenario in scenarios] == [1, 1, 1, 1, 8, 8, 8, 8]
+    assert [scenario.batch_size for scenario in scenarios] == [64, 128, 256, 512, 64, 128, 256, 512]
+    assert all(scenario.seconds == 2 for scenario in scenarios)
+    assert all(scenario.warmup == 1 for scenario in scenarios)
+    assert all(scenario.repeat == 2 for scenario in scenarios)
+
+
 def test_ensure_unique_scenario_names_rejects_duplicates():
     scenario = benchmark.BenchmarkScenario(
         name="duplicate",

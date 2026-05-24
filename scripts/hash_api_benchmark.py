@@ -15,7 +15,7 @@ from typing import Any
 
 
 DEFAULT_SALT = "aabbccddeeff0011"
-PRESET_NAMES = ("smoke", "warm-short", "cuda-compare")
+PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan")
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,17 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
 
     if preset == "warm-short":
         pairs = [(1, 1), (1, 64), (8, 64)]
+    elif preset == "batch-scan":
+        pairs = [
+            (1, 64),
+            (1, 128),
+            (1, 256),
+            (1, 512),
+            (8, 64),
+            (8, 128),
+            (8, 256),
+            (8, 512),
+        ]
     elif preset == "cuda-compare":
         pairs = [(1, 64), (8, 64), (64, 128), (256, 256)]
     else:
