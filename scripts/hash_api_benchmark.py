@@ -17,6 +17,7 @@ from typing import Any
 DEFAULT_SALT = "aabbccddeeff0011"
 PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan", "difficulty-sequence")
 DEFAULT_STABLE_SPREAD_PCT = 10.0
+NESTED_TIMING_FIELDS = frozenset({"kernel_ms"})
 
 
 @dataclass(frozen=True)
@@ -301,14 +302,14 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     total_ms = float(timings.get("total_ms", 0.0) or 0.0)
     shares: dict[str, float] = {}
     for key, value in timings.items():
-        if key == "total_ms" or total_ms <= 0.0:
+        if key == "total_ms" or key in NESTED_TIMING_FIELDS or total_ms <= 0.0:
             continue
         shares[key] = float(value) / total_ms * 100.0
 
     dominant_stage = ""
     dominant_stage_ms = 0.0
     dominant_stage_pct = 0.0
-    stage_values = {key: value for key, value in timings.items() if key != "total_ms"}
+    stage_values = {key: value for key, value in timings.items() if key != "total_ms" and key not in NESTED_TIMING_FIELDS}
     if stage_values:
         dominant_stage = max(stage_values, key=stage_values.get)
         dominant_stage_ms = float(timings.get(dominant_stage, 0.0) or 0.0)

@@ -41,6 +41,7 @@ struct HashApiTimings {
     double keygen_ms = 0.0;
     double first_block_ms = 0.0;
     double compute_ms = 0.0;
+    double kernel_ms = 0.0;
     double finalize_ms = 0.0;
     double total_ms = 0.0;
 };

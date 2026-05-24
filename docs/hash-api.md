@@ -73,7 +73,7 @@ Core files:
 
 `hash` is populated for fixed-key `hash-one` requests.
 
-`timings` is a machine-readable millisecond breakdown for optimization. Current fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. Unsupported or irrelevant stages are reported as `0.0`.
+`timings` is a machine-readable millisecond breakdown for optimization. Current additive stage fields are `validation_ms`, `setup_ms`, `input_ms`, `keygen_ms`, `first_block_ms`, `compute_ms`, `finalize_ms`, and `total_ms`. CUDA results also report `kernel_ms` as a sub-measurement inside `compute_ms`, based on CUDA event timing. Unsupported or irrelevant stages are reported as `0.0`.
 
 Each match includes:
 
@@ -146,6 +146,7 @@ Example success shape:
     "keygen_ms": 0.0,
     "first_block_ms": 0.0,
     "compute_ms": 12.0,
+    "kernel_ms": 0.0,
     "finalize_ms": 0.0,
     "total_ms": 12.4
   },
@@ -175,6 +176,7 @@ Example failure shape:
     "keygen_ms": 0.0,
     "first_block_ms": 0.0,
     "compute_ms": 0.0,
+    "kernel_ms": 0.0,
     "finalize_ms": 0.0,
     "total_ms": 0.1
   },

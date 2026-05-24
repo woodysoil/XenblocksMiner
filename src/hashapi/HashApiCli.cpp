@@ -125,6 +125,7 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.keygen_ms += source.keygen_ms;
     target.first_block_ms += source.first_block_ms;
     target.compute_ms += source.compute_ms;
+    target.kernel_ms += source.kernel_ms;
     target.finalize_ms += source.finalize_ms;
     target.total_ms += source.total_ms;
 }
@@ -289,7 +290,14 @@ int runBenchmark(HashApiRequest request,
         aggregate.ok = true;
         aggregate.attempts += current.attempts;
         addTimings(aggregate.timings, current.timings);
+        if (!request.key.empty()) {
+            aggregate.hash = current.hash;
+        }
         aggregate.matches.insert(aggregate.matches.end(), current.matches.begin(), current.matches.end());
+    }
+
+    if (request.key.empty()) {
+        aggregate.hash.clear();
     }
 
     const auto end = std::chrono::steady_clock::now();

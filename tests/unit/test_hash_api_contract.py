@@ -100,6 +100,7 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "keygen_ms",
         "first_block_ms",
         "compute_ms",
+        "kernel_ms",
         "finalize_ms",
         "total_ms",
     ]:
@@ -150,6 +151,8 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "backend->runBatch(request)" in content
     assert "--difficulty-sequence" in content
     assert "parseDifficultySequence" in content
+    assert "aggregate.hash = current.hash" in content
+    assert "aggregate.hash.clear()" in content
     assert "ex.what()" in content
     assert "cuda backend is not available in this build" in content
 

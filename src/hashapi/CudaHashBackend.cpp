@@ -220,7 +220,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
 
         const auto compute_start = std::chrono::steady_clock::now();
         compute_backend.run();
-        compute_backend.finish();
+        result.timings.kernel_ms = static_cast<double>(compute_backend.finish());
         result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 
         const auto finalize_start = std::chrono::steady_clock::now();
