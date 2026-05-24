@@ -573,6 +573,7 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     first_block_initial_ms = float(timings.get("first_block_initial_hash_cpu_ms", 0.0) or 0.0)
     first_block_digest_ms = float(timings.get("first_block_digest_cpu_ms", 0.0) or 0.0)
     first_block_worker_wall_ms = float(timings.get("first_block_max_worker_ms", 0.0) or 0.0)
+    first_block_worker_finish_ms = float(timings.get("first_block_max_worker_finish_ms", 0.0) or 0.0)
     first_block_cpu_sum_ms = first_block_initial_ms + first_block_digest_ms
     first_block_cpu_sum_to_wall = (
         first_block_cpu_sum_ms / first_block_wall_ms if first_block_wall_ms > 0.0 and first_block_cpu_sum_ms > 0.0 else 0.0
@@ -587,6 +588,16 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
         if first_block_wall_ms > 0.0 and first_block_worker_wall_ms > 0.0
         else 0.0
     )
+    first_block_finish_wall_to_wall = (
+        first_block_worker_finish_ms / first_block_wall_ms
+        if first_block_wall_ms > 0.0 and first_block_worker_finish_ms > 0.0
+        else 0.0
+    )
+    first_block_post_worker_overhead_ms = (
+        max(0.0, first_block_wall_ms - first_block_worker_finish_ms)
+        if first_block_wall_ms > 0.0 and first_block_worker_finish_ms > 0.0
+        else 0.0
+    )
 
     return {
         "dominant_stage": dominant_stage,
@@ -598,6 +609,8 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
         "first_block_cpu_sum_to_wall": first_block_cpu_sum_to_wall,
         "first_block_worker_wall_to_wall": first_block_worker_wall_to_wall,
         "first_block_scheduling_overhead_ms": first_block_scheduling_overhead_ms,
+        "first_block_finish_wall_to_wall": first_block_finish_wall_to_wall,
+        "first_block_post_worker_overhead_ms": first_block_post_worker_overhead_ms,
     }
 
 
