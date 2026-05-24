@@ -12,7 +12,8 @@ from typing import Any
 
 
 Report = dict[str, Any]
-RunMap = dict[str, dict[str, Any]]
+RunKey = str | tuple[Any, ...]
+RunMap = dict[RunKey, dict[str, Any]]
 
 
 def load_report(path: Path) -> Report:
@@ -43,6 +44,15 @@ def _int_value(data: dict[str, Any], key: str, default: int = 0) -> int:
         return default
 
 
+def _bool_value(data: dict[str, Any], key: str, default: bool = False) -> bool:
+    value = data.get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     summary = _summary_for(run)
     scenario = _scenario_for(run)
@@ -59,6 +69,12 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "seconds": _int_value(scenario, "seconds", 0),
         "warmup": _int_value(summary, "warmup", _int_value(scenario, "warmup", 0)),
         "repeat": _int_value(summary, "repeat", _int_value(scenario, "repeat", 1)),
+        "allow_xuni": _bool_value(summary, "allow_xuni", _bool_value(scenario, "allow_xuni", True)),
+        "detailed_timings": _bool_value(
+            summary,
+            "detailed_timings",
+            _bool_value(scenario, "detailed_timings", False),
+        ),
         "attempts": _int_value(summary, "attempts", 0),
         "elapsed_ms": _float_value(summary, "elapsed_ms", 0.0),
         "hashrate": _float_value(summary, "hashrate", 0.0),
@@ -78,14 +94,82 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def index_runs(report: Report) -> RunMap:
+def run_config_key(run: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        run["backend"],
+        run["device_id"],
+        run["difficulty"],
+        run["difficulty_mode"],
+        tuple(run["difficulty_sequence"]),
+        run["difficulty_changes"],
+        run["key_mode"],
+        run["batch_size"],
+        run["seconds"],
+        run["warmup"],
+        run["repeat"],
+        run["allow_xuni"],
+        run["detailed_timings"],
+    )
+
+
+def run_key(run: dict[str, Any], match_by: str) -> RunKey:
+    if match_by == "name":
+        return run["name"]
+    if match_by == "config":
+        return run_config_key(run)
+    raise ValueError(f"unsupported match mode: {match_by}")
+
+
+def format_run_key(key: RunKey) -> str:
+    if isinstance(key, str):
+        return key
+    (
+        backend,
+        device_id,
+        difficulty,
+        difficulty_mode,
+        difficulty_sequence,
+        difficulty_changes,
+        key_mode,
+        batch_size,
+        seconds,
+        warmup,
+        repeat,
+        allow_xuni,
+        detailed_timings,
+    ) = key
+    if difficulty_mode == "sequence":
+        difficulty_label = "x".join(str(item) for item in difficulty_sequence)
+    else:
+        difficulty_label = str(difficulty)
+    xuni_label = "xuni" if allow_xuni else "no-xuni"
+    detail_label = "detailed" if detailed_timings else "default-timing"
+    return (
+        f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size}:"
+        f"{key_mode}:changes{difficulty_changes}:s{seconds}:w{warmup}:r{repeat}:"
+        f"{xuni_label}:{detail_label}"
+    )
+
+
+def display_name(key: RunKey, before: dict[str, Any] | None, after: dict[str, Any] | None, match_by: str) -> str:
+    if match_by == "name":
+        return str(key)
+    before_name = str((before or {}).get("name") or "")
+    after_name = str((after or {}).get("name") or "")
+    if before_name and after_name and before_name != after_name:
+        return f"{before_name} -> {after_name}"
+    return before_name or after_name or format_run_key(key)
+
+
+def index_runs(report: Report, match_by: str = "name") -> RunMap:
     indexed: RunMap = {}
     for run in report.get("runs", []):
         normalized = normalize_run(run)
-        name = normalized["name"]
-        if name in indexed:
-            raise ValueError(f"duplicate scenario name in report: {name}")
-        indexed[name] = normalized
+        key = run_key(normalized, match_by)
+        if key in indexed:
+            label = "scenario name" if match_by == "name" else "scenario config"
+            raise ValueError(f"duplicate {label} in report: {format_run_key(key)}")
+        indexed[key] = normalized
     return indexed
 
 
@@ -165,21 +249,25 @@ def compare_reports(
     after_report: Report,
     min_change_pct: float = 0.0,
     max_spread_pct: float = 10.0,
+    match_by: str = "name",
 ) -> Report:
-    before_runs = index_runs(before_report)
-    after_runs = index_runs(after_report)
+    before_runs = index_runs(before_report, match_by=match_by)
+    after_runs = index_runs(after_report, match_by=match_by)
     comparisons: list[dict[str, Any]] = []
 
-    for name in sorted(set(before_runs) | set(after_runs)):
-        before = before_runs.get(name)
-        after = after_runs.get(name)
+    for key in sorted(set(before_runs) | set(after_runs), key=format_run_key):
+        before = before_runs.get(key)
+        after = after_runs.get(key)
         before_rate = before["median_hashrate"] if before else 0.0
         after_rate = after["median_hashrate"] if after else 0.0
         change_pct = _percent_change(before_rate, after_rate) if before and after else None
         status = _status(before, after, change_pct, min_change_pct, max_spread_pct)
         comparisons.append(
             {
-                "name": name,
+                "name": display_name(key, before, after, match_by),
+                "match_key": format_run_key(key),
+                "before_name": (before or {}).get("name", ""),
+                "after_name": (after or {}).get("name", ""),
                 "status": status,
                 "before_hashrate": before_rate,
                 "after_hashrate": after_rate,
@@ -211,6 +299,7 @@ def compare_reports(
         "schema": "xenblocks.hashapi.compare.v1",
         "min_change_pct": min_change_pct,
         "max_spread_pct": max_spread_pct,
+        "match_by": match_by,
         "summary": {
             "total": len(comparisons),
             "improved": statuses.count("improved"),
@@ -314,6 +403,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=10.0,
         help="Maximum before/after hashrate spread accepted before marking a changed scenario as noisy.",
     )
+    parser.add_argument(
+        "--match-by",
+        choices=("name", "config"),
+        default="name",
+        help="Match benchmark runs by scenario name or by comparable scenario settings.",
+    )
     parser.add_argument("--fail-on-regression", action="store_true", help="Exit with code 2 if any scenario regresses.")
     return parser
 
@@ -326,6 +421,7 @@ def main(argv: list[str]) -> int:
             load_report(args.after),
             min_change_pct=args.min_change_pct,
             max_spread_pct=args.max_spread_pct,
+            match_by=args.match_by,
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

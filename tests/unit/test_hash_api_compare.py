@@ -183,6 +183,37 @@ def test_compare_reports_reports_missing_scenarios():
     assert result["summary"]["missing_before"] == 1
 
 
+def test_compare_reports_can_match_by_config_when_names_differ():
+    result = compare.compare_reports(
+        _report(_run("before-label", 100.0)),
+        _report(_run("after-label", 110.0)),
+        min_change_pct=1.0,
+        match_by="config",
+    )
+
+    assert result["match_by"] == "config"
+    assert len(result["comparisons"]) == 1
+    item = result["comparisons"][0]
+    assert item["name"] == "before-label -> after-label"
+    assert item["before_name"] == "before-label"
+    assert item["after_name"] == "after-label"
+    assert item["status"] == "improved"
+    assert item["change_pct"] == 10.0
+    assert result["summary"]["missing_after"] == 0
+    assert result["summary"]["missing_before"] == 0
+
+
+def test_compare_reports_config_match_separates_different_settings():
+    result = compare.compare_reports(
+        _report(_run("same-shape", 100.0)),
+        _report(_run("different-sequence", 110.0, difficulty_sequence=[1, 8])),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+
+
 def test_compare_reports_rejects_duplicate_names():
     report = _report(_run("same", 100.0), _run("same", 110.0))
 
@@ -192,6 +223,17 @@ def test_compare_reports_rejects_duplicate_names():
         assert "duplicate scenario name" in str(exc)
     else:
         raise AssertionError("expected duplicate scenario rejection")
+
+
+def test_compare_reports_rejects_duplicate_configs_when_matching_by_config():
+    report = _report(_run("same-shape-a", 100.0), _run("same-shape-b", 110.0))
+
+    try:
+        compare.compare_reports(report, _report(_run("same-shape-c", 120.0)), match_by="config")
+    except ValueError as exc:
+        assert "duplicate scenario config" in str(exc)
+    else:
+        raise AssertionError("expected duplicate config rejection")
 
 
 def test_main_outputs_json_and_fails_on_regression(tmp_path, capsys):
@@ -206,6 +248,20 @@ def test_main_outputs_json_and_fails_on_regression(tmp_path, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["schema"] == "xenblocks.hashapi.compare.v1"
     assert output["summary"]["regressed"] == 1
+
+
+def test_main_can_match_by_config(tmp_path, capsys):
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(json.dumps(_report(_run("before-label", 100.0))), encoding="utf-8")
+    after.write_text(json.dumps(_report(_run("after-label", 110.0))), encoding="utf-8")
+
+    exit_code = compare.main([str(before), str(after), "--match-by", "config", "--format", "json"])
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["match_by"] == "config"
+    assert output["comparisons"][0]["status"] == "improved"
 
 
 def test_format_text_outputs_automation_friendly_rows():
