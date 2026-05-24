@@ -79,6 +79,7 @@ Current observations:
 - H2D and D2H transfer timings are measurable but not currently the dominant d8/b2048 bottleneck. Pinned host staging was tested and rejected for the current implementation because the same-settings throughput comparison regressed, so revisit it only as part of a broader transfer-overlap or buffer-lifetime redesign.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
+- Local build configuration is part of benchmark quality. A stale local CUDA build cache was found using `CMAKE_BUILD_TYPE=Debug` and `CMAKE_CUDA_ARCHITECTURES=52`, so do not treat results from that build directory as a clean Release throughput baseline. Use a fresh Release CUDA preset such as `cuda-release-vcpkg-modern` or a matching architecture-specific preset before making new speed claims.
 
 ## Fixed Algorithm Constraints
 
@@ -459,6 +460,8 @@ Goal: create a reliable performance baseline before changing kernels or memory b
 Tasks:
 
 - Confirm current full CUDA build instructions are public-safe and reproducible.
+- Use a Release CUDA build configured with an explicit modern architecture set or a public architecture-specific preset for benchmark claims.
+- Avoid stale build directories whose cached `CMAKE_BUILD_TYPE` or `CMAKE_CUDA_ARCHITECTURES` differs from the intended benchmark target.
 - Run existing Python/unit tests.
 - Run real worker integration when a CUDA binary is available.
 - Run baseline benchmark scenarios with JSON output.

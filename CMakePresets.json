@@ -8,6 +8,49 @@
             "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         },
         {
+            "name": "cuda-release-vcpkg-modern",
+            "displayName": "CUDA Release with modern architecture set",
+            "description": "Release full-miner build for benchmark runs on modern CUDA GPUs.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-cuda-modern",
+            "toolchainFile": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "XENBLOCKS_BUILD_MINER": "ON",
+                "CMAKE_CUDA_ARCHITECTURES": "75;80;86;89;90"
+            }
+        },
+        {
+            "name": "cuda-release-vcpkg-sm86",
+            "displayName": "CUDA Release for sm_86",
+            "description": "Release full-miner build for Ampere-class CUDA GPUs.",
+            "inherits": "cuda-release-vcpkg-modern",
+            "binaryDir": "${sourceDir}/build-cuda-sm86",
+            "cacheVariables": {
+                "CMAKE_CUDA_ARCHITECTURES": "86"
+            }
+        },
+        {
+            "name": "cuda-release-vcpkg-sm89",
+            "displayName": "CUDA Release for sm_89",
+            "description": "Release full-miner build for Ada-class CUDA GPUs.",
+            "inherits": "cuda-release-vcpkg-modern",
+            "binaryDir": "${sourceDir}/build-cuda-sm89",
+            "cacheVariables": {
+                "CMAKE_CUDA_ARCHITECTURES": "89"
+            }
+        },
+        {
+            "name": "cuda-release-vcpkg-sm90",
+            "displayName": "CUDA Release for sm_90",
+            "description": "Release full-miner build for Hopper-class CUDA GPUs.",
+            "inherits": "cuda-release-vcpkg-modern",
+            "binaryDir": "${sourceDir}/build-cuda-sm90",
+            "cacheVariables": {
+                "CMAKE_CUDA_ARCHITECTURES": "90"
+            }
+        },
+        {
             "name": "hashapi-cli-mingw",
             "generator": "MinGW Makefiles",
             "binaryDir": "${sourceDir}/build-hashapi",
@@ -37,6 +80,22 @@
             "name": "ninja-vcpkg-release",
             "configurePreset": "ninja-multi-vcpkg",
             "configuration": "Release"
+        },
+        {
+            "name": "cuda-release-vcpkg-modern",
+            "configurePreset": "cuda-release-vcpkg-modern"
+        },
+        {
+            "name": "cuda-release-vcpkg-sm86",
+            "configurePreset": "cuda-release-vcpkg-sm86"
+        },
+        {
+            "name": "cuda-release-vcpkg-sm89",
+            "configurePreset": "cuda-release-vcpkg-sm89"
+        },
+        {
+            "name": "cuda-release-vcpkg-sm90",
+            "configurePreset": "cuda-release-vcpkg-sm90"
         },
         {
             "name": "hashapi-cli-mingw",

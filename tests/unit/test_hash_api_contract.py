@@ -84,6 +84,30 @@ def test_hash_api_smoke_preset_exists():
     assert "XENBLOCKS_HASHAPI_STUB_BACKEND" in content
 
 
+def test_cuda_release_benchmark_presets_exist():
+    content = read("CMakePresets.json")
+    docs = read("doc/BUILD_INSTRUCTIONS.md")
+
+    for token in [
+        "cuda-release-vcpkg-modern",
+        "cuda-release-vcpkg-sm86",
+        "cuda-release-vcpkg-sm89",
+        "cuda-release-vcpkg-sm90",
+        '"CMAKE_BUILD_TYPE": "Release"',
+        '"CMAKE_CUDA_ARCHITECTURES": "75;80;86;89;90"',
+    ]:
+        assert token in content
+
+    for token in [
+        "repeatable Hash API/CUDA benchmark runs",
+        "cuda-release-vcpkg-modern",
+        "cuda-release-vcpkg-sm86",
+        "Do not compare benchmark results from a Debug build",
+        "CMAKE_CUDA_ARCHITECTURES",
+    ]:
+        assert token in docs
+
+
 def test_hash_api_json_uses_standard_library_only():
     content = read("src/hashapi/HashApiJson.h")
     assert "nlohmann/json.hpp" not in content
