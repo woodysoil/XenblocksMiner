@@ -399,6 +399,7 @@ Rejected or risky experiments:
 - changing Argon2 `store32` to a little-endian `memcpy` fast path preserved the golden CUDA hash but produced noisy and then regressed d8/b2048 generated CUDA runs, so keep the explicit byte stores
 - reusing per-chunk finalized hash strings with an output-parameter base64 encoder preserved the golden CUDA hash and lowered some finalize timing samples, but full d8/b2048 generated CUDA throughput remained noisy and regressed on confirmation
 - parallelizing CUDA final hash materialization across CPU threads preserved the golden CUDA hash and lowered `finalize_hash_ms`, but benchmark subprocesses exited unstably during d8/b2048 generated CUDA runs, so keep finalization serial unless backend output-memory lifetime and thread-safety are redesigned
+- default-constructing `Blake2b` without zero-initializing its state preserved the golden CUDA hash, but a d8/b2048 generated CUDA run regressed to 48.4k H/s median with 26.7% spread versus the latest accepted 52.4k H/s confirmation, so keep the explicit constructor initialization
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
