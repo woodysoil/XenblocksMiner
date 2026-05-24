@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <regex>
 
 namespace hashapi {
 
@@ -16,8 +15,19 @@ bool isSuperblockHash(const std::string& hash)
 
 bool hasXuniMatch(const std::string& hash)
 {
-    static const std::regex xuni_pattern(R"(XUNI\d)");
-    return std::regex_search(hash, xuni_pattern);
+    constexpr const char* kXuniPrefix = "XUNI";
+    constexpr std::size_t kXuniPrefixLength = 4;
+
+    for (std::size_t offset = hash.find(kXuniPrefix);
+         offset != std::string::npos;
+         offset = hash.find(kXuniPrefix, offset + 1)) {
+        const std::size_t digit_offset = offset + kXuniPrefixLength;
+        if (digit_offset < hash.size() &&
+            std::isdigit(static_cast<unsigned char>(hash[digit_offset])) != 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void appendMatches(const HashApiRequest& request,

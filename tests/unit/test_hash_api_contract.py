@@ -164,6 +164,13 @@ def test_random_key_generator_avoids_per_key_stream_allocation():
     assert "std::uniform_int_distribution<size_t> distribution" in content
 
 
+def test_hash_api_matching_avoids_regex_in_hot_path():
+    content = read("src/hashapi/HashApiMatching.cpp")
+    assert "std::regex" not in content
+    assert "std::regex_search" not in content
+    assert 'hash.find(kXuniPrefix)' in content
+
+
 def test_local_hash_service_is_separate_from_marketplace_server():
     service = read("server/hash_api/app.py")
     platform_server = read("server/server.py")
