@@ -8,6 +8,8 @@ The aspirational target is at least a 1000% speed improvement over the measured 
 
 This goal is intended for Codex `/goal` long-running execution after the reusable Hash API extraction. Treat this file as the persistent operating brief.
 
+The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1` / `p=1`, and variable `m=diff`. Optimize the current local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
+
 ## `/goal` Starter
 
 Use `goal.md` as the short entrypoint, then keep this file as the authoritative long-running plan.
@@ -42,11 +44,23 @@ The hash workload is Argon2id-style mining as currently modeled by XenblocksMine
 
 - `t = 1` is fixed.
 - `p = 1` / `s = 1` lane, segment, or parallelism setting as represented by the current implementation is fixed.
-- `m = difficulty` is the variable memory-cost parameter.
+- `m = diff` / `difficulty` is the variable memory-cost parameter and may change between benchmark or mining sessions.
 - Salt and key inputs must remain semantically identical to the current Hash API contract.
 - Target matching must remain semantically identical to the current Hash API contract.
 
 Do not change the algorithm into a different hash, skip required work, approximate hashes, weaken target matching, or return synthetic successes. Optimization must reduce runtime for the same accepted input/output behavior.
+
+## Target Architecture
+
+The end state should make hash optimization easy for humans and AI agents:
+
+- Keep a pure Hash API boundary that can run without marketplace, wallet, frontend, lease, devfee, or platform services.
+- Keep CPU/reference and CUDA implementations behind the same request/result contract.
+- Keep `hash-one`, `hash-batch`, and `hash-benchmark` usable as stable automation entrypoints.
+- Keep benchmark scripts machine-readable so future agents can compare before/after runs without parsing terminal prose.
+- Make GPU tuning parameters explicit, measurable, and isolated from business logic.
+- Prefer backend refactors before kernel rewrites when the current structure hides timing, forces repeated allocation, or mixes validation with hot-path hashing.
+- Design tuning decisions around runtime device properties or compute capability, not local device names or private machine details.
 
 ## Operating Rules For Codex
 
@@ -91,6 +105,22 @@ Repeat this loop until the Definition Of Done is reached:
 11. Repeat with the next bottleneck.
 
 Prefer many small measurable iterations over broad speculative rewrites.
+
+## Autonomous Execution Policy
+
+Codex should keep working without asking for approval for normal optimization tasks:
+
+- reading files and git state
+- running tests
+- running local builds
+- running local benchmark scripts
+- creating ignored local benchmark reports
+- editing scoped source, test, script, and documentation files
+- making small validated commits
+
+Do not ask for permission just because an iteration may take time. Stop only for the blockers listed in the "Stop And Ask The User If" section.
+
+If an experiment fails, revert only the current agent's uncommitted experiment, record the evidence if it prevents repeated work, and continue with the next measurable idea.
 
 ## Local Artifact Policy
 
@@ -138,6 +168,7 @@ Use machine-readable benchmark output as the source of truth.
 Primary metric:
 
 - CUDA backend attempts per second / hashrate for `hash-benchmark`.
+- milliseconds per hash attempt for fixed-key and generated-key paths where available.
 
 Secondary metrics:
 
@@ -146,6 +177,7 @@ Secondary metrics:
 - single fixed-key `hash-one` latency
 - batch latency by batch size
 - initialization overhead per difficulty value
+- latency when `m=diff` changes between runs
 - match reporting overhead
 - memory allocation count and size where measurable
 - CPU/reference latency for correctness and regression checks, not as the main speed target
@@ -465,12 +497,14 @@ Work through this backlog before attempting high-risk kernel rewrites:
 1. Use benchmark comparison tooling for two report JSON files before accepting throughput claims.
 2. Keep reusable benchmark scenario presets aligned with the scenarios used for committed performance claims.
 3. Record a local initial CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
-4. Separate cold initialization timing from warm steady-state hashing in result metadata if current output is not sufficient.
-5. Cache difficulty-derived setup in the Hash API backend when `m`, salt, and batch shape are unchanged.
-6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
-7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
-8. Tune batch size and launch parameters only after the above CPU-side overhead is under control.
-9. Add optional autotuning once there is enough benchmark data to justify it.
+4. Add timing metadata that separates request validation, input generation, backend execution, CUDA finish/synchronization, finalization, and match handling.
+5. Separate cold initialization timing from warm steady-state hashing in result metadata if current output is not sufficient.
+6. Measure the cost of `m=diff` changes versus repeated same-`m` warm batches.
+7. Cache difficulty-derived setup in the Hash API backend when `m`, salt, and batch shape are unchanged.
+8. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
+9. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
+10. Tune batch size and launch parameters only after the above CPU-side overhead is under control.
+11. Add optional autotuning once there is enough benchmark data to justify it.
 
 Every backlog item must still follow the correctness and reporting rules above.
 
