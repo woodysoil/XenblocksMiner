@@ -115,6 +115,7 @@ This section should be refreshed whenever it would prevent duplicated work after
 - Detailed first-block timing now exposes the slowest worker wall time and derived worker-wall/scheduling-overhead analysis. Use those fields before retrying scheduler or worker-chunk changes.
 - Detailed first-block scheduling timing also exposes thread launch time, worker start skew, and worker finish span. Use those fields to decide whether scheduler work should target thread creation/start latency, worker-loop balance, or post-worker join overhead.
 - Latest finish-overhead diagnostics show first-block wall time is almost entirely explained by worker-local work and the latest worker finish, while post-worker join/accounting overhead is small. Do not spend the next optimization cycle on post-join cleanup; focus on worker start skew, worker-local digest cost, or a safer first-block architecture measurement instead.
+- Dynamic first-block chunk scheduling is available as an explicit benchmark knob. The default `first_block_dynamic_chunk_size=0` still means static chunking. Current local evidence supports chunk `32` at d8/b1024 and chunk `16` or `32` at d8/b2048, with chunk `16` best in the latest b2048 confirmation. Do not silently change explicit static requests; design any default or auto policy with clear override semantics.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 
@@ -648,9 +649,10 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 7. Run a short main-target CUDA benchmark.
 8. Run or load repeated d8/b2048 and d8/b1024 baselines because recent useful evidence used both scenarios.
 9. Use detailed timings to confirm the current dominant bottleneck, especially `input_ms`, key generation, first-block preparation, setup, transfers, compute, and finalization.
-10. Do not retry rejected pinned host staging, CUDA activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.
-11. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
-12. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
+10. For the next scheduler-specific code step, inspect request parsing and CUDA tuning helpers, then add the smallest testable automatic dynamic-chunk policy while preserving explicit static `0` semantics.
+11. Do not retry rejected pinned host staging, CUDA activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.
+12. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
+13. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
 
 Known accepted and rejected experiments are documented in `docs/HASH_OPTIMIZATION_GOAL.md`. Do not retry rejected experiments unless the implementation shape has materially changed and the new attempt includes correctness checks.
 
