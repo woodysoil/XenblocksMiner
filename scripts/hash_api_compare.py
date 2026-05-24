@@ -53,6 +53,39 @@ def _bool_value(data: dict[str, Any], key: str, default: bool = False) -> bool:
     return bool(value)
 
 
+def report_quality(report: Report, label: str) -> dict[str, Any]:
+    recommendations = report.get("recommendations") or {}
+    environment = report.get("environment") or {}
+    report_ok_value = recommendations.get("report_ok")
+    report_ok_available = isinstance(report_ok_value, bool)
+    report_ok = bool(report_ok_value) if report_ok_available else True
+    invalid_run_count = _int_value(recommendations, "invalid_run_count", 0)
+    benchmark_trust = str(environment.get("benchmark_trust") or "unknown")
+    high_cpu_load = _bool_value(environment, "high_cpu_load", False)
+    environment_available = _bool_value(environment, "available", False)
+
+    reasons: list[str] = []
+    if report_ok_available and not report_ok:
+        reasons.append("report_ok=false")
+    if invalid_run_count > 0:
+        reasons.append("invalid_run_count>0")
+    if benchmark_trust == "low" or high_cpu_load:
+        reasons.append("benchmark_trust=low")
+
+    return {
+        "label": label,
+        "acceptable": not reasons,
+        "report_ok": report_ok,
+        "report_ok_available": report_ok_available,
+        "invalid_run_count": invalid_run_count,
+        "benchmark_trust": benchmark_trust,
+        "environment_available": environment_available,
+        "high_cpu_load": high_cpu_load,
+        "sample_count": _int_value(environment, "sample_count", 0),
+        "reasons": reasons,
+    }
+
+
 def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     summary = _summary_for(run)
     scenario = _scenario_for(run)
@@ -299,6 +332,8 @@ def compare_reports(
     match_by: str = "name",
     ignore_detailed_timings: bool = False,
 ) -> Report:
+    before_quality = report_quality(before_report, "before")
+    after_quality = report_quality(after_report, "after")
     before_runs = index_runs(
         before_report,
         match_by=match_by,
@@ -360,6 +395,11 @@ def compare_reports(
         "max_spread_pct": max_spread_pct,
         "match_by": match_by,
         "ignore_detailed_timings": ignore_detailed_timings,
+        "quality": {
+            "ok": bool(before_quality["acceptable"] and after_quality["acceptable"]),
+            "before": before_quality,
+            "after": after_quality,
+        },
         "summary": {
             "total": len(comparisons),
             "improved": statuses.count("improved"),
@@ -498,6 +538,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="When matching by config, treat detailed and default timing reports as the same scenario.",
     )
+    parser.add_argument(
+        "--fail-on-report-quality",
+        action="store_true",
+        help="Exit with code 2 if either report is partial, invalid, or marked with low benchmark trust.",
+    )
     parser.add_argument("--fail-on-regression", action="store_true", help="Exit with code 2 if any scenario regresses.")
     return parser
 
@@ -523,6 +568,8 @@ def main(argv: list[str]) -> int:
         print(format_text(report))
 
     if args.fail_on_regression and (report["summary"]["regressed"] > 0 or report["summary"]["noisy_regressed"] > 0):
+        return 2
+    if args.fail_on_report_quality and not report["quality"]["ok"]:
         return 2
     return 0
 

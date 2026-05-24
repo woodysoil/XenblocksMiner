@@ -72,9 +72,25 @@ def _run(
     }
 
 
-def _report(*runs: dict) -> dict:
+def _report(
+    *runs: dict,
+    report_ok: bool = True,
+    invalid_run_count: int = 0,
+    benchmark_trust: str = "normal",
+    high_cpu_load: bool = False,
+) -> dict:
     return {
         "schema": "xenblocks.hashapi.benchmark.v1",
+        "environment": {
+            "available": True,
+            "benchmark_trust": benchmark_trust,
+            "high_cpu_load": high_cpu_load,
+            "sample_count": 2,
+        },
+        "recommendations": {
+            "report_ok": report_ok,
+            "invalid_run_count": invalid_run_count,
+        },
         "runs": list(runs),
     }
 
@@ -210,6 +226,30 @@ def test_compare_reports_includes_key_mode_metadata():
     assert result["comparisons"][0]["key_mode"] == "fixed"
 
 
+def test_compare_reports_includes_report_quality_metadata():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0)),
+        _report(_run("cuda-a", 105.0), benchmark_trust="low", high_cpu_load=True),
+    )
+
+    assert result["quality"]["ok"] is False
+    assert result["quality"]["before"]["acceptable"] is True
+    assert result["quality"]["after"]["acceptable"] is False
+    assert result["quality"]["after"]["benchmark_trust"] == "low"
+    assert result["quality"]["after"]["reasons"] == ["benchmark_trust=low"]
+
+
+def test_compare_reports_marks_partial_report_quality():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0), report_ok=False, invalid_run_count=1),
+        _report(_run("cuda-a", 105.0)),
+    )
+
+    assert result["quality"]["ok"] is False
+    assert result["quality"]["before"]["acceptable"] is False
+    assert result["quality"]["before"]["reasons"] == ["report_ok=false", "invalid_run_count>0"]
+
+
 def test_compare_reports_reports_missing_scenarios():
     result = compare.compare_reports(
         _report(_run("before-only", 100.0)),
@@ -331,6 +371,21 @@ def test_main_outputs_json_and_fails_on_regression(tmp_path, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["schema"] == "xenblocks.hashapi.compare.v1"
     assert output["summary"]["regressed"] == 1
+    assert output["quality"]["ok"] is True
+
+
+def test_main_can_fail_on_report_quality(tmp_path, capsys):
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(json.dumps(_report(_run("cuda-a", 100.0))), encoding="utf-8")
+    after.write_text(json.dumps(_report(_run("cuda-a", 101.0), benchmark_trust="low")), encoding="utf-8")
+
+    exit_code = compare.main([str(before), str(after), "--format", "json", "--fail-on-report-quality"])
+
+    assert exit_code == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["quality"]["ok"] is False
+    assert output["summary"]["regressed"] == 0
 
 
 def test_main_can_match_by_config(tmp_path, capsys):
