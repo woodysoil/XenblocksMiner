@@ -52,6 +52,11 @@ static const unsigned int blake2b_sigma[12][16] = {
 
 static std::uint64_t load64(const void *src)
 {
+#if defined(_WIN32) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+    std::uint64_t value = 0;
+    std::memcpy(&value, src, sizeof(value));
+    return value;
+#else
     auto in = static_cast<const std::uint8_t *>(src);
     std::uint64_t res = *in++;
     res |= static_cast<std::uint64_t>(*in++) << 8;
@@ -62,10 +67,14 @@ static std::uint64_t load64(const void *src)
     res |= static_cast<std::uint64_t>(*in++) << 48;
     res |= static_cast<std::uint64_t>(*in++) << 56;
     return res;
+#endif
 }
 
 static void store64(void *dst, std::uint64_t v)
 {
+#if defined(_WIN32) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+    std::memcpy(dst, &v, sizeof(v));
+#else
     auto out = static_cast<std::uint8_t *>(dst);
     *out++ = static_cast<std::uint8_t>(v); v >>= 8;
     *out++ = static_cast<std::uint8_t>(v); v >>= 8;
@@ -75,6 +84,7 @@ static void store64(void *dst, std::uint64_t v)
     *out++ = static_cast<std::uint8_t>(v); v >>= 8;
     *out++ = static_cast<std::uint8_t>(v); v >>= 8;
     *out++ = static_cast<std::uint8_t>(v);
+#endif
 }
 
 void Blake2b::init(std::size_t outlen)
@@ -93,24 +103,24 @@ void Blake2b::compress(const void *block, std::uint64_t f0)
     std::uint64_t m[16];
     std::uint64_t v[16];
 
-    auto in = static_cast<const uint64_t *>(block);
+    auto in = static_cast<const std::uint8_t *>(block);
 
-    m[ 0] = load64(in +  0);
-    m[ 1] = load64(in +  1);
-    m[ 2] = load64(in +  2);
-    m[ 3] = load64(in +  3);
-    m[ 4] = load64(in +  4);
-    m[ 5] = load64(in +  5);
-    m[ 6] = load64(in +  6);
-    m[ 7] = load64(in +  7);
-    m[ 8] = load64(in +  8);
-    m[ 9] = load64(in +  9);
-    m[10] = load64(in + 10);
-    m[11] = load64(in + 11);
-    m[12] = load64(in + 12);
-    m[13] = load64(in + 13);
-    m[14] = load64(in + 14);
-    m[15] = load64(in + 15);
+    m[ 0] = load64(in +  0 * sizeof(std::uint64_t));
+    m[ 1] = load64(in +  1 * sizeof(std::uint64_t));
+    m[ 2] = load64(in +  2 * sizeof(std::uint64_t));
+    m[ 3] = load64(in +  3 * sizeof(std::uint64_t));
+    m[ 4] = load64(in +  4 * sizeof(std::uint64_t));
+    m[ 5] = load64(in +  5 * sizeof(std::uint64_t));
+    m[ 6] = load64(in +  6 * sizeof(std::uint64_t));
+    m[ 7] = load64(in +  7 * sizeof(std::uint64_t));
+    m[ 8] = load64(in +  8 * sizeof(std::uint64_t));
+    m[ 9] = load64(in +  9 * sizeof(std::uint64_t));
+    m[10] = load64(in + 10 * sizeof(std::uint64_t));
+    m[11] = load64(in + 11 * sizeof(std::uint64_t));
+    m[12] = load64(in + 12 * sizeof(std::uint64_t));
+    m[13] = load64(in + 13 * sizeof(std::uint64_t));
+    m[14] = load64(in + 14 * sizeof(std::uint64_t));
+    m[15] = load64(in + 15 * sizeof(std::uint64_t));
 
     v[ 0] = h[0];
     v[ 1] = h[1];

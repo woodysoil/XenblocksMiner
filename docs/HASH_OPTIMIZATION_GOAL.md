@@ -367,6 +367,7 @@ Known useful changes already made:
 - per-attempt benchmark timing summaries and full recommendation candidate reporting
 - d1 CUDA default batch size raised to 512 when no explicit user batch-size limit is configured
 - d8 CUDA default batch size raised to 2048 when no explicit user batch-size limit is configured
+- little-endian `Blake2b` 64-bit load/store fast path reduced generated CUDA per-attempt cost in a d8/b2048 A/B benchmark
 
 Rejected or risky experiments:
 
