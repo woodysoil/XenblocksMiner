@@ -465,6 +465,24 @@ def collect_environment_metadata() -> dict[str, Any]:
     }
 
 
+def combine_environment_metadata(*samples: dict[str, Any]) -> dict[str, Any]:
+    available_samples = [sample for sample in samples if sample.get("available")]
+    if not available_samples:
+        return samples[0] if samples else {"available": False, "reason": "environment_unavailable"}
+
+    cpu_loads = [float(sample.get("cpu_load_pct", 0.0) or 0.0) for sample in available_samples]
+    high_cpu_load = any(bool(sample.get("high_cpu_load")) for sample in available_samples) or max(cpu_loads) >= 90.0
+    return {
+        "available": True,
+        "cpu_load_pct": max(cpu_loads),
+        "start_cpu_load_pct": cpu_loads[0],
+        "end_cpu_load_pct": cpu_loads[-1],
+        "sample_count": len(available_samples),
+        "high_cpu_load": high_cpu_load,
+        "benchmark_trust": "low" if high_cpu_load else "normal",
+    }
+
+
 def summarize_timings(timings: Any) -> dict[str, float]:
     if not isinstance(timings, dict):
         return {}
@@ -1070,7 +1088,9 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    environment_before = collect_environment_metadata()
     runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
+    environment_after = collect_environment_metadata()
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "created_at_unix": time.time(),
@@ -1082,7 +1102,7 @@ def main(argv: list[str]) -> int:
         },
         "build": collect_build_metadata(args.build_cache),
         "hardware": collect_hardware_metadata(),
-        "environment": collect_environment_metadata(),
+        "environment": combine_environment_metadata(environment_before, environment_after),
         "binary": str(args.binary),
         "salt": args.salt,
         "presets": args.preset,

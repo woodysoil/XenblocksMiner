@@ -27,21 +27,24 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
 
 
 def _stub_metadata(monkeypatch):
+    environment_calls = {"count": 0}
+
+    def fake_environment_metadata():
+        environment_calls["count"] += 1
+        return {
+            "available": True,
+            "cpu_load_pct": 12.5,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        }
+
     monkeypatch.setattr(
         benchmark,
         "collect_hardware_metadata",
         lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
     )
-    monkeypatch.setattr(
-        benchmark,
-        "collect_environment_metadata",
-        lambda: {
-            "available": True,
-            "cpu_load_pct": 12.5,
-            "high_cpu_load": False,
-            "benchmark_trust": "normal",
-        },
-    )
+    monkeypatch.setattr(benchmark, "collect_environment_metadata", fake_environment_metadata)
+    return environment_calls
 
 
 def test_parse_scenario_inherits_warmup_and_repeat_defaults():
@@ -1414,6 +1417,33 @@ def test_collect_environment_metadata_handles_unavailable_cpu_load(monkeypatch):
     assert metadata == {
         "available": False,
         "reason": "cpu_load_unavailable",
+    }
+
+
+def test_combine_environment_metadata_uses_max_cpu_load_for_trust():
+    metadata = benchmark.combine_environment_metadata(
+        {
+            "available": True,
+            "cpu_load_pct": 25.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+        {
+            "available": True,
+            "cpu_load_pct": 97.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+    )
+
+    assert metadata == {
+        "available": True,
+        "cpu_load_pct": 97.0,
+        "start_cpu_load_pct": 25.0,
+        "end_cpu_load_pct": 97.0,
+        "sample_count": 2,
+        "high_cpu_load": True,
+        "benchmark_trust": "low",
     }
 
 
