@@ -17,6 +17,7 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "difficulty": 1,
         "batch_size": 2,
         "attempts": attempts,
+        "first_block_workers": 0,
         "first_block_worker_count": 0,
         "first_block_chunk_size": 0,
         "elapsed_ms": 1000.0,
@@ -377,6 +378,7 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["stable"] is False
     assert aggregate["stable_spread_pct"] == 10.0
     assert aggregate["attempts"] == 60
+    assert aggregate["first_block_workers"] == 0
     assert aggregate["elapsed_ms"] == 3000.0
     assert aggregate["ms_per_attempt"] == 50.0
     assert aggregate["difficulty_mode"] == "fixed"
@@ -398,6 +400,7 @@ def test_summarize_iterations_marks_stable_repeated_samples():
         batch_size=2048,
         seconds=1,
         repeat=3,
+        first_block_workers=4,
     )
 
     aggregate = benchmark.summarize_iterations(
@@ -407,6 +410,7 @@ def test_summarize_iterations_marks_stable_repeated_samples():
 
     assert aggregate["hashrate_spread_pct"] < aggregate["stable_spread_pct"]
     assert aggregate["stable"] is True
+    assert aggregate["first_block_workers"] == 4
     assert aggregate["sample_count"] == 3
     assert aggregate["ok_sample_count"] == 3
 
@@ -730,6 +734,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "name": "d1-b128",
                 "difficulty": 1,
                 "batch_size": 128,
+                "first_block_workers": 4,
                 "first_block_worker_count": 4,
                 "first_block_chunk_size": 32,
                 "hashrate_spread_pct": 5.0,
@@ -763,6 +768,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 1,
             "batch_size": 128,
+            "first_block_workers": 4,
             "first_block_worker_count": 4,
             "first_block_chunk_size": 32,
             "median_hashrate": 150.0,
@@ -781,6 +787,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 8,
             "batch_size": 64,
+            "first_block_workers": 0,
             "first_block_worker_count": 0,
             "first_block_chunk_size": 0,
             "median_hashrate": 120.0,
@@ -798,6 +805,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     assert recommendations["candidates_by_difficulty"][0]["difficulty"] == 1
     assert [item["batch_size"] for item in recommendations["candidates_by_difficulty"][0]["candidates"]] == [64, 128]
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["stable"] is True
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_workers"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_worker_count"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size"] == 32
 
