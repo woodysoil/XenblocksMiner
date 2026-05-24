@@ -389,6 +389,7 @@ Rejected or risky experiments:
 - increasing CUDA finalize timing chunks from 64 to 256 preserved the golden CUDA hash but regressed a d8/b2048 generated CUDA run, so keep the smaller chunk unless a broader timing redesign changes the tradeoff
 - pre-sizing the base64 output string and writing by index preserved the golden CUDA hash but did not improve d8/b2048 generated CUDA throughput, so keep the reserved `push_back` encoder unless a broader finalization redesign changes allocation behavior
 - changing Argon2 `store32` to a little-endian `memcpy` fast path preserved the golden CUDA hash but produced noisy and then regressed d8/b2048 generated CUDA runs, so keep the explicit byte stores
+- reusing per-chunk finalized hash strings with an output-parameter base64 encoder preserved the golden CUDA hash and lowered some finalize timing samples, but full d8/b2048 generated CUDA throughput remained noisy and regressed on confirmation
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
