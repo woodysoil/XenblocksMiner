@@ -19,6 +19,7 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "attempts": attempts,
         "first_block_workers": 0,
         "first_block_dynamic_chunk_size": 0,
+        "first_block_dynamic_chunk_auto": False,
         "first_block_worker_count": 0,
         "first_block_chunk_size": 0,
         "elapsed_ms": 1000.0,
@@ -732,6 +733,14 @@ def test_parse_scenario_supports_first_block_dynamic_chunk_size():
     assert scenario.first_block_dynamic_chunk_size == 64
 
 
+def test_parse_scenario_supports_first_block_dynamic_chunk_auto():
+    scenario = benchmark.parse_scenario(
+        "name=diag,backend=cuda,difficulty=8,batch_size=2048,seconds=1,first_block_dynamic_chunk_auto=true"
+    )
+
+    assert scenario.first_block_dynamic_chunk_auto is True
+
+
 def test_build_hash_command_adds_detailed_timings_flag():
     scenario = benchmark.BenchmarkScenario(
         name="diag",
@@ -779,6 +788,55 @@ def test_build_hash_command_adds_first_block_dynamic_chunk_size_when_set():
     assert command[command.index("--first-block-dynamic-chunk-size") + 1] == "64"
 
 
+def test_build_hash_command_adds_first_block_dynamic_chunk_auto_when_set():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        first_block_dynamic_chunk_auto=True,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--first-block-dynamic-chunk-auto" in command
+
+
+def test_summarize_result_uses_selected_dynamic_chunk_size():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        first_block_dynamic_chunk_auto=True,
+    )
+    summary = benchmark.summarize_result(
+        scenario,
+        {
+            "backend": "cuda",
+            "device_id": 0,
+            "batch_size": 2048,
+            "attempts": 2048,
+            "first_block_dynamic_chunk_size": 32,
+            "first_block_dynamic_chunk_auto": True,
+            "first_block_worker_count": 8,
+            "first_block_chunk_size": 32,
+            "elapsed_ms": 1000.0,
+            "hashrate": 2048.0,
+            "timings": {},
+            "matches": [],
+            "ok": True,
+            "error": "",
+        },
+    )
+
+    assert summary["first_block_dynamic_chunk_auto"] is True
+    assert summary["first_block_dynamic_chunk_size"] == 32
+    assert summary["first_block_chunk_size"] == 32
+
+
 def test_summarize_iterations_reports_median_timing_per_attempt():
     scenario = benchmark.BenchmarkScenario(
         name="cuda-test",
@@ -812,6 +870,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "batch_size": 128,
                 "first_block_workers": 4,
                 "first_block_dynamic_chunk_size": 64,
+                "first_block_dynamic_chunk_auto": True,
                 "first_block_worker_count": 4,
                 "first_block_chunk_size": 32,
                 "hashrate_spread_pct": 5.0,
@@ -847,6 +906,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "batch_size": 128,
             "first_block_workers": 4,
             "first_block_dynamic_chunk_size": 64,
+            "first_block_dynamic_chunk_auto": True,
             "first_block_worker_count": 4,
             "first_block_chunk_size": 32,
             "median_hashrate": 150.0,
@@ -867,6 +927,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "batch_size": 64,
             "first_block_workers": 0,
             "first_block_dynamic_chunk_size": 0,
+            "first_block_dynamic_chunk_auto": False,
             "first_block_worker_count": 0,
             "first_block_chunk_size": 0,
             "median_hashrate": 120.0,
@@ -886,6 +947,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["stable"] is True
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_workers"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_dynamic_chunk_size"] == 64
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_dynamic_chunk_auto"] is True
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_worker_count"] == 4
     assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["first_block_chunk_size"] == 32
 

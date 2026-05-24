@@ -81,6 +81,21 @@ std::size_t firstBlockSelectedChunkSize(std::size_t attempts,
     return firstBlockChunkSize(attempts, worker_count);
 }
 
+std::size_t recommendedFirstBlockDynamicChunkSize(const HashApiRequest& request,
+                                                  std::size_t attempts,
+                                                  std::size_t worker_count)
+{
+    if (!request.first_block_dynamic_chunk_auto ||
+        request.backend != "cuda" ||
+        !request.key.empty() ||
+        request.difficulty != 8 ||
+        attempts < 1024 ||
+        worker_count <= 1) {
+        return 0;
+    }
+    return 32;
+}
+
 void fillPasswordBlocks(ComputeBackend& backend,
                         const Argon2Params& params,
                         const std::vector<std::string>& passwords,
@@ -286,8 +301,13 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         const std::size_t attempts = single_key ? 1 : request.batch_size;
         result.first_block_worker_count = firstBlockWorkerCount(attempts, request.first_block_workers);
         result.first_block_dynamic_chunk_size = 0;
-        if (result.first_block_worker_count > 1 && request.first_block_dynamic_chunk_size > 0) {
-            result.first_block_dynamic_chunk_size = std::min(attempts, request.first_block_dynamic_chunk_size);
+        result.first_block_dynamic_chunk_auto =
+            request.first_block_dynamic_chunk_auto && request.first_block_dynamic_chunk_size == 0;
+        const std::size_t requested_dynamic_chunk_size = request.first_block_dynamic_chunk_size > 0
+            ? request.first_block_dynamic_chunk_size
+            : recommendedFirstBlockDynamicChunkSize(request, attempts, result.first_block_worker_count);
+        if (result.first_block_worker_count > 1 && requested_dynamic_chunk_size > 0) {
+            result.first_block_dynamic_chunk_size = std::min(attempts, requested_dynamic_chunk_size);
         }
         result.first_block_chunk_size = firstBlockSelectedChunkSize(
             attempts,
@@ -361,7 +381,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
                                params,
                                password_storage_,
                                request.first_block_workers,
-                               request.first_block_dynamic_chunk_size,
+                               result.first_block_dynamic_chunk_size,
                                detailed_first_block_timings);
             result.timings.first_block_ms = elapsedMillis(first_block_start, std::chrono::steady_clock::now());
         }

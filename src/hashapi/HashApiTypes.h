@@ -27,6 +27,7 @@ struct HashApiRequest {
     bool detailed_timings = false;
     std::size_t first_block_workers = 0;
     std::size_t first_block_dynamic_chunk_size = 0;
+    bool first_block_dynamic_chunk_auto = false;
 };
 
 struct HashApiMatch {
@@ -78,6 +79,7 @@ struct HashApiResult {
     std::size_t batch_size = 0;
     std::size_t attempts = 0;
     std::size_t first_block_dynamic_chunk_size = 0;
+    bool first_block_dynamic_chunk_auto = false;
     std::size_t first_block_worker_count = 0;
     std::size_t first_block_chunk_size = 0;
     double elapsed_ms = 0.0;

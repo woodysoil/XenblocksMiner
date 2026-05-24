@@ -104,6 +104,7 @@ std::string toJson(const HashApiResult& result)
         << "\"batch_size\":" << result.batch_size << ","
         << "\"attempts\":" << result.attempts << ","
         << "\"first_block_dynamic_chunk_size\":" << result.first_block_dynamic_chunk_size << ","
+        << "\"first_block_dynamic_chunk_auto\":" << boolText(result.first_block_dynamic_chunk_auto) << ","
         << "\"first_block_worker_count\":" << result.first_block_worker_count << ","
         << "\"first_block_chunk_size\":" << result.first_block_chunk_size << ","
         << "\"elapsed_ms\":" << result.elapsed_ms << ","

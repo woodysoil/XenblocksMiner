@@ -39,6 +39,7 @@ def test_hash_api_request_fields_exist():
         "detailed_timings",
         "first_block_workers",
         "first_block_dynamic_chunk_size",
+        "first_block_dynamic_chunk_auto",
     ]:
         assert field in content
 
@@ -166,6 +167,7 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
 
     for field in [
         "first_block_dynamic_chunk_size",
+        "first_block_dynamic_chunk_auto",
         "first_block_worker_count",
         "first_block_chunk_size",
     ]:
@@ -176,6 +178,8 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
     assert "firstBlockWorkerCount(attempts, request.first_block_workers)" in cuda_impl
     assert "firstBlockSelectedChunkSize(" in cuda_impl
     assert "request.first_block_dynamic_chunk_size" in cuda_impl
+    assert "recommendedFirstBlockDynamicChunkSize" in cuda_impl
+    assert "request.first_block_dynamic_chunk_auto" in cuda_impl
     assert "next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed)" in cuda_impl
 
 
@@ -221,6 +225,7 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "aggregate.hash = current.hash" in content
     assert "aggregate.hash.clear()" in content
     assert "aggregate.first_block_dynamic_chunk_size = current.first_block_dynamic_chunk_size" in content
+    assert "aggregate.first_block_dynamic_chunk_auto = current.first_block_dynamic_chunk_auto" in content
     assert "aggregate.first_block_worker_count = current.first_block_worker_count" in content
     assert "aggregate.first_block_chunk_size = current.first_block_chunk_size" in content
     assert "target.first_block_max_worker_ms += source.first_block_max_worker_ms" in content
@@ -228,6 +233,7 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "target.first_block_worker_finish_span_ms += source.first_block_worker_finish_span_ms" in content
     assert "--detailed-timings" in content
     assert "--first-block-dynamic-chunk-size" in content
+    assert "--first-block-dynamic-chunk-auto" in content
     assert "ex.what()" in content
     assert "cuda backend is not available in this build" in content
 

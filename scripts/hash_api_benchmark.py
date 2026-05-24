@@ -84,6 +84,7 @@ class BenchmarkScenario:
     detailed_timings: bool = False
     first_block_workers: int = 0
     first_block_dynamic_chunk_size: int = 0
+    first_block_dynamic_chunk_auto: bool = False
 
 
 def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
@@ -149,6 +150,8 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         detailed_timings=parts.get("detailed_timings", "false").lower() in {"1", "true", "yes"},
         first_block_workers=max(0, int(parts.get("first_block_workers", "0"))),
         first_block_dynamic_chunk_size=max(0, int(parts.get("first_block_dynamic_chunk_size", "0"))),
+        first_block_dynamic_chunk_auto=parts.get("first_block_dynamic_chunk_auto", "false").lower()
+        in {"1", "true", "yes"},
     )
 
 
@@ -664,7 +667,14 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "batch_size": result.get("batch_size", scenario.batch_size),
         "attempts": result.get("attempts", 0),
         "first_block_workers": scenario.first_block_workers,
-        "first_block_dynamic_chunk_size": scenario.first_block_dynamic_chunk_size,
+        "first_block_dynamic_chunk_size": result.get(
+            "first_block_dynamic_chunk_size",
+            scenario.first_block_dynamic_chunk_size,
+        ),
+        "first_block_dynamic_chunk_auto": result.get(
+            "first_block_dynamic_chunk_auto",
+            scenario.first_block_dynamic_chunk_auto,
+        ),
         "first_block_worker_count": result.get("first_block_worker_count", 0),
         "first_block_chunk_size": result.get("first_block_chunk_size", 0),
         "elapsed_ms": result.get("elapsed_ms", 0.0),
@@ -700,7 +710,10 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "batch_size": summaries[0]["batch_size"] if summaries else scenario.batch_size,
         "attempts": attempts,
         "first_block_workers": scenario.first_block_workers,
-        "first_block_dynamic_chunk_size": scenario.first_block_dynamic_chunk_size,
+        "first_block_dynamic_chunk_size": _median_int(
+            [item.get("first_block_dynamic_chunk_size", 0) for item in ok_summaries]
+        ),
+        "first_block_dynamic_chunk_auto": scenario.first_block_dynamic_chunk_auto,
         "first_block_worker_count": _median_int([item.get("first_block_worker_count", 0) for item in ok_summaries]),
         "first_block_chunk_size": _median_int([item.get("first_block_chunk_size", 0) for item in ok_summaries]),
         "elapsed_ms": elapsed_ms,
@@ -775,6 +788,7 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "batch_size": int(summary.get("batch_size", 0)),
             "first_block_workers": int(summary.get("first_block_workers", 0) or 0),
             "first_block_dynamic_chunk_size": int(summary.get("first_block_dynamic_chunk_size", 0) or 0),
+            "first_block_dynamic_chunk_auto": bool(summary.get("first_block_dynamic_chunk_auto", False)),
             "first_block_worker_count": int(summary.get("first_block_worker_count", 0) or 0),
             "first_block_chunk_size": int(summary.get("first_block_chunk_size", 0) or 0),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
@@ -836,6 +850,7 @@ def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         "detailed_timings",
         "first_block_workers",
         "first_block_dynamic_chunk_size",
+        "first_block_dynamic_chunk_auto",
     )
     sanitized = {key: scenario[key] for key in safe_keys if key in scenario}
     if "key_mode" not in sanitized:
@@ -943,6 +958,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         command.extend(["--first-block-workers", str(scenario.first_block_workers)])
     if scenario.first_block_dynamic_chunk_size > 0:
         command.extend(["--first-block-dynamic-chunk-size", str(scenario.first_block_dynamic_chunk_size)])
+    if scenario.first_block_dynamic_chunk_auto:
+        command.append("--first-block-dynamic-chunk-auto")
     return command
 
 
