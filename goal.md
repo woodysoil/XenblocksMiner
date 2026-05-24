@@ -60,6 +60,41 @@ The agent should not ask for approval during normal local optimization cycles. B
 
 The agent should continue across compaction and resume events by reading this file first, then `docs/HASH_OPTIMIZATION_GOAL.md`, then the latest commits and dirty diff. If a previous agent left a correct dirty experiment in progress, finish its validation before starting a new experiment.
 
+## Strong Goal Shape
+
+Treat the active `/goal` as a compact contract, not a vague "keep improving" prompt. Every continuation turn should preserve these six parts:
+
+- Outcome: reduce time per valid Hash API CUDA hash attempt as far as correctness allows.
+- Verification surface: focused unit tests, CUDA golden hash checks, machine-readable benchmark JSON, sanitized summaries, comparison reports, and staged diffs.
+- Constraints: preserve `argon2id-xen` semantics, Hash API request/result compatibility, target matching, generated-key attempt indexing, and public-repo privacy.
+- Boundaries: stay inside the reusable hash core, CUDA backend, benchmark tooling, tests, docs, and narrowly related miner integration.
+- Iteration policy: pick the next smallest measurable bottleneck from timing evidence, validate it, commit it if useful, document or revert it if rejected, then continue.
+- Blocked policy: stop only for the explicit stop conditions in this file; otherwise choose the next safe local action without asking for approval.
+
+Long instructions belong in this file and `docs/HASH_OPTIMIZATION_GOAL.md`. The `/goal` command should point at these files instead of trying to carry every rule inline.
+
+## Continuation Turn Rules
+
+At the start of every automatic continuation turn:
+
+1. Read `goal.md` and `docs/HASH_OPTIMIZATION_GOAL.md` if context is stale, compacted, or uncertain.
+2. Run `git status -sb` and inspect recent commits before editing.
+3. If the worktree is dirty, classify the dirty state first: previous-agent accepted work, previous-agent rejected experiment, user change, or unrelated local artifact.
+4. Finish validation for useful dirty work before starting a new experiment.
+5. Select exactly one next measurable step from the current bottleneck evidence.
+6. Run correctness checks before trusting performance numbers.
+7. Commit small validated slices with English messages.
+8. Update the detailed goal document when a result changes future decisions.
+
+Do not use a continuation turn only to restate the plan. Make measurable progress unless a stop condition is reached.
+
+Each turn should end as one of:
+
+- accepted: correctness passed, the change is useful, privacy checks passed, and a small commit was made
+- rejected: the current uncommitted experiment was reverted or left documented as rejected evidence
+- measurement-only: tooling, timing, docs, or benchmark reliability improved and was committed
+- blocked: an explicit stop condition was reached and the remaining blocker is concrete
+
 ## Outcome
 
 Optimize the extracted Hash API and CUDA hashing path until one of these is true:
@@ -71,6 +106,8 @@ Optimize the extracted Hash API and CUDA hashing path until one of these is true
 Until one of those outcomes is proven, keep iterating.
 
 The target improvement is measured on the same benchmark scenario, not across unrelated difficulty, batch-size, key-mode, or hardware changes. A 1000% claim needs a recorded baseline, a confirmed best result, and the exact comparison formula from the progress accounting section.
+
+A 1000% improvement means the confirmed best median throughput is at least `11x` the selected baseline median throughput by the formula below. Do not confuse this with reaching `1000% of baseline`, which would be only `10x`.
 
 ## Progress Accounting
 
@@ -85,6 +122,17 @@ Maintain progress against a named baseline rather than against memory or termina
 Do not claim the 1000% target from a single noisy run. Confirm large claims with repeated runs or a stable scan, and keep the raw report ignored unless a sanitized summary is intentionally committed.
 
 Plateau evidence requires at least three consecutive well-scoped optimization attempts against the current dominant bottleneck with less than 3% confirmed improvement, plus a short note in `docs/HASH_OPTIMIZATION_GOAL.md` explaining the remaining bottleneck and why risk is now higher than expected gain.
+
+A benchmark can become the active baseline or best result only when:
+
+- `report_ok` is true
+- `benchmark_trust` is `normal` when environment metadata is present
+- build metadata is public-safe and matches the intended Release CUDA configuration
+- the scenario matches the comparison target
+- spread is at or below the configured stability threshold, or the uncertainty is explicitly documented as measurement-only
+- correctness checks passed on the affected path
+
+Reports marked `benchmark_trust: low` are useful for diagnosing local environment noise, but they must not replace the baseline or justify performance claims.
 
 ## Fixed Workload
 
@@ -165,6 +213,7 @@ This checkpoint exists so a long-running `/goal` session can resume without rein
 - The branch can stay ahead of the remote during autonomous work. Keep improving and committing locally unless the user explicitly requests squash, reorder, push, or public history rewrite.
 - Current stable Release continuity evidence for generated-key CUDA d8/b2048 is about `78.3k H/s` median with `3.8%` spread. Treat it as local benchmark evidence, not as a public hardware claim.
 - Current timing evidence points to CPU-side input and first-block preparation as the dominant bottleneck, so prefer first-block/input-preparation work before risky CUDA kernel rewrites unless newer measurements contradict it.
+- Benchmark reports include public-safe environment trust metadata sampled before and after each run. Prefer `benchmark_trust: normal` reports for CPU-side input and first-block conclusions.
 - The current benchmark harness can scan difficulty, batch size, and CUDA first-block worker caps. First-block worker caps are tuning parameters for measurement, not a default behavior change unless stable repeated evidence supports it.
 - Recent timing evidence shows generated CUDA d8/b2048 work is usually CPU-side dominated by `input_ms`, especially first-block preparation, while `setup_ms` and transfer timings are still useful secondary targets.
 - Recent rejected experiments include CUDA activation caching, pinned host staging buffers, runner caching, a lanes==1 first-block fast path, `_rotr64` Blake2b rotate replacement, and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
@@ -550,6 +599,15 @@ Before each commit:
 4. Run `git diff --cached --check`.
 5. Inspect the staged diff for private paths, usernames, hostnames, secrets, wallet data, raw reports, and local hardware identifiers.
 6. Commit the smallest coherent slice.
+
+Use a staged-diff privacy scan before each commit. A non-match exit code from the scan is acceptable:
+
+```bash
+git diff --cached --check
+git diff --cached | rg -n "[A-Za-z]:[/\\\\]|[/]Users[/]|Users[\\\\]|<private-user>|[h]ostname=|[H]OSTNAME|[S]ECRET|[P]RIVATE KEY|[B]EGIN .*KEY|wallet [p]rivate"
+```
+
+Do not commit local GPU model names, local absolute paths, or raw benchmark report contents even when they look harmless.
 
 ## Stop Conditions
 
