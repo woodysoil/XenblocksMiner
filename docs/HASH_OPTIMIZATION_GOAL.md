@@ -60,9 +60,10 @@ Current observations:
 - d64 batch-size scans have been noisy and should not be used to change defaults without stronger repeated evidence.
 - Later 10-second d64 scans still conflicted between b1024 and b2048 stability versus median throughput, so keep the d64 default conservative until repeated evidence converges.
 - A short d8 scan found b4096 as a fast candidate, but a 10-second d8/b4096 confirmation later had a benchmark subprocess access-violation exit and slower/noisier valid samples, so keep the d8 default at b2048 unless a future stable confirmation removes that instability.
+- A newer d8 b1024/b2048 confirmation on the CUDA-capable local GPU found b1024 slightly faster by median and stable, while b2048 was slightly lower and just above the stability threshold. Treat b1024 as the current safer local A/B scenario, but do not change the miner default from b2048 until repeated evidence converges across longer runs or another GPU class.
 - Detailed setup timing shows setup can matter in short runs, with CUDA activation usually the largest setup subfield. Direct activation caching was tested and rejected because benchmark subprocesses became unstable.
 - Detailed first-block timing shows first-block digest work is a major CPU-side cost in generated-key batches. Because parallel first-block timing can sum worker-local CPU time, do not treat nested detailed fields as additive wall-clock components.
-- H2D and D2H transfer timings are measurable but not currently the dominant d8/b2048 bottleneck. Pinned host staging is still a reasonable isolated experiment because it is local to buffer allocation and transfer behavior.
+- H2D and D2H transfer timings are measurable but not currently the dominant d8/b2048 bottleneck. Pinned host staging was tested and rejected for the current implementation because the same-settings throughput comparison regressed, so revisit it only as part of a broader transfer-overlap or buffer-lifetime redesign.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 
@@ -145,8 +146,8 @@ Start here after reading this file:
 5. Build the smoke CLI or full CUDA binary that is already configured locally.
 6. Run the golden CUDA hash check when a CUDA binary is available.
 7. Run a short main-target CUDA benchmark to confirm the binary and benchmark harness still work.
-8. Run or load a repeated d8/b2048 baseline because recent accepted and rejected experiments used that scenario.
-9. If no newer evidence supersedes this checkpoint, record a d8/b2048 CUDA transfer baseline with `--detailed-timings`, then test pinned host staging buffers inside `KernelRunner`.
+8. Run or load a repeated d8/b2048 baseline because recent accepted and rejected experiments used that scenario, then include d8/b1024 when the local GPU shows b2048 instability.
+9. If no newer evidence supersedes this checkpoint, use `--detailed-timings` on d8/b2048 and d8/b1024 to confirm whether `input_ms` and first-block preparation still dominate before choosing the next experiment.
 10. Inspect timing metadata and choose one bottleneck:
    - high `input_ms`: reduce CPU-side key generation, salt/key preparation, or first-block setup overhead
    - high `keygen_ms`: optimize random key generation, prefix handling, or generated-key memory layout
@@ -558,7 +559,7 @@ Tasks:
 - Tune block/thread parameters per compute capability.
 - Improve global memory coalescing if profiling shows poor memory behavior.
 - Reduce register pressure if it limits occupancy.
-- Evaluate pinned host memory for transfer-heavy paths.
+- Revisit pinned host memory only for transfer-heavy paths after a broader transfer-overlap or buffer-lifetime design exists.
 - Evaluate CUDA streams only if there is real overlap potential.
 - Keep a safe fallback for GPUs that do not benefit from a specific tuning.
 
@@ -760,14 +761,14 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 
 Work through this backlog before attempting high-risk kernel rewrites:
 
-1. Maintain a current local CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
-2. Evaluate pinned host staging buffers inside `KernelRunner` after recording a same-settings transfer baseline; accept only if correctness holds and transfer or throughput evidence is useful.
-3. Run stable custom batch-size scans for common difficulty ranges.
-4. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
-5. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
-6. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
-7. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
-8. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
+1. Maintain current local CUDA baselines under `.benchmarks/` with warm-up and repeated runs, including d8/b2048 for continuity and d8/b1024 when b2048 is unstable locally.
+2. Run stable custom batch-size scans for common difficulty ranges, keeping d8/b2048 for continuity and d8/b1024 for the current local unstable-baseline case.
+3. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
+4. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
+5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
+6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
+7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
+8. Revisit pinned host memory only if profiling shows transfer cost dominates after input/setup overhead is reduced.
 9. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
 10. Tune launch parameters only after CPU-side overhead is under control.
 11. Add optional autotuning once enough benchmark data justifies it.
@@ -871,6 +872,6 @@ Recommended first action after this revision:
 2. Build or reuse the local CUDA binary.
 3. Run the golden CUDA hash check.
 4. Run a short main-target CUDA benchmark.
-5. Run or load a repeated d8/b2048 baseline.
-6. If no newer checkpoint exists, run the transfer-focused d8/b2048 benchmark and then evaluate pinned host staging buffers in `KernelRunner`.
-7. Use the timing breakdown to choose between input generation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
+5. Run or load repeated d8/b2048 and d8/b1024 baselines.
+6. Use detailed timing breakdowns to choose between input generation, first-block preparation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
+7. Do not retry rejected pinned host staging, activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.

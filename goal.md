@@ -120,8 +120,8 @@ This checkpoint exists so a long-running `/goal` session can resume without rein
 - It is not the marketplace, wallet, frontend, websocket, or hosted HTTP platform API.
 - Local commits ahead of the remote branch are retained local progress. Do not assume they were lost; verify with `git status -sb` and `git log`.
 - Recent timing evidence shows generated CUDA d8/b2048 work is usually CPU-side dominated by `input_ms`, especially first-block preparation, while `setup_ms` and transfer timings are still useful secondary targets.
-- Recent rejected experiments include CUDA activation caching and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
-- If there is no newer evidence, the next default experiment is to record a transfer-focused d8/b2048 CUDA baseline and then evaluate pinned host staging buffers inside `KernelRunner`.
+- Recent rejected experiments include CUDA activation caching, pinned host staging buffers, a lanes==1 first-block fast path, and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
+- If there is no newer evidence, the next default work is to refresh d8/b2048 and d8/b1024 CUDA baselines, inspect detailed `input_ms` and first-block timing, then choose the smallest input/setup/backend-boundary improvement that preserves the Hash API contract.
 
 ## Architecture Direction
 
@@ -382,9 +382,9 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 5. Build the available smoke CLI or full CUDA binary.
 6. Run the golden CUDA hash check when a CUDA binary is available.
 7. Run a short main-target CUDA benchmark.
-8. Run or load a repeated d8/b2048 baseline because recent useful evidence used that scenario.
-9. If no newer checkpoint supersedes it, record a d8/b2048 transfer baseline with detailed timings, then test pinned host staging buffers in `KernelRunner`.
-10. Inspect timing metadata and pick the next bottleneck.
+8. Run or load repeated d8/b2048 and d8/b1024 baselines because recent useful evidence used both scenarios.
+9. Use detailed timings to confirm the current dominant bottleneck, especially `input_ms`, key generation, first-block preparation, setup, transfers, compute, and finalization.
+10. Do not retry rejected pinned host staging, CUDA activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.
 11. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
 12. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected experiments.
 

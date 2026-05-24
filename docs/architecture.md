@@ -43,7 +43,7 @@ All components run in a single asyncio event loop. The MQTT broker, HTTP server,
 
 ### 2.1 Server Startup
 
-Entry point: `/home/woody/XenblocksMiner/server/server.py`
+Entry point: `server/server.py`
 
 `PlatformServer.__init__()` runs synchronously:
 1. Creates `MQTTBroker` instance (no I/O yet).
@@ -64,7 +64,7 @@ Entry point: `/home/woody/XenblocksMiner/server/server.py`
 There is no traditional middleware stack. The server instance is injected via `app.state.server` (set in `_register_routes()`). Router modules retrieve it through a helper:
 
 ```python
-# /home/woody/XenblocksMiner/server/deps.py
+# server/deps.py
 def get_server(request: Request):
     return request.app.state.server
 ```
@@ -73,7 +73,7 @@ Authentication is handled per-route through explicit `Header` parameters (`x_api
 
 ### 2.3 Router Organization
 
-All routers registered in `/home/woody/XenblocksMiner/server/routers/__init__.py`:
+All routers registered in `server/routers/__init__.py`:
 
 | Module | Prefix | Purpose |
 |--------|--------|---------|
@@ -89,7 +89,7 @@ All routers registered in `/home/woody/XenblocksMiner/server/routers/__init__.py
 
 ### 2.4 MQTT Broker
 
-File: `/home/woody/XenblocksMiner/server/broker.py`
+File: `server/broker.py`
 
 A minimal, pure-Python MQTT 3.1.1 broker built on `asyncio.start_server`. Supports:
 - CONNECT/CONNACK handshake with client ID extraction.
@@ -124,7 +124,7 @@ Server-to-worker publishes use `broker.publish(topic, payload)` to deliver contr
 
 ## 3. Authentication Flow
 
-File: `/home/woody/XenblocksMiner/server/auth.py`
+File: `server/auth.py`
 
 Two auth mechanisms, resolved in priority order by `resolve_account()`:
 
@@ -187,7 +187,7 @@ Role-based guards: `require_consumer()`, `require_provider()`, `require_admin()`
 ### 4.1 WebSocket Protocol
 
 Endpoint: `ws://{host}/ws/dashboard`
-Manager: `/home/woody/XenblocksMiner/server/ws.py`
+Manager: `server/ws.py`
 
 Connection lifecycle:
 1. Client connects -> `WSManager.connect()` accepts, enforces `MAX_WS_CLIENTS` (200) cap.
@@ -210,7 +210,7 @@ Broadcast implementation uses `asyncio.gather` with a 2s per-send timeout. Stale
 
 ### 4.3 Client Reconnection Strategy
 
-File: `/home/woody/XenblocksMiner/web/src/hooks/useWebSocket.ts`
+File: `web/src/hooks/useWebSocket.ts`
 
 Exponential backoff on `ws.onclose`:
 - Initial delay: 1000ms
@@ -230,7 +230,7 @@ The `useWebSocket` hook derives `online` status client-side by comparing `Date.n
 
 ### 5.1 SQLite Configuration
 
-File: `/home/woody/XenblocksMiner/server/storage.py`
+File: `server/storage.py`
 
 - Backend: `aiosqlite` (async wrapper around `sqlite3`).
 - Journal mode: WAL (Write-Ahead Logging) for concurrent read/write.
@@ -314,7 +314,7 @@ Migrations are idempotent — `ALTER TABLE ADD COLUMN` failures are silently cau
 ### 6.2 Component Tree
 
 ```
-App (/home/woody/XenblocksMiner/web/src/App.tsx)
+App (`web/src/App.tsx`)
   QueryClientProvider
     BrowserRouter
       WalletProvider (Context)
@@ -360,7 +360,7 @@ All page components are `React.lazy()` imports wrapped in a single `<Suspense>` 
 
 ### 7.1 Token Architecture
 
-File: `/home/woody/XenblocksMiner/web/src/design/tokens.ts`
+File: `web/src/design/tokens.ts`
 
 All visual constants are centralized in a single tokens file. Components import from `tokens.ts` — no hardcoded color values.
 
@@ -395,7 +395,7 @@ The `tw` object in tokens provides pre-composed Tailwind class strings for consi
 
 ### 7.3 Component Library
 
-Exported from `/home/woody/XenblocksMiner/web/src/design/index.ts`:
+Exported from `web/src/design/index.ts`:
 
 | Component | Purpose |
 |---|---|
@@ -424,7 +424,7 @@ The frontend uses three distinct state categories, each with a clear owner:
 
 ### 8.1 Server State (React Query)
 
-Configured in `/home/woody/XenblocksMiner/web/src/lib/queryClient.ts`:
+Configured in `web/src/lib/queryClient.ts`:
 - `staleTime: 10_000` (10s before refetch)
 - `retry: 2`
 - `refetchOnWindowFocus: true`
@@ -436,14 +436,14 @@ Used for: REST API data that doesn't need sub-second freshness — marketplace l
 
 Two context providers manage live data:
 
-**DashboardContext** (`/home/woody/XenblocksMiner/web/src/context/DashboardContext.tsx`):
+**DashboardContext** (`web/src/context/DashboardContext.tsx`):
 - Wraps the `useWebSocket` hook.
 - Provides: `workers: Worker[]`, `stats: Stats`, `recentBlocks: Block[]`, `connected: boolean`.
 - State updates arrive via WebSocket messages; no polling.
 - Stats are derived client-side from the workers array on every incoming message.
 - Available to all components via `useDashboard()`.
 
-**WalletContext** (`/home/woody/XenblocksMiner/web/src/context/WalletContext.tsx`):
+**WalletContext** (`web/src/context/WalletContext.tsx`):
 - Manages MetaMask connection state.
 - Provides: `address`, `connecting`, `connect()`, `disconnect()`.
 - On mount, attempts session restoration via `GET /api/auth/me` using stored JWT from `localStorage` (`xb_jwt` key).
@@ -452,7 +452,7 @@ Two context providers manage live data:
 
 ### 8.3 API Utility
 
-File: `/home/woody/XenblocksMiner/web/src/api.ts`
+File: `web/src/api.ts`
 
 `apiFetch<T>()` is a thin wrapper around `fetch()` that:
 1. Reads JWT from `localStorage`.
