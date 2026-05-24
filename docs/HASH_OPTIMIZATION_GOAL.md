@@ -45,6 +45,7 @@ Current progress:
 - Optional `--detailed-timings` also splits CUDA setup timing and first-block CPU timing for diagnosis. These detailed fields are nested diagnostic timing, not additive wall time.
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, top-level and nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
+- Hash API comparison tooling can match by config while ignoring only detailed-timing mode with `--ignore-detailed-timings`, which helps compare default and diagnostic reports for the same scenario without changing other matching fields.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
 - CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers` and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.

@@ -97,7 +97,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_config_key(run: dict[str, Any]) -> tuple[Any, ...]:
+def run_config_key(run: dict[str, Any], ignore_detailed_timings: bool = False) -> tuple[Any, ...]:
     return (
         run["backend"],
         run["device_id"],
@@ -111,16 +111,16 @@ def run_config_key(run: dict[str, Any]) -> tuple[Any, ...]:
         run["warmup"],
         run["repeat"],
         run["allow_xuni"],
-        run["detailed_timings"],
+        False if ignore_detailed_timings else run["detailed_timings"],
         run["first_block_workers"],
     )
 
 
-def run_key(run: dict[str, Any], match_by: str) -> RunKey:
+def run_key(run: dict[str, Any], match_by: str, ignore_detailed_timings: bool = False) -> RunKey:
     if match_by == "name":
         return run["name"]
     if match_by == "config":
-        return run_config_key(run)
+        return run_config_key(run, ignore_detailed_timings=ignore_detailed_timings)
     raise ValueError(f"unsupported match mode: {match_by}")
 
 
@@ -166,11 +166,11 @@ def display_name(key: RunKey, before: dict[str, Any] | None, after: dict[str, An
     return before_name or after_name or format_run_key(key)
 
 
-def index_runs(report: Report, match_by: str = "name") -> RunMap:
+def index_runs(report: Report, match_by: str = "name", ignore_detailed_timings: bool = False) -> RunMap:
     indexed: RunMap = {}
     for run in report.get("runs", []):
         normalized = normalize_run(run)
-        key = run_key(normalized, match_by)
+        key = run_key(normalized, match_by, ignore_detailed_timings=ignore_detailed_timings)
         if key in indexed:
             label = "scenario name" if match_by == "name" else "scenario config"
             raise ValueError(f"duplicate {label} in report: {format_run_key(key)}")
@@ -297,9 +297,18 @@ def compare_reports(
     min_change_pct: float = 0.0,
     max_spread_pct: float = 10.0,
     match_by: str = "name",
+    ignore_detailed_timings: bool = False,
 ) -> Report:
-    before_runs = index_runs(before_report, match_by=match_by)
-    after_runs = index_runs(after_report, match_by=match_by)
+    before_runs = index_runs(
+        before_report,
+        match_by=match_by,
+        ignore_detailed_timings=ignore_detailed_timings,
+    )
+    after_runs = index_runs(
+        after_report,
+        match_by=match_by,
+        ignore_detailed_timings=ignore_detailed_timings,
+    )
     comparisons: list[dict[str, Any]] = []
 
     for key in sorted(set(before_runs) | set(after_runs), key=format_run_key):
@@ -350,6 +359,7 @@ def compare_reports(
         "min_change_pct": min_change_pct,
         "max_spread_pct": max_spread_pct,
         "match_by": match_by,
+        "ignore_detailed_timings": ignore_detailed_timings,
         "summary": {
             "total": len(comparisons),
             "improved": statuses.count("improved"),
@@ -483,6 +493,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="name",
         help="Match benchmark runs by scenario name or by comparable scenario settings.",
     )
+    parser.add_argument(
+        "--ignore-detailed-timings",
+        action="store_true",
+        help="When matching by config, treat detailed and default timing reports as the same scenario.",
+    )
     parser.add_argument("--fail-on-regression", action="store_true", help="Exit with code 2 if any scenario regresses.")
     return parser
 
@@ -496,6 +511,7 @@ def main(argv: list[str]) -> int:
             min_change_pct=args.min_change_pct,
             max_spread_pct=args.max_spread_pct,
             match_by=args.match_by,
+            ignore_detailed_timings=args.ignore_detailed_timings,
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

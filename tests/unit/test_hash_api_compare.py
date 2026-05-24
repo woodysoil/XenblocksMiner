@@ -21,6 +21,7 @@ def _run(
     difficulty_sequence: list[int] | None = None,
     key_mode: str = "generated",
     first_block_workers: int = 0,
+    detailed_timings: bool = False,
 ) -> dict:
     sequence = difficulty_sequence or []
     return {
@@ -36,6 +37,7 @@ def _run(
             "warmup": 1,
             "repeat": 3,
             "first_block_workers": first_block_workers,
+            "detailed_timings": detailed_timings,
         },
         "summary": {
             "name": name,
@@ -263,6 +265,36 @@ def test_compare_reports_config_match_separates_first_block_workers():
     assert statuses == ["missing-after", "missing-before"]
     assert {item["first_block_workers"] for item in result["comparisons"]} == {0, 4}
     assert any("fbw4" in item["match_key"] for item in result["comparisons"])
+
+
+def test_compare_reports_config_match_separates_detailed_timing_mode_by_default():
+    result = compare.compare_reports(
+        _report(_run("default-timing", 100.0, detailed_timings=False)),
+        _report(_run("detailed-timing", 110.0, detailed_timings=True)),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+    assert any("detailed" in item["match_key"] for item in result["comparisons"])
+
+
+def test_compare_reports_can_ignore_detailed_timing_mode_for_config_match():
+    result = compare.compare_reports(
+        _report(_run("default-timing", 100.0, detailed_timings=False)),
+        _report(_run("detailed-timing", 110.0, detailed_timings=True)),
+        match_by="config",
+        ignore_detailed_timings=True,
+        min_change_pct=1.0,
+    )
+
+    assert result["ignore_detailed_timings"] is True
+    assert len(result["comparisons"]) == 1
+    item = result["comparisons"][0]
+    assert item["name"] == "default-timing -> detailed-timing"
+    assert item["status"] == "improved"
+    assert item["change_pct"] == 10.0
+    assert "default-timing" in item["match_key"]
 
 
 def test_compare_reports_rejects_duplicate_names():
