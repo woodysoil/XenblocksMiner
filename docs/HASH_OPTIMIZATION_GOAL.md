@@ -43,6 +43,8 @@ Current progress:
 Current observations:
 
 - Generated batch paths can be dominated by `input_ms`, which includes CPU-side key generation and Argon2 first-block input preparation.
+- After CUDA first-block preparation was parallelized across CPU worker threads for generated-key batches, `input_ms` still dominates larger batch paths, but viable batch sizes shifted upward.
+- A short post-parallelization scan on a CUDA-capable local GPU found stable candidates around d1/b256, d8/b512, and d64/b512. Treat these as candidates only, not universal defaults.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 
@@ -348,6 +350,8 @@ Known useful changes already made:
 - base64 encoding overhead reduction
 - timing breakdown metadata for Hash API results
 - benchmark presets, repeats, comparison, recommendation output, and custom scan matrices
+- input timing split into key generation and first-block preparation metadata
+- CUDA first-block preparation parallelized across CPU worker threads for generated-key batches
 
 Rejected or risky experiments:
 
