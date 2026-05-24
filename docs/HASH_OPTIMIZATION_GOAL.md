@@ -405,6 +405,7 @@ Rejected or risky experiments:
 - caching decoded salt bytes inside `Argon2Params` after the stack prehash optimization passed focused tests but made the CUDA golden hash command exit without JSON, so decoded salt caching remains rejected
 - merging the whole no-secret/no-associated-data Argon2 initial hash input into one stack buffer preserved the golden CUDA hash, but confirmation only reached 67.7k H/s versus the accepted 67.1k H/s while slightly increasing `first_block_ms` per attempt, so it is too close to noise to keep
 - merging `digestLong`'s 4-byte output length and 72-byte prehash seed into one update preserved the golden CUDA hash, but regressed d8/b2048 generated CUDA to 66.0k H/s median with 13.3% spread versus the accepted 67.1k H/s confirmation
+- specializing `digestLong` for the 1024-byte Argon2 first-block output preserved the golden CUDA hash, but a d8/b2048 generated CUDA smoke regressed to 54.5k H/s median versus the current 58.3k H/s stable baseline and worsened per-attempt first-block/finalization timings
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
