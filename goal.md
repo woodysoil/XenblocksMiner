@@ -162,9 +162,12 @@ This checkpoint exists so a long-running `/goal` session can resume without rein
 - That CLI surface is the current stable driver for AI optimization loops, benchmarks, correctness checks, and future embedding work.
 - It is not the marketplace, wallet, frontend, websocket, or hosted HTTP platform API.
 - Local commits ahead of the remote branch are retained local progress. Do not assume they were lost; verify with `git status -sb` and `git log`.
+- The branch can stay ahead of the remote during autonomous work. Keep improving and committing locally unless the user explicitly requests squash, reorder, push, or public history rewrite.
+- Current stable Release continuity evidence for generated-key CUDA d8/b2048 is about `78.3k H/s` median with `3.8%` spread. Treat it as local benchmark evidence, not as a public hardware claim.
+- Current timing evidence points to CPU-side input and first-block preparation as the dominant bottleneck, so prefer first-block/input-preparation work before risky CUDA kernel rewrites unless newer measurements contradict it.
 - The current benchmark harness can scan difficulty, batch size, and CUDA first-block worker caps. First-block worker caps are tuning parameters for measurement, not a default behavior change unless stable repeated evidence supports it.
 - Recent timing evidence shows generated CUDA d8/b2048 work is usually CPU-side dominated by `input_ms`, especially first-block preparation, while `setup_ms` and transfer timings are still useful secondary targets.
-- Recent rejected experiments include CUDA activation caching, pinned host staging buffers, a lanes==1 first-block fast path, and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
+- Recent rejected experiments include CUDA activation caching, pinned host staging buffers, runner caching, a lanes==1 first-block fast path, `_rotr64` Blake2b rotate replacement, and several salt/key/finalization micro-optimizations; read `docs/HASH_OPTIMIZATION_GOAL.md` before retrying any similar idea.
 - If there is no newer evidence, the next default work is to refresh d8/b2048 and d8/b1024 CUDA baselines, inspect detailed `input_ms` and first-block timing, then choose the smallest input/setup/backend-boundary improvement that preserves the Hash API contract.
 
 ## Architecture Direction

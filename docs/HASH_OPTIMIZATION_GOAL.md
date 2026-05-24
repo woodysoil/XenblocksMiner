@@ -24,6 +24,14 @@ Continuously execute docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Has
 
 The reusable Hash API extraction is already in place. The optimization work should build on it instead of going back to the platform monolith.
 
+Active goal status:
+
+- `/goal` is active for continuous Hash API and CUDA throughput optimization.
+- The branch may be ahead of the remote with many local commits. Treat those commits as retained local work, not lost work, unless the user explicitly requests a squash, reorder, push, or public history rewrite.
+- The current clean Release continuity baseline is the generated-key CUDA main-target scenario at difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, and no XUNI matching, with about `78.3k H/s` median and `3.8%` spread.
+- The dominant measured bottleneck in that baseline is CPU-side input preparation, especially first-block preparation. Detailed timing showed `input_ms` at about `58-61%` of wall time and `first_block_ms` at about `54-57%`.
+- This baseline is local evidence on a CUDA-capable GPU. Do not publish raw reports, local binary paths, hardware identifiers, or private machine details.
+
 Known current capabilities:
 
 - Hash API code lives under `src/hashapi/`.
@@ -36,6 +44,7 @@ Current progress:
 
 - Reusable Hash API extraction is complete enough for isolated optimization work.
 - The extracted automation surface is the command-line Hash API: `hash-one`, `hash-batch`, and `hash-benchmark`. Treat these as CLI entrypoints for reproducible optimization, not as frontend, websocket, marketplace, or hosted HTTP platform APIs.
+- The "CLI API" wording means the command-line adapter around the extracted Hash API. It exposes hash execution and benchmark automation, but it is not a hosted HTTP API and it is not the full platform.
 - Benchmark presets, warm-up runs, repeated runs, median/min/max summaries, output files, comparison tooling, recommendation output, and custom scan matrices are in place.
 - Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
 - Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
@@ -452,8 +461,29 @@ Rejected or risky experiments:
 - adding a `lanes == 1` fast path that manually emits the two first-block digests preserved the golden CUDA hash, but generated CUDA d8/b2048 normal-path comparison regressed median throughput from 34.2k H/s to 22.5k H/s with very high spread, so keep the generic lane loops unless a broader first-block redesign changes the compiler/runtime behavior
 - setting an explicit first-block worker cap should remain a benchmark tuning option, not a default change, until longer confirmations show stable cross-scenario gains; the first d8/b1024 confirmation favored auto by median and found capped runs noisy or regressed
 - making CUDA event transfer/kernel timings opt-in for default runs preserved the golden CUDA hash and kept default d8/b2048 throughput effectively unchanged at 76.7k H/s versus the 77.1k H/s baseline, but the paired detailed-timing scenario exited invalid with code 3221225477, so keep the existing always-available CUDA event timing until the event lifetime design is changed more broadly
+- replacing the `Blake2b` rotate macro with an MSVC `_rotr64` intrinsic wrapper preserved focused tests and the CUDA golden hash, but d8/b2048 generated CUDA measured about `77.7k H/s` median with `11.9%` spread versus the stable `78.3k H/s` Release baseline, so keep the original rotate expression unless a broader compiler or Blake2b rewrite changes the evidence
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
+
+## Next Autonomous Iteration
+
+Start the next cycle from the latest clean commit and this decision tree:
+
+1. If the worktree is dirty, identify whether it is a previous-agent experiment. Revert only rejected experiments owned by the current goal.
+2. Run the focused Hash API tests before editing performance code.
+3. Build or reuse the clean Release CUDA binary from the configured preset.
+4. Run the CUDA golden hash check before trusting benchmark data.
+5. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
+6. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
+7. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate.
+8. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
+
+Good next experiment shapes:
+
+- Add measurement that separates first-block digest expansion from scheduling overhead more clearly without adding default benchmark overhead.
+- Reduce generated first-block preparation allocations or copies if inspection finds a hot local allocation that is not already rejected.
+- Improve first-block scheduling or worker chunking only behind an explicit benchmark knob until stable repeated evidence supports a default.
+- Improve architecture boundaries that let CUDA backend state, difficulty-derived setup, or timing metadata be reused safely without activation or runner lifetime regressions.
 
 ## Phase Plan
 
