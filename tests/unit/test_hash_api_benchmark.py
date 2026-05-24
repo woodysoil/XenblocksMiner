@@ -299,7 +299,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 1,
             "batch_size": 128,
             "median_hashrate": 150.0,
+            "min_hashrate": 150.0,
+            "max_hashrate": 150.0,
             "hashrate_spread_pct": 5.0,
+            "ms_per_attempt": 0.0,
             "stable": True,
             "selection_reason": "best_stable_median",
             "dominant_stage": "input_ms",
@@ -312,7 +315,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 8,
             "batch_size": 64,
             "median_hashrate": 120.0,
+            "min_hashrate": 120.0,
+            "max_hashrate": 120.0,
             "hashrate_spread_pct": 15.0,
+            "ms_per_attempt": 0.0,
             "stable": False,
             "selection_reason": "no_stable_candidate",
             "dominant_stage": "compute_ms",
@@ -320,6 +326,9 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "scenario": "d8-b64",
         },
     ]
+    assert recommendations["candidates_by_difficulty"][0]["difficulty"] == 1
+    assert [item["batch_size"] for item in recommendations["candidates_by_difficulty"][0]["candidates"]] == [64, 128]
+    assert recommendations["candidates_by_difficulty"][0]["candidates"][1]["stable"] is True
 
 
 def test_build_recommendations_prefers_stable_candidate_over_noisy_higher_median():
@@ -650,7 +659,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
 
     assert exit_code == 0
     stdout = json.loads(capsys.readouterr().out)
-    assert list(stdout) == ["batch_size_by_difficulty", "stable_spread_pct"]
+    assert list(stdout) == ["batch_size_by_difficulty", "candidates_by_difficulty", "stable_spread_pct"]
     assert stdout["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert "runs" in json.loads(output.read_text(encoding="utf-8"))
 

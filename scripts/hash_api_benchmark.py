@@ -349,25 +349,47 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         )
         selected_by_key[key] = (selected, selection_reason)
 
-    batch_size_by_difficulty = [
-        {
-            "backend": backend,
-            "device_id": device_id,
-            "difficulty": difficulty,
+    def recommendation_entry(summary: dict[str, Any], selection_reason: str = "") -> dict[str, Any]:
+        return {
+            "backend": str(summary.get("backend", "")),
+            "device_id": int(summary.get("device_id", 0)),
+            "difficulty": int(summary.get("difficulty", 0)),
             "batch_size": int(summary.get("batch_size", 0)),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
+            "min_hashrate": float(summary.get("min_hashrate", summary.get("hashrate", 0.0)) or 0.0),
+            "max_hashrate": float(summary.get("max_hashrate", summary.get("hashrate", 0.0)) or 0.0),
             "hashrate_spread_pct": float(summary.get("hashrate_spread_pct", 0.0) or 0.0),
+            "ms_per_attempt": float(summary.get("ms_per_attempt", 0.0) or 0.0),
             "stable": float(summary.get("hashrate_spread_pct", 0.0) or 0.0) <= DEFAULT_STABLE_SPREAD_PCT,
             "selection_reason": selection_reason,
             "dominant_stage": str((summary.get("timing_analysis") or {}).get("dominant_stage", "")),
             "dominant_stage_pct": float((summary.get("timing_analysis") or {}).get("dominant_stage_pct", 0.0) or 0.0),
             "scenario": str(summary.get("name", "")),
         }
+
+    batch_size_by_difficulty = [
+        recommendation_entry(summary, selection_reason)
         for (backend, device_id, difficulty), (summary, selection_reason) in sorted(selected_by_key.items())
+    ]
+    candidates_by_difficulty = [
+        {
+            "backend": backend,
+            "device_id": device_id,
+            "difficulty": difficulty,
+            "candidates": [
+                recommendation_entry(summary)
+                for summary in sorted(
+                    candidates,
+                    key=lambda item: int(item.get("batch_size", 0)),
+                )
+            ],
+        }
+        for (backend, device_id, difficulty), candidates in sorted(candidates_by_key.items())
     ]
     return {
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": batch_size_by_difficulty,
+        "candidates_by_difficulty": candidates_by_difficulty,
     }
 
 
