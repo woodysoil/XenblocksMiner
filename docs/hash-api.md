@@ -188,7 +188,7 @@ python scripts/hash_api_benchmark.py --binary build/bin/xenblocksMiner.exe --bac
 python scripts/hash_api_benchmark.py --binary build/bin/xenblocksMiner.exe --scenario name=cuda-small,backend=cuda,difficulty=1024,batch_size=64,seconds=10,device=0
 ```
 
-The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scenario, command, process exit code, host metadata, CUDA/NVIDIA probe output when available, wall-clock duration, a comparable summary, and the parsed Hash API result.
+The report schema is `xenblocks.hashapi.benchmark.v1`. Each run records the scenario, command, process exit code, host metadata, CUDA/NVIDIA probe output when available, wall-clock duration, a comparable summary, and the parsed Hash API result. Reports also include `recommendations.batch_size_by_difficulty`, which selects the best successful median hashrate per backend, device, and difficulty from the scenarios in that report.
 
 Reusable presets include `smoke`, `warm-short`, `cuda-compare`, and `batch-scan`. Use `batch-scan` before hard-coding batch assumptions on a new GPU; it compares medium and large batch sizes for low difficulties while keeping raw reports under ignored local benchmark directories.
 

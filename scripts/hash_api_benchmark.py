@@ -225,6 +225,41 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
     return aggregate
 
 
+def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    best_by_key: dict[tuple[str, int, int], dict[str, Any]] = {}
+    for run in runs:
+        summary = run.get("summary") or {}
+        if not summary.get("ok"):
+            continue
+        key = (
+            str(summary.get("backend", "")),
+            int(summary.get("device_id", 0)),
+            int(summary.get("difficulty", 0)),
+        )
+        hashrate = float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0)
+        current = best_by_key.get(key)
+        current_hashrate = 0.0
+        if current is not None:
+            current_hashrate = float(current.get("median_hashrate", current.get("hashrate", 0.0)) or 0.0)
+        if current is None or hashrate > current_hashrate:
+            best_by_key[key] = summary
+
+    batch_size_by_difficulty = [
+        {
+            "backend": backend,
+            "device_id": device_id,
+            "difficulty": difficulty,
+            "batch_size": int(summary.get("batch_size", 0)),
+            "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
+            "scenario": str(summary.get("name", "")),
+        }
+        for (backend, device_id, difficulty), summary in sorted(best_by_key.items())
+    ]
+    return {
+        "batch_size_by_difficulty": batch_size_by_difficulty,
+    }
+
+
 def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> list[str]:
     command = [
         str(binary),
@@ -346,6 +381,7 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "created_at_unix": time.time(),
@@ -359,7 +395,8 @@ def main(argv: list[str]) -> int:
         "binary": str(args.binary),
         "salt": args.salt,
         "presets": args.preset,
-        "runs": [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios],
+        "recommendations": build_recommendations(runs),
+        "runs": runs,
     }
 
     output = json.dumps(report, indent=2, sort_keys=True)
