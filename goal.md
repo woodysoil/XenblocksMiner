@@ -12,9 +12,9 @@ This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.
 
 The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, and the documented completion rule.
 
-## Goal Contract
+## Long-Running Goal Contract
 
-This goal follows the strongest Codex Goal shape:
+This goal follows the strongest Codex Goal shape and is designed for unattended `/goal` execution:
 
 - Outcome: maximize real Hash API CUDA hashing throughput, with an aspirational 1000% improvement target, then continue until plateau or practical hardware-limit evidence is documented.
 - Verification surface: focused Hash API tests, CUDA golden hash checks, machine-readable benchmark JSON, before/after comparison output, and committed diffs.
@@ -22,6 +22,10 @@ This goal follows the strongest Codex Goal shape:
 - Boundaries: focus on `src/hashapi/`, CUDA backend files, Argon2/Blake2b hot paths, benchmark scripts, tests, and narrowly related integration code.
 - Iteration policy: choose the next experiment from measured timing bottlenecks, validate correctness before trusting speed, commit useful stable slices, then immediately continue to the next measurable bottleneck.
 - Blocked stop condition: stop only when a listed stop condition is reached, no defensible optimization path remains, required tooling is unavailable, or public history rewrite decisions need the user.
+
+The agent should not ask for approval during normal local optimization cycles. Builds, tests, CUDA smoke checks, benchmark runs, ignored local artifacts, scoped source edits, scoped documentation edits, and small validated commits are expected parts of the loop.
+
+The agent should continue across compaction and resume events by reading this file first, then `docs/HASH_OPTIMIZATION_GOAL.md`, then the latest commits and dirty diff. If a previous agent left a correct dirty experiment in progress, finish its validation before starting a new experiment.
 
 ## Outcome
 
@@ -32,6 +36,8 @@ Optimize the extracted Hash API and CUDA hashing path until one of these is true
 - profiler evidence shows the implementation is near the practical hardware limit for the tested GPU class
 
 Until one of those outcomes is proven, keep iterating.
+
+The target improvement is measured on the same benchmark scenario, not across unrelated difficulty, batch-size, key-mode, or hardware changes. A 1000% claim needs a recorded baseline, a confirmed best result, and the exact comparison formula from the progress accounting section.
 
 ## Progress Accounting
 
@@ -59,6 +65,8 @@ The optimization target is the real mining hash workload:
 The primary metric is warm steady-state CUDA attempts per second. The secondary metric is milliseconds per valid hash attempt, especially for generated-key mining batches.
 
 Optimize same-difficulty warm loops first because they are the easiest to compare. Then confirm that the architecture also handles variable `m=diff` sequences without repeated setup or allocation costs dominating the run.
+
+When choosing between alternatives, prefer designs that keep `m=diff` explicit and cheap to retune. Do not bake in one local difficulty, one local batch size, one local GPU name, or one private build path.
 
 ## Non-Negotiable Correctness Rules
 
@@ -119,6 +127,8 @@ On every resume, context compaction, or new `/goal` run:
 8. Continue with the next smallest measurable step.
 
 If a dirty measurement-only change is already present, finish its validation and commit it before starting a new optimization experiment. Measurement improvements are useful when they make later performance decisions more reliable, even if they do not directly raise hashrate.
+
+If the active workspace is ahead of the remote branch, treat those commits as retained local progress unless the user explicitly asks to squash, reorder, or push them. Do not infer that commits were lost just because they are not present on the remote.
 
 ## Hardware Direction
 
@@ -201,6 +211,12 @@ Repeat this loop:
 
 Prefer many small measured iterations over broad speculative rewrites.
 
+Each loop should end in one of three states:
+
+- accepted: correctness passed, benchmark evidence is useful, and a small commit was made
+- rejected: correctness or benchmark evidence failed, the current uncommitted experiment was reverted, and the rejection was documented only if it prevents repeated work
+- measurement-only: no speed claim was made, but benchmark, timing, test, or documentation infrastructure improved and was committed
+
 ## Bottleneck Order
 
 Use timing evidence, but start with these likely targets:
@@ -250,6 +266,8 @@ Reject or revert an experiment when:
 - benchmark output becomes malformed
 - median warm throughput regresses without a compelling architecture reason
 - the claimed improvement is indistinguishable from noise after confirmation
+
+For small changes that mainly affect fixed-key single-hash latency, use the isolation preset before changing the generated-key path. Keep generated-key d8/b2048 throughput as the continuity scenario until a newer documented scenario supersedes it.
 
 ## Standard Validation Commands
 
