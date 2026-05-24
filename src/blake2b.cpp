@@ -197,16 +197,21 @@ void Blake2b::update(const void *in, std::size_t inLen)
 
 void Blake2b::final(void *out, std::size_t outLen)
 {
-    std::uint8_t buffer[OUT_BYTES] = {0};
-
     incrementCounter(bufLen);
     std::memset(buf + bufLen, 0, BLOCK_BYTES - bufLen);
     compress(buf, UINT64_C(0xFFFFFFFFFFFFFFFF));
 
+    if (outLen == OUT_BYTES) {
+        for (unsigned int i = 0; i < 8; i++) {
+            store64(static_cast<std::uint8_t *>(out) + i * sizeof(std::uint64_t), h[i]);
+        }
+        return;
+    }
+
+    std::uint8_t buffer[OUT_BYTES] = {0};
     for (unsigned int i = 0; i < 8; i++) {
         store64(buffer + i * sizeof(std::uint64_t), h[i]);
     }
-
     std::memcpy(out, buffer, outLen);
 }
 
