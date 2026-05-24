@@ -80,6 +80,7 @@ Current observations:
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 - Local build configuration is part of benchmark quality. A stale local CUDA build cache was found using `CMAKE_BUILD_TYPE=Debug` and `CMAKE_CUDA_ARCHITECTURES=52`, so do not treat results from that build directory as a clean Release throughput baseline. Use a fresh Release CUDA preset such as `cuda-release-vcpkg-modern` or a matching architecture-specific preset before making new speed claims.
+- A fresh Release CUDA build using the modern architecture preset preserved the golden d8 CUDA hash. New generated-key d8 baselines on the CUDA-capable local GPU remained noisy: b2048 reached 52.6k H/s median with 11.4% spread, while b1024 reached 63.7k H/s median with 16.7% spread. Both runs were `report_ok: true` but unstable by the 10% spread gate. They should be treated as current measurement evidence, not as default-tuning proof. Both remained dominated by `input_ms` at about 62% of wall time and `first_block_ms` at about 58%, so the next code experiments should continue to target generated input and first-block preparation before CUDA kernel rewrites.
 
 ## Fixed Algorithm Constraints
 
