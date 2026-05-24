@@ -135,6 +135,13 @@ def test_hash_api_benchmark_runner_exists():
     assert "scripts/hash_api_benchmark.py" in docs
 
 
+def test_random_key_generator_avoids_per_key_stream_allocation():
+    content = read("src/RandomHexKeyGenerator.h")
+    assert "std::stringstream" not in content
+    assert "key.reserve(total_length)" in content
+    assert "std::uniform_int_distribution<size_t> distribution" in content
+
+
 def test_local_hash_service_is_separate_from_marketplace_server():
     service = read("server/hash_api/app.py")
     platform_server = read("server/server.py")
