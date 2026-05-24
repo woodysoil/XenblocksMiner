@@ -374,6 +374,7 @@ Known useful changes already made:
 - d1 CUDA default batch size raised to 512 when no explicit user batch-size limit is configured
 - d8 CUDA default batch size raised to 2048 when no explicit user batch-size limit is configured
 - little-endian `Blake2b` 64-bit load/store fast path reduced generated CUDA per-attempt cost in a d8/b2048 A/B benchmark
+- `RandomHexKeyGenerator` now consumes multiple hex nibbles from each `mt19937` output instead of using per-character distribution calls; local d8/b2048 generated CUDA confirmation reduced median `keygen_ms` per attempt from about 0.00222 ms to about 0.000845 ms and reached 49.9k H/s with 5.15% spread
 
 Rejected or risky experiments:
 

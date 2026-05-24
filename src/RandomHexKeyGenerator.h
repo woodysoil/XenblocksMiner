@@ -10,7 +10,7 @@
 class RandomHexKeyGenerator {
 public:
     RandomHexKeyGenerator(const std::string& initial_prefix = "", size_t key_length = 64)
-        : total_length(key_length), distribution(0, 15) {
+        : total_length(key_length) {
             setPrefix(initial_prefix);
             std::random_device rd;
             auto seed = rd() ^ static_cast<unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
@@ -33,7 +33,11 @@ public:
         key.reserve(total_length);
         key.append(prefix);
         while (key.length() < total_length) {
-            key.push_back(kHexChars[distribution(generator)]);
+            std::uint32_t random_bits = generator();
+            for (int nibble = 0; nibble < 8 && key.length() < total_length; ++nibble) {
+                key.push_back(kHexChars[random_bits & 0x0f]);
+                random_bits >>= 4;
+            }
         }
         return key;
     }
@@ -43,5 +47,4 @@ private:
     std::string prefix;
     size_t total_length;
     std::mt19937 generator;
-    std::uniform_int_distribution<size_t> distribution;
 };

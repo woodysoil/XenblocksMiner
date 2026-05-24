@@ -233,7 +233,8 @@ def test_random_key_generator_avoids_per_key_stream_allocation():
     content = read("src/RandomHexKeyGenerator.h")
     assert "std::stringstream" not in content
     assert "key.reserve(total_length)" in content
-    assert "std::uniform_int_distribution<size_t> distribution" in content
+    assert "std::uniform_int_distribution" not in content
+    assert "std::uint32_t random_bits = generator()" in content
 
 
 def test_hash_api_matching_avoids_regex_in_hot_path():
