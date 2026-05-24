@@ -37,7 +37,9 @@ Current progress:
 - Reusable Hash API extraction is complete enough for isolated optimization work.
 - Benchmark presets, warm-up runs, repeated runs, median/min/max summaries, output files, comparison tooling, recommendation output, and custom scan matrices are in place.
 - Batch-size recommendations prefer stable candidates before falling back to noisy high-median candidates.
+- Benchmark recommendations also include full candidate lists with min/max hashrate, spread, and per-attempt timing fields.
 - Hash API timing metadata currently separates validation, setup, input generation, compute, finalization, and total time.
+- Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.
 - Do not start risky CUDA kernel rewrites until benchmark and timing data show that CPU-side setup, input generation, and allocation overhead are no longer the dominant bottlenecks.
@@ -46,8 +48,9 @@ Current observations:
 
 - Generated batch paths can be dominated by `input_ms`, which includes CPU-side key generation and Argon2 first-block input preparation.
 - After CUDA first-block preparation was parallelized across CPU worker threads for generated-key batches, `input_ms` still dominates larger batch paths, but viable batch sizes shifted upward.
-- A short post-parallelization scan on a CUDA-capable local GPU found stable candidates around d1/b256, d8/b512, and d64/b512. Treat these as candidates only, not universal defaults.
-- Miner auto batch selection now applies those conservative low-difficulty candidates only when no manual batch limit is configured; unsupported difficulty ranges still fall back to the memory-limited batch size.
+- Repeated main-target-only scans on a CUDA-capable local GPU support d1/b512 as the conservative low-difficulty default. Treat this as local evidence only, not a universal hardware limit.
+- Miner auto batch selection now applies conservative low-difficulty candidates only when no manual batch limit is configured; unsupported difficulty ranges still fall back to the memory-limited batch size.
+- d64 batch-size scans have been noisy and should not be used to change defaults without stronger repeated evidence.
 - Short 1-second batch scans are useful for smoke checks but too noisy for committed tuning claims.
 - Serious tuning claims require longer runs, warm-up, repeated samples, and stable medians with reasonable min/max spread.
 
@@ -356,6 +359,9 @@ Known useful changes already made:
 - input timing split into key generation and first-block preparation metadata
 - CUDA first-block preparation parallelized across CPU worker threads for generated-key batches
 - conservative CUDA batch-size selection helper wired into miner auto batch selection
+- main-target-only benchmark mode for measuring normal mining without secondary XUNI matching
+- per-attempt benchmark timing summaries and full recommendation candidate reporting
+- d1 CUDA default batch size raised to 512 when no explicit user batch-size limit is configured
 
 Rejected or risky experiments:
 
