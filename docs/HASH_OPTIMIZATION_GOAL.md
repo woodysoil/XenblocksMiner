@@ -131,19 +131,24 @@ Prefer many small measurable iterations over broad speculative rewrites.
 Start here after reading this file:
 
 1. Verify the worktree is clean or identify unrelated dirty files.
-2. Run the focused Hash API unit tests.
-3. Build the smoke CLI or full CUDA binary that is already configured locally.
-4. Run a short `warm-short` benchmark to confirm the binary and benchmark harness still work.
-5. Run a longer same-settings baseline for the next target bottleneck.
-6. Inspect timing metadata and choose one bottleneck:
+2. Confirm docs and recent commits contain no local paths, usernames, hostnames, secrets, raw benchmark reports, or private hardware identifiers.
+3. Run the focused Hash API unit tests.
+4. Build the smoke CLI or full CUDA binary that is already configured locally.
+5. Run the golden CUDA hash check when a CUDA binary is available.
+6. Run a short main-target CUDA benchmark to confirm the binary and benchmark harness still work.
+7. Run or load a repeated d8/b2048 baseline because recent accepted and rejected experiments used that scenario.
+8. Inspect timing metadata and choose one bottleneck:
    - high `input_ms`: reduce CPU-side key generation, salt/key preparation, or first-block setup overhead
+   - high `keygen_ms`: optimize random key generation, prefix handling, or generated-key memory layout
+   - high `first_block_ms`: improve safe Argon2 first-block preparation and CPU parallelism
    - high `setup_ms`: cache difficulty-derived or device-derived setup safely
    - high `compute_ms`: inspect CUDA allocation, copy, launch geometry, memory behavior, and kernel occupancy
    - high `finalize_ms`: use `finalize_hash_ms` and `match_ms` to choose between hash finalization, encoding, matching, result collection, or JSON work outside the timed hot path
-7. Make one scoped change.
-8. Validate correctness.
-9. Re-run the same benchmark and compare median warm throughput first.
-10. Commit if the result is correct and materially useful.
+9. Prefer input preparation and setup/measurement improvements before speculative finalization micro-optimizations.
+10. Make one scoped change.
+11. Validate correctness.
+12. Re-run the same benchmark and compare median warm throughput first.
+13. Commit if the result is correct, materially useful, and privacy-clean.
 
 If the previous step is only a benchmark harness or documentation improvement, validate with the focused Python tests and `git diff --check`. A full CUDA benchmark is still preferred when the change affects performance interpretation.
 
@@ -704,16 +709,16 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 
 Work through this backlog before attempting high-risk kernel rewrites:
 
-1. Record a current local CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
-2. Run a stable custom batch-size scan for the common difficulty range.
-3. Measure the cost of `m=diff` changes versus repeated same-`m` warm batches.
-4. Reduce CPU-side input generation and preparation overhead where `input_ms` dominates.
-5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, and backend state make it provably safe.
+1. Maintain a current local CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
+2. Run stable custom batch-size scans for common difficulty ranges.
+3. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
+4. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
+5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
 6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
 7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
 8. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
-9. Tune launch parameters only after the above CPU-side overhead is under control.
-10. Add optional autotuning once there is enough benchmark data to justify it.
+9. Tune launch parameters only after CPU-side overhead is under control.
+10. Add optional autotuning once enough benchmark data justifies it.
 11. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
 
 Every backlog item must still follow the correctness and reporting rules above.
@@ -738,7 +743,7 @@ Before every commit:
 2. Review changed files.
 3. Run correctness validation.
 4. Run at least one relevant benchmark.
-5. Ensure no local paths or private machine details are staged.
+5. Ensure no local paths, usernames, hostnames, secrets, raw benchmark reports, or private hardware identifiers are staged.
 6. Commit only a coherent slice.
 
 Privacy check:
@@ -773,6 +778,7 @@ Stop only for real blockers:
 - an optimization requires changing hash semantics
 - a CUDA change appears hardware-specific and risky without access to that hardware
 - tests reveal a pre-existing bug whose fix would broaden scope significantly
+- public history rewrite is needed for commits that may already have been shared
 
 Otherwise, keep moving through the next smallest measurable optimization step.
 
@@ -780,8 +786,8 @@ Otherwise, keep moving through the next smallest measurable optimization step.
 
 This long-running goal is complete when one of these is true:
 
-- throughput improves by at least 1000% over the initial measured baseline while preserving correctness
-- repeated optimization attempts plateau and the remaining bottleneck is documented
+- throughput improves by at least 1000% over the initial measured baseline while preserving correctness and no obvious low-risk improvements remain
+- repeated well-scoped optimization attempts plateau and the remaining bottleneck is documented with benchmark or profiler evidence
 - profiler evidence shows the implementation is near the practical hardware limit for the tested GPU class
 
 Required final state:
@@ -810,6 +816,8 @@ When resuming a long-running `/goal` session:
 Recommended first action after this revision:
 
 1. Run the focused Hash API tests.
-2. Run a short CUDA benchmark if a local CUDA binary is available.
-3. Run a stable custom scan for difficulty values likely to be used next.
-4. Use the timing breakdown to choose between input generation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
+2. Build or reuse the local CUDA binary.
+3. Run the golden CUDA hash check.
+4. Run a short main-target CUDA benchmark.
+5. Run or load a repeated d8/b2048 baseline.
+6. Use the timing breakdown to choose between input generation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
