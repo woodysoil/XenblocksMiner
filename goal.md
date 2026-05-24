@@ -40,6 +40,10 @@ The aspirational target is a verified 1000% throughput increase over the selecte
 
 The current local CUDA-capable GPU is the first test platform. The resulting architecture must stay portable enough for future RTX 3050-class and higher-end CUDA GPUs by using public device properties, compute capability, explicit tuning parameters, and runtime measurements instead of private device names or local machine assumptions.
 
+The execution target is not a single benchmark tweak. The goal is to keep improving the reusable hash core so an AI agent can repeatedly measure, change, validate, and commit without depending on frontend, marketplace, wallet, network, lease, or platform services.
+
+If the current structure makes that loop awkward, first refactor toward a cleaner Hash API boundary, then continue performance work. Treat architecture cleanup as part of the performance goal when it removes repeated setup, hidden state, noisy timing, unsafe lifetime ownership, or platform coupling from the hash hot path.
+
 ## Long-Running Goal Contract
 
 This goal follows the strongest Codex Goal shape and is designed for unattended `/goal` execution:
@@ -127,6 +131,28 @@ Expected current shape:
 
 If the current structure blocks optimization, refactor the Hash API/backend boundary first. Do not drift into frontend, marketplace, wallet, lease, devfee, authentication, or broad platform work while this goal is active.
 
+## Hash Core Extraction Target
+
+The long-term shape should be a small, reusable hash engine with adapters around it:
+
+- Core contract: typed request/result structures for salt, key mode, prefix, difficulty, batch size, target matching, backend choice, device selection, and timing metadata.
+- CPU adapter: correctness/reference backend that can run without CUDA.
+- CUDA adapter: optimized backend that owns GPU state, buffers, launch choices, and device-derived tuning.
+- CLI adapter: `hash-one`, `hash-batch`, and `hash-benchmark` as stable automation entrypoints.
+- Miner adapter: existing miner integration should call the Hash API instead of duplicating hashing logic.
+- Future adapters: library, local service, or other programs may be added later without changing hash semantics.
+
+Keep dependencies pointing inward. The hash core may know about hashing requests, validation, backends, tuning metadata, and result matching. It should not know about frontend screens, user accounts, marketplace flows, wallet UX, platform reporting, settlement, MQTT business logic, or remote lease policy.
+
+When an optimization requires wider ownership changes, prefer this order:
+
+1. Make the Hash API contract explicit.
+2. Move platform-specific concerns out of the timed hash path.
+3. Separate cold setup from warm steady-state execution.
+4. Isolate backend state and buffer lifetime.
+5. Add or improve benchmarks for the new boundary.
+6. Optimize the now-measurable hot path.
+
 ## Current Checkpoint
 
 This checkpoint exists so a long-running `/goal` session can resume without reinterpreting the project direction.
@@ -202,6 +228,51 @@ Do not hard-code tuning to a private local device name. Prefer tuning decisions 
 - measured stability
 
 Preserve explicit user-supplied device and batch-size settings over automatic tuning.
+
+## Optimization Tracks
+
+Use these tracks as the long-running work queue. Work on the earliest track that is currently blocking reliable speed gains, but switch tracks when benchmark evidence points elsewhere.
+
+Track A: measurement and reproducibility
+
+- Keep `hash-benchmark` output machine-readable and comparable.
+- Keep warm-up, repeat count, spread, per-attempt timing, invalid-run detection, and before/after comparison reliable.
+- Add timing fields only when they change decisions or reduce ambiguity.
+- Reject partial or unstable benchmark matrices before changing defaults.
+
+Track B: pure Hash API architecture
+
+- Keep hash code callable without frontend, marketplace, wallet, lease, devfee, network services, or platform startup.
+- Keep CPU/reference and CUDA backends behind one request/result contract.
+- Move repeated validation, setup, difficulty normalization, device selection, allocation, and backend lifetime decisions into explicit backend or tuning components.
+- Keep CLI commands stable so future agents can iterate through scripts instead of manual UI flows.
+
+Track C: generated input and first-block preparation
+
+- Prioritize this track while `input_ms`, `keygen_ms`, or `first_block_ms` dominate.
+- Optimize generated-key construction, salt/key materialization, Argon2 first-block preparation, CPU parallelism, and data layout.
+- Preserve fixed `t=1`, fixed `s/p=1`, and variable `m=diff` semantics.
+- Do not retry rejected keygen, salt caching, or first-block fast-path experiments unless the implementation shape materially changed.
+
+Track D: CUDA warm execution
+
+- Prioritize this track when `compute_ms`, allocation, transfer, launch, or kernel timing dominates.
+- Reduce allocation churn, tune batch size, inspect transfer cost, tune launch geometry, and measure occupancy or memory behavior before rewriting kernels.
+- Treat pinned memory, streams, runner caching, and device finalization as redesign topics, not quick retries, because earlier isolated attempts were unstable or slower.
+
+Track E: autotuning by public device properties
+
+- Add tuning only after stable cross-scenario evidence exists.
+- Base automatic choices on difficulty, batch size, key mode, compute capability, available memory, and measured stability.
+- Preserve explicit user settings over autotune defaults.
+- Keep autotune overhead out of steady-state benchmark measurements.
+
+Track F: cross-GPU readiness
+
+- Validate locally first, then keep the tuning model ready for RTX 3050-class and higher-end CUDA GPUs.
+- Avoid local GPU names, local build paths, private machine identifiers, or one-device assumptions in committed code or docs.
+- Keep architecture-specific choices guarded by public compute capability or runtime properties.
+- Document best-known settings as local evidence unless confirmed across more devices.
 
 ## Autonomous Execution
 
@@ -293,6 +364,22 @@ Use this queue as the default order when no newer evidence is available:
 12. Keep accepted and rejected experiments documented so future long-running agents do not repeat failed work.
 
 A structural cleanup can be the next iteration if it directly enables one of these work items or improves the reliability of future measurements.
+
+## Next Iteration Selector
+
+At the start of each autonomous cycle, choose exactly one next step by this rule:
+
+1. If correctness validation is stale or the binary changed, run focused tests and the CUDA golden hash check first.
+2. If no trustworthy current baseline exists, run or load the d8/b2048 generated-key CUDA baseline.
+3. If benchmark results are noisy, improve measurement quality or rerun a narrower scenario before editing performance code.
+4. If `input_ms` or `first_block_ms` dominates, select a Track C experiment.
+5. If setup or lifecycle cost dominates, select a Track B experiment.
+6. If CUDA compute, allocation, transfer, or launch dominates, select a Track D experiment.
+7. If stable manual settings repeatedly beat defaults, select a Track E autotuning experiment.
+8. If the same optimization no longer transfers across difficulty values, add a variable-`m=diff` scenario before choosing another code change.
+9. If three consecutive well-scoped attempts against the same bottleneck fail to improve confirmed throughput by at least 3%, document plateau evidence and move to the next bottleneck.
+
+Do not choose broad rewrites unless the selector shows that smaller measurable changes are blocked by the current structure.
 
 ## Bottleneck Order
 
