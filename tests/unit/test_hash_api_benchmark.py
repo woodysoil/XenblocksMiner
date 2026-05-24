@@ -294,6 +294,8 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["min_hashrate"] == 10.0
     assert aggregate["max_hashrate"] == 30.0
     assert aggregate["hashrate_spread_pct"] == 100.0
+    assert aggregate["stable"] is False
+    assert aggregate["stable_spread_pct"] == 10.0
     assert aggregate["attempts"] == 60
     assert aggregate["elapsed_ms"] == 3000.0
     assert aggregate["ms_per_attempt"] == 50.0
@@ -303,7 +305,30 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["key_mode"] == "generated"
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
+    assert aggregate["sample_count"] == 3
+    assert aggregate["ok_sample_count"] == 3
     assert aggregate["ok"] is True
+
+
+def test_summarize_iterations_marks_stable_repeated_samples():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-stable",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        repeat=3,
+    )
+
+    aggregate = benchmark.summarize_iterations(
+        scenario,
+        [_summary(100.0, attempts=100), _summary(104.0, attempts=104), _summary(102.0, attempts=102)],
+    )
+
+    assert aggregate["hashrate_spread_pct"] < aggregate["stable_spread_pct"]
+    assert aggregate["stable"] is True
+    assert aggregate["sample_count"] == 3
+    assert aggregate["ok_sample_count"] == 3
 
 
 def test_summarize_iterations_reports_sequence_metadata():
@@ -350,6 +375,8 @@ def test_summarize_iterations_marks_nonzero_process_exit_invalid():
     assert aggregate["ok"] is False
     assert aggregate["attempts"] == 100
     assert aggregate["hashrate"] == 100.0
+    assert aggregate["sample_count"] == 2
+    assert aggregate["ok_sample_count"] == 1
     assert aggregate["error"] == "process exited with code 3221225477"
 
 

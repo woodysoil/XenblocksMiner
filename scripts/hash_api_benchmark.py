@@ -410,6 +410,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
     median_hashrate = statistics.median(hashrates) if hashrates else 0.0
     min_hashrate = min(hashrates) if hashrates else 0.0
     max_hashrate = max(hashrates) if hashrates else 0.0
+    spread_pct = hashrate_spread_pct(min_hashrate, max_hashrate, median_hashrate)
     timings = median_timings(ok_summaries)
     attempts = sum(int(item["attempts"]) for item in ok_summaries)
     elapsed_ms = sum(float(item["elapsed_ms"]) for item in ok_summaries)
@@ -430,7 +431,9 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "median_hashrate": median_hashrate,
         "min_hashrate": min_hashrate,
         "max_hashrate": max_hashrate,
-        "hashrate_spread_pct": hashrate_spread_pct(min_hashrate, max_hashrate, median_hashrate),
+        "hashrate_spread_pct": spread_pct,
+        "stable": bool(ok_summaries) and spread_pct <= DEFAULT_STABLE_SPREAD_PCT,
+        "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "timings": timings,
         "timing_per_attempt": median_timing_per_attempt(ok_summaries),
         "timing_analysis": timing_analysis(timings),
@@ -439,6 +442,8 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "error": "; ".join(errors),
         "warmup": scenario.warmup,
         "repeat": scenario.repeat,
+        "sample_count": len(summaries),
+        "ok_sample_count": len(ok_summaries),
     }
     return aggregate
 
