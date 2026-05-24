@@ -366,6 +366,7 @@ Rejected or risky experiments:
 - thread-local `cudaSetDevice` caching regressed generated batch throughput
 - Blake2b initial hash prefix caching caused CUDA CLI or benchmark JSON output failures
 - persistent CUDA first-block worker pool caused benchmark subprocess exit failures after otherwise successful JSON output
+- byte-pair random key generation using a 0-255 distribution regressed d8/b512 generated CUDA throughput by about 30% and did not reduce `keygen_ms`
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
