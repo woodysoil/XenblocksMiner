@@ -16,6 +16,7 @@ from typing import Any
 
 DEFAULT_SALT = "aabbccddeeff0011"
 PRESET_NAMES = ("smoke", "warm-short", "cuda-compare", "batch-scan")
+DEFAULT_STABLE_SPREAD_PCT = 10.0
 
 
 @dataclass(frozen=True)
@@ -313,11 +314,16 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "difficulty": difficulty,
             "batch_size": int(summary.get("batch_size", 0)),
             "median_hashrate": float(summary.get("median_hashrate", summary.get("hashrate", 0.0)) or 0.0),
+            "hashrate_spread_pct": float(summary.get("hashrate_spread_pct", 0.0) or 0.0),
+            "stable": float(summary.get("hashrate_spread_pct", 0.0) or 0.0) <= DEFAULT_STABLE_SPREAD_PCT,
+            "dominant_stage": str((summary.get("timing_analysis") or {}).get("dominant_stage", "")),
+            "dominant_stage_pct": float((summary.get("timing_analysis") or {}).get("dominant_stage_pct", 0.0) or 0.0),
             "scenario": str(summary.get("name", "")),
         }
         for (backend, device_id, difficulty), summary in sorted(best_by_key.items())
     ]
     return {
+        "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": batch_size_by_difficulty,
     }
 

@@ -232,13 +232,32 @@ def test_summarize_iterations_reports_timing_stage_percentages():
 def test_build_recommendations_selects_best_batch_per_difficulty():
     runs = [
         {"summary": {**_summary(100.0), "name": "d1-b64", "difficulty": 1, "batch_size": 64}},
-        {"summary": {**_summary(150.0), "name": "d1-b128", "difficulty": 1, "batch_size": 128}},
-        {"summary": {**_summary(120.0), "name": "d8-b64", "difficulty": 8, "batch_size": 64}},
+        {
+            "summary": {
+                **_summary(150.0),
+                "name": "d1-b128",
+                "difficulty": 1,
+                "batch_size": 128,
+                "hashrate_spread_pct": 5.0,
+                "timing_analysis": {"dominant_stage": "input_ms", "dominant_stage_pct": 75.0},
+            }
+        },
+        {
+            "summary": {
+                **_summary(120.0),
+                "name": "d8-b64",
+                "difficulty": 8,
+                "batch_size": 64,
+                "hashrate_spread_pct": 15.0,
+                "timing_analysis": {"dominant_stage": "compute_ms", "dominant_stage_pct": 55.0},
+            }
+        },
         {"summary": {**_summary(90.0, ok=False), "name": "d8-b128", "difficulty": 8, "batch_size": 128}},
     ]
 
     recommendations = benchmark.build_recommendations(runs)
 
+    assert recommendations["stable_spread_pct"] == 10.0
     assert recommendations["batch_size_by_difficulty"] == [
         {
             "backend": "cuda",
@@ -246,6 +265,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 1,
             "batch_size": 128,
             "median_hashrate": 150.0,
+            "hashrate_spread_pct": 5.0,
+            "stable": True,
+            "dominant_stage": "input_ms",
+            "dominant_stage_pct": 75.0,
             "scenario": "d1-b128",
         },
         {
@@ -254,6 +277,10 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "difficulty": 8,
             "batch_size": 64,
             "median_hashrate": 120.0,
+            "hashrate_spread_pct": 15.0,
+            "stable": False,
+            "dominant_stage": "compute_ms",
+            "dominant_stage_pct": 55.0,
             "scenario": "d8-b64",
         },
     ]
@@ -410,6 +437,7 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert exit_code == 0
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["schema"] == "xenblocks.hashapi.benchmark.v1"
+    assert report["recommendations"]["stable_spread_pct"] == 10.0
     assert report["recommendations"]["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
@@ -506,7 +534,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
 
     assert exit_code == 0
     stdout = json.loads(capsys.readouterr().out)
-    assert list(stdout) == ["batch_size_by_difficulty"]
+    assert list(stdout) == ["batch_size_by_difficulty", "stable_spread_pct"]
     assert stdout["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert "runs" in json.loads(output.read_text(encoding="utf-8"))
 
