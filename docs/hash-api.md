@@ -204,6 +204,8 @@ For larger GPUs or deeper tuning, use repeated `--scan-difficulty` and `--scan-b
 
 Use `scripts/hash_api_compare.py` for before/after reports. It compares median hashrate, reports timing deltas, and marks changed scenarios as noisy when either run's spread exceeds the configured threshold.
 
+Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the normal main-target path without secondary XUNI matching.
+
 ## CUDA Batch Tuning
 
 `src/hashapi/HashApiTuning.*` contains conservative batch-size helpers shared by miner integration and future autotuning work. The helper separates memory-limited safety from benchmark-informed defaults:

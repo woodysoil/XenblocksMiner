@@ -31,6 +31,7 @@ class BenchmarkScenario:
     device: int = 0
     warmup: int = 0
     repeat: int = 1
+    allow_xuni: bool = True
 
 
 def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) -> BenchmarkScenario:
@@ -47,6 +48,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         device=int(parts.get("device", "0")),
         warmup=int(parts.get("warmup", str(default_warmup))),
         repeat=max(1, int(parts.get("repeat", str(default_repeat)))),
+        allow_xuni=parts.get("allow_xuni", "true").lower() not in {"0", "false", "no"},
     )
 
 
@@ -409,6 +411,8 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
     ]
     if scenario.prefix:
         command.extend(["--prefix", scenario.prefix])
+    if not scenario.allow_xuni:
+        command.append("--no-xuni")
     return command
 
 
@@ -475,6 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seconds", default=5, type=int, help="Seconds per built-in scenario.")
     parser.add_argument("--warmup", default=0, type=int, help="Warm-up runs per scenario before measured repeats.")
     parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
+    parser.add_argument("--no-xuni", action="store_true", help="Disable secondary XUNI matching in generated scenarios.")
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
     parser.add_argument(
         "--sanitized-output",
@@ -539,6 +544,8 @@ def main(argv: list[str]) -> int:
             )
         if not scenarios:
             scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
+        if args.no_xuni:
+            scenarios = [BenchmarkScenario(**{**asdict(scenario), "allow_xuni": False}) for scenario in scenarios]
         ensure_unique_scenario_names(scenarios)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -55,6 +55,14 @@ def test_parse_scenario_allows_scenario_specific_warmup_and_repeat():
     assert scenario.repeat == 3
 
 
+def test_parse_scenario_can_disable_xuni_matching():
+    scenario = benchmark.parse_scenario(
+        "backend=cuda,difficulty=1,batch_size=2,seconds=1,allow_xuni=false",
+    )
+
+    assert scenario.allow_xuni is False
+
+
 def test_preset_scenarios_builds_warm_short_matrix():
     scenarios = benchmark.preset_scenarios(
         "warm-short",
@@ -476,6 +484,54 @@ def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     assert report["runs"][0]["scenario"]["warmup"] == 1
     assert report["runs"][0]["scenario"]["repeat"] == 2
     assert json.loads(capsys.readouterr().out)["runs"][0]["summary"]["hashrate"] == 42.0
+
+
+def test_main_can_disable_xuni_for_all_scenarios(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_metadata():
+        return {"nvidia_smi": {"available": False}, "nvcc": {"available": False}}
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "collect_hardware_metadata", fake_metadata)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--preset",
+            "warm-short",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=1,batch_size=2,seconds=1,allow_xuni=true",
+            "--scan-difficulty",
+            "1",
+            "--scan-batch-size",
+            "2",
+            "--seconds",
+            "1",
+            "--no-xuni",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured
+    assert all(scenario.allow_xuni is False for scenario in captured)
+    assert all("--no-xuni" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
 
 
 def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):

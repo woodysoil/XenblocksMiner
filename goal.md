@@ -1,36 +1,34 @@
 # Codex Goal: Continuous Hash Throughput Optimization
 
-## `/goal` Objective
+## Goal Objective
 
 Continuously optimize XenblocksMiner Hash API and CUDA hashing throughput for the real mining workload:
 
 - `t = 1` is fixed.
 - `p = 1` / `s = 1` is fixed.
-- `m = difficulty` / `diff` is the variable memory-cost value and may change between runs.
+- `m = difficulty` / `diff` is the only regularly changing hash parameter.
 
 Minimize time per valid hash attempt and maximize warm steady-state attempts per second while preserving exact `argon2id-xen` semantics.
 
-The aspirational target is at least a 1000% throughput improvement over the initial measured baseline. Continue beyond that target when measurable low-risk improvements remain. Stop only when repeated benchmarks and profiling evidence show a plateau or practical hardware limit.
+The aspirational target is at least a 1000% throughput improvement over the initial measured baseline. Keep iterating after that target only while low-risk, measurable improvements remain. Stop only when repeated benchmark and profiling evidence show a plateau or practical hardware limit.
 
-Use `docs/HASH_OPTIMIZATION_GOAL.md` as the authoritative long-running operating brief. This file is the short `/goal` entrypoint that should survive context compaction and resume events.
+Use `docs/HASH_OPTIMIZATION_GOAL.md` as the full operating brief. This file is the short `/goal` entrypoint that should survive context compaction and resume events.
 
-## Autonomous Execution Contract
+## Run Mode
 
-Keep iterating without asking for approval for routine local development work:
+Operate autonomously. Do not ask for approval for routine local optimization work:
 
-- read source files, docs, diffs, logs, and git status
-- run tests, builds, local benchmark scripts, and short CUDA smoke checks
+- inspect source files, docs, diffs, logs, and git status
+- run tests, builds, local benchmark scripts, and CUDA smoke checks
 - create ignored benchmark artifacts under `.benchmarks/`
 - edit scoped source, tests, scripts, build files, and docs
 - make small validated commits with English commit messages
 
-Do not pause just because a build, benchmark, or commit is needed. Pause only for the blocker conditions listed below.
+Pause only for the blocker conditions in `Stop Conditions`.
 
-## Language And Privacy Rules
+## Non-Negotiable Constraints
 
-Use English for:
-
-- code, comments, tests, docs, benchmark names, API names, branch names, and commit messages
+Use English for all code, comments, tests, docs, benchmark names, API names, branch names, and commit messages.
 
 Never commit:
 
@@ -41,7 +39,7 @@ Never commit:
 - raw benchmark reports containing binary paths, command lines, or local hardware details
 - local GPU model names when they identify a private machine
 
-Use public-safe placeholders in docs and commits:
+Use public-safe placeholders in docs and commit messages:
 
 - `<miner-binary>`
 - `<build-dir>`
@@ -72,16 +70,35 @@ Every performance change must include a correctness check that exercises the cha
 
 Keep the hash engine cleanly separated from platform features.
 
-The target architecture should make future AI-assisted optimization easy:
+Target architecture:
 
 - Hash API code stays centered under `src/hashapi/`.
 - CPU/reference and CUDA backends share the same request/result contract.
 - `hash-one`, `hash-batch`, and `hash-benchmark` remain stable automation entrypoints.
 - Benchmark output remains machine-readable and comparable across commits.
-- GPU tuning parameters are explicit, measurable, and isolated from marketplace, wallet, frontend, lease, devfee, and reporting code.
-- Runtime tuning should depend on difficulty, batch shape, compute capability, and device properties rather than private local hardware names.
+- GPU tuning parameters are explicit, measurable, and isolated from marketplace, wallet, frontend, lease, devfee, reporting, and other platform code.
+- Runtime tuning depends on difficulty, batch shape, compute capability, and public device properties rather than private local hardware names.
+- The miner may consume Hash API tuning results, but explicit user-supplied batch-size or device settings must continue to win.
 
-If the current structure blocks serious optimization, refactor the boundary first, then optimize the hot path.
+If the current structure blocks serious optimization, refactor the Hash API/backend boundary first, then optimize the hot path.
+
+## Current Status
+
+The reusable Hash API extraction is already in place. Continue from that architecture instead of reworking the full platform first.
+
+Current expected capabilities:
+
+- `src/hashapi/` contains the reusable Hash API boundary.
+- CPU/reference and CUDA backends are available behind a shared request/result contract.
+- CLI entrypoints such as `hash-one`, `hash-batch`, and `hash-benchmark` are available for automation.
+- Benchmark tooling supports scenarios, presets, warm-up runs, repeats, JSON output, comparison, and batch scans.
+- Conservative CUDA batch tuning is wired into miner integration when no explicit batch size is provided.
+
+Current optimization focus:
+
+- Optimize the current local CUDA-capable GPU first.
+- Keep the tuning design ready for RTX 3050-class and higher-end CUDA GPUs.
+- Prefer benchmark-backed improvements in input preparation, setup reuse, allocation reuse, matching/finalization, batch sizing, and launch configuration before risky kernel rewrites.
 
 ## Continuous Iteration Loop
 
@@ -106,8 +123,8 @@ Prefer many small, measurable iterations over broad speculative rewrites.
 
 Start or resume with this queue unless newer evidence in `docs/HASH_OPTIMIZATION_GOAL.md` supersedes it:
 
-1. Verify the worktree and avoid unrelated dirty files.
-2. Run focused Hash API unit tests.
+1. Finish and validate any existing dirty Hash API benchmark or documentation slice.
+2. Run the focused Hash API unit tests.
 3. Build the available smoke CLI or full CUDA binary.
 4. Run a short CUDA smoke benchmark.
 5. Run or load a repeated baseline for the next bottleneck.
@@ -118,8 +135,9 @@ Start or resume with this queue unless newer evidence in `docs/HASH_OPTIMIZATION
    - high `setup_ms`: cache difficulty-derived or device-derived setup safely
    - high `compute_ms`: inspect CUDA allocation, transfers, launch geometry, occupancy, and memory behavior
    - high `finalize_ms`: reduce matching, encoding, result collection, or JSON work
-7. Consider batch-size selection and autotuning only with stable repeated benchmark evidence.
-8. Keep miner integration aligned with Hash API tuning without breaking explicit user-supplied batch-size overrides.
+7. Use main-target-only benchmarks when measuring normal mining throughput without secondary XUNI matching.
+8. Consider batch-size selection and autotuning only with stable repeated benchmark evidence.
+9. Keep miner integration aligned with Hash API tuning without breaking explicit user-supplied overrides.
 
 ## Measurement Rules
 
@@ -149,11 +167,11 @@ python -m pytest tests/unit/test_hash_api_contract.py tests/unit/test_hash_api_s
 ```
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --preset warm-short --seconds 2 --warmup 1 --repeat 3 --output .benchmarks/warm-short.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --preset warm-short --seconds 2 --warmup 1 --repeat 3 --no-xuni --output .benchmarks/warm-short-main-target.json
 ```
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --no-xuni --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --recommendations-only --output .benchmarks/batch-scan-stable-main-target.json
 ```
 
 ## Commit Discipline
@@ -175,6 +193,15 @@ Before each commit:
 3. Run relevant correctness validation.
 4. Run at least one relevant benchmark for performance-affecting changes.
 5. Confirm the staged diff contains no private paths, usernames, hostnames, secrets, raw benchmark reports, or local hardware identifiers.
+
+Useful privacy check before committing:
+
+```bash
+git diff --cached --check
+git diff --cached
+```
+
+Then manually inspect the staged diff.
 
 ## Stop Conditions
 
