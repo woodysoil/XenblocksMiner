@@ -25,6 +25,7 @@ double elapsedMillis(std::chrono::steady_clock::time_point start,
 }
 
 constexpr std::size_t kMinParallelFirstBlockAttempts = 8;
+constexpr std::size_t kFinalizeTimingChunkSize = 64;
 
 void fillPasswordBlock(ComputeBackend& backend,
                        const Argon2Params& params,
@@ -224,19 +225,29 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 
         const auto finalize_start = std::chrono::steady_clock::now();
-        for (std::size_t i = 0; i < attempts; ++i) {
-            const auto finalize_hash_start = std::chrono::steady_clock::now();
-            const std::string hash = finalizeHash(compute_backend, params, i);
-            const auto finalize_hash_end = std::chrono::steady_clock::now();
-            result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, finalize_hash_end);
+        std::vector<std::string> finalized_hashes;
+        finalized_hashes.reserve(std::min(kFinalizeTimingChunkSize, attempts));
+        for (std::size_t begin = 0; begin < attempts; begin += kFinalizeTimingChunkSize) {
+            const std::size_t end = std::min(attempts, begin + kFinalizeTimingChunkSize);
+            finalized_hashes.clear();
+            finalized_hashes.reserve(end - begin);
 
-            const std::string& key = password_storage_[i];
-            if (single_key) {
-                result.hash = hash;
+            const auto finalize_hash_start = std::chrono::steady_clock::now();
+            for (std::size_t i = begin; i < end; ++i) {
+                finalized_hashes.push_back(finalizeHash(compute_backend, params, i));
             }
+            result.timings.finalize_hash_ms += elapsedMillis(finalize_hash_start, std::chrono::steady_clock::now());
 
             const auto match_start = std::chrono::steady_clock::now();
-            appendMatches(request, result, key, hash, i);
+            for (std::size_t offset = 0; offset < finalized_hashes.size(); ++offset) {
+                const std::size_t i = begin + offset;
+                const std::string& hash = finalized_hashes[offset];
+                const std::string& key = password_storage_[i];
+                if (single_key) {
+                    result.hash = hash;
+                }
+                appendMatches(request, result, key, hash, i);
+            }
             result.timings.match_ms += elapsedMillis(match_start, std::chrono::steady_clock::now());
         }
         result.timings.finalize_ms = elapsedMillis(finalize_start, std::chrono::steady_clock::now());
