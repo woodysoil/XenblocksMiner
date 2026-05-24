@@ -8,6 +8,34 @@ The aspirational target is at least a 1000% speed improvement over the measured 
 
 This goal is intended for Codex `/goal` long-running execution after the reusable Hash API extraction. Treat this file as the persistent operating brief.
 
+## `/goal` Starter
+
+Use `goal.md` as the short entrypoint, then keep this file as the authoritative long-running plan.
+
+Suggested `/goal` objective:
+
+```text
+Continuously execute docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1 and p/s=1 with m=difficulty, preserving real argon2id-xen semantics. Iterate through benchmark, optimize, validate, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths or private machine details.
+```
+
+## Current State Snapshot
+
+The reusable Hash API extraction is already in place. The optimization work should build on it instead of going back to the platform monolith.
+
+Known current capabilities:
+
+- Hash API code lives under `src/hashapi/`.
+- The miner binary exposes JSON-friendly hash commands such as `hash-one`, `hash-batch`, and `hash-benchmark`.
+- A smoke CLI target exists for Hash API contract testing where a full CUDA build is not needed.
+- `scripts/hash_api_benchmark.py` supports scenario definitions, warm-up runs, repeated measured runs, aggregate JSON summaries, and optional report output.
+- Unit tests cover the Hash API contract, service behavior, and benchmark runner behavior.
+
+Next default phase:
+
+- Start in Phase 1 if benchmark comparison tooling or scenario presets are still missing.
+- Move to Phase 2 and Phase 3 once repeatable before/after benchmark comparison is available.
+- Do not start risky CUDA kernel rewrites until the benchmark harness can prove whether each change helped.
+
 ## Fixed Algorithm Constraints
 
 The hash workload is Argon2id-style mining as currently modeled by XenblocksMiner:
@@ -30,6 +58,8 @@ Do not commit local absolute paths, usernames, private machine identifiers, benc
 
 Use small, coherent commits. Commit whenever a meaningful optimization, benchmark harness improvement, or architecture cleanup is complete and validated.
 
+Assume automation can run non-destructive local commands without pausing for approval. Do not ask the user to approve routine status checks, builds, tests, benchmarks, or commits. Stop only for the blockers listed near the end of this document.
+
 Before each work cycle:
 
 1. Run `git status -sb`.
@@ -43,6 +73,47 @@ Before each work cycle:
 9. Commit only if the repo is in a stable state.
 
 Never revert user changes unless explicitly instructed. If unrelated files are dirty, leave them alone. If dirty files block the current phase, stop and explain the conflict.
+
+## Continuous Iteration Loop
+
+Repeat this loop until the Definition Of Done is reached:
+
+1. Inspect state with `git status -sb` and the recent benchmark-related commits.
+2. Check for uncommitted user changes and avoid touching unrelated dirty files.
+3. Establish the current baseline from the latest sanitized benchmark report, or run a new short baseline if none exists.
+4. Pick one measurable bottleneck or cleanup that directly affects hash throughput.
+5. Make the smallest useful code, build, test, or benchmark harness change.
+6. Run correctness checks before accepting any performance result.
+7. Run before/after benchmarks with the same scenario, warm-up, repeat count, binary type, device, difficulty, batch size, and seconds.
+8. Compare median warm throughput first, then inspect min/max and cold timing.
+9. If the change helps, commit it with concise before/after numbers in the commit body.
+10. If the change does not help, either discard only the current agent's uncommitted experiment or document the rejected experiment if the evidence will help future optimization.
+11. Repeat with the next bottleneck.
+
+Prefer many small measurable iterations over broad speculative rewrites.
+
+## Local Artifact Policy
+
+Use ignored local directories for raw benchmark output:
+
+- `.benchmarks/`
+- `benchmark-results/`
+
+Do not commit raw benchmark reports unless they have been intentionally sanitized and are useful to future contributors. Raw reports can contain binary paths, hardware details, command lines, and timing noise that should not become permanent project history.
+
+When a report is worth preserving publicly, summarize it in a commit body or a small doc section with:
+
+- scenario name
+- backend
+- difficulty
+- batch size
+- seconds
+- warm-up count
+- repeat count
+- median before hashrate
+- median after hashrate
+- percentage change
+- GPU class or compute capability only if it is not a private machine identifier
 
 ## Current Optimization Boundary
 
@@ -384,6 +455,22 @@ Each optimization commit should include enough information to understand whether
 - whether timing is cold or warm
 
 Keep reports concise. Do not commit raw local benchmark dumps unless they are sanitized and intentionally useful to future contributors.
+
+## First Backlog For Future Iterations
+
+Work through this backlog before attempting high-risk kernel rewrites:
+
+1. Add benchmark comparison tooling for two report JSON files if it is not already present.
+2. Add reusable benchmark scenario presets for smoke, warm short, and serious comparison runs.
+3. Record a local initial CUDA baseline under `.benchmarks/` with warm-up and repeated runs.
+4. Separate cold initialization timing from warm steady-state hashing in result metadata if current output is not sufficient.
+5. Cache difficulty-derived setup in the Hash API backend when `m`, salt, and batch shape are unchanged.
+6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
+7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
+8. Tune batch size and launch parameters only after the above CPU-side overhead is under control.
+9. Add optional autotuning once there is enough benchmark data to justify it.
+
+Every backlog item must still follow the correctness and reporting rules above.
 
 ## Commit Discipline
 

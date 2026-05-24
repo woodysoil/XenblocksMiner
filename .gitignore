@@ -9,6 +9,8 @@ node_modules/
 web/dist/
 *.tsbuildinfo
 test-logs/
+.benchmarks/
+benchmark-results/
 .claude/
 .deps/
 .venv/
