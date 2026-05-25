@@ -121,6 +121,17 @@ def test_parse_scenario_supports_gpu_first_blocks_flag():
     assert scenario.gpu_first_blocks is True
 
 
+def test_parse_scenario_supports_auto_batch_size_flag():
+    scenario = benchmark.parse_scenario(
+        "backend=cuda,difficulty=8,batch_size=0,seconds=3,auto_batch_size=true",
+    )
+
+    assert scenario.auto_batch_size is True
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+    assert "--auto-batch-size" in command
+    assert "--batch-size" not in command
+
+
 def test_parse_scenario_supports_difficulty_sequence():
     scenario = benchmark.parse_scenario(
         "backend=cuda,difficulty_sequence=1|8|1|8,batch_size=512,seconds=2",

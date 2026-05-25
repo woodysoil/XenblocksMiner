@@ -191,6 +191,7 @@ def parse_scenario(text: str, default_warmup: int = 0, default_repeat: int = 1) 
         first_block_dynamic_chunk_auto=parts.get("first_block_dynamic_chunk_auto", "false").lower()
         in {"1", "true", "yes"},
         gpu_first_blocks=parts.get("gpu_first_blocks", "false").lower() in {"1", "true", "yes"},
+        auto_batch_size=parts.get("auto_batch_size", "false").lower() in {"1", "true", "yes"},
     )
 
 
