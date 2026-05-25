@@ -135,6 +135,12 @@ Active goal status:
   128 repeats completed about `303.74k` finalizes per second at about `3292 ns`
   per finalize; treat this as host-side diagnostic evidence only, not a miner
   throughput claim.
+- Measurement-only finalization diagnostic hardening: the default
+  `argon2-finalize-benchmark` shape now verifies a fixed expected sample hash and
+  checksum in addition to deterministic repeated output. This catches
+  wrong-but-repeatable final digest rewrites before CUDA golden or wrapper
+  benchmarks. Validation passed focused Hash API tests plus default and small
+  non-default diagnostic runs.
 
 Known current capabilities:
 

@@ -17,6 +17,10 @@ constexpr std::size_t kHashLength = 64;
 constexpr std::size_t kBlockSize = argon2::ARGON2_BLOCK_SIZE;
 constexpr std::uint64_t kFnvOffset = UINT64_C(14695981039346656037);
 constexpr std::uint64_t kFnvPrime = UINT64_C(1099511628211);
+constexpr const char* kExpectedDefaultSampleHash =
+    "8a819c67c36ca294116d0fd0fa341940cbe08fa1e138fef94b3cc0bd0a503aeca6b6b19bb057a011"
+    "ff4377903d15b0bfc0d53498d8ba08b7790d9a9345e99595";
+constexpr std::uint64_t kExpectedDefaultChecksum = UINT64_C(0xa64548db96f51b25);
 
 std::size_t parseSizeArg(int argc, char** argv, const char* name, std::size_t fallback)
 {
@@ -108,7 +112,12 @@ int main(int argc, char** argv)
     const double elapsed_ms = elapsedMillis(start, std::chrono::steady_clock::now());
 
     params.finalize(check_hash.data(), blocks.data());
+    const std::string sample_hash = hexBytes(first_hash.data(), first_hash.size());
+    const bool default_shape = block_count == 4096 && repeat == 128;
     const bool deterministic = first_hash == check_hash;
+    const bool known_sample_ok = !default_shape || sample_hash == kExpectedDefaultSampleHash;
+    const bool known_checksum_ok = !default_shape || checksum == kExpectedDefaultChecksum;
+    const bool ok = deterministic && known_sample_ok && known_checksum_ok;
     const double finalizes_per_second = elapsed_ms > 0.0
         ? static_cast<double>(iterations) / (elapsed_ms / 1000.0)
         : 0.0;
@@ -118,7 +127,7 @@ int main(int argc, char** argv)
 
     std::cout
         << "{"
-        << "\"ok\":" << (deterministic ? "true" : "false") << ","
+        << "\"ok\":" << (ok ? "true" : "false") << ","
         << "\"algorithm\":\"argon2id-xen-finalize\","
         << "\"block_size\":" << kBlockSize << ","
         << "\"blocks\":" << block_count << ","
@@ -128,8 +137,11 @@ int main(int argc, char** argv)
         << "\"finalizes_per_second\":" << finalizes_per_second << ","
         << "\"ns_per_finalize\":" << ns_per_finalize << ","
         << "\"checksum\":\"" << std::hex << checksum << std::dec << "\","
-        << "\"sample_hash\":\"" << hexBytes(first_hash.data(), first_hash.size()) << "\""
+        << "\"sample_hash\":\"" << sample_hash << "\","
+        << "\"deterministic\":" << (deterministic ? "true" : "false") << ","
+        << "\"known_sample_ok\":" << (known_sample_ok ? "true" : "false") << ","
+        << "\"known_checksum_ok\":" << (known_checksum_ok ? "true" : "false")
         << "}\n";
 
-    return deterministic ? 0 : 1;
+    return ok ? 0 : 1;
 }

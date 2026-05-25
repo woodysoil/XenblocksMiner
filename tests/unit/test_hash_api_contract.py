@@ -381,6 +381,8 @@ def test_argon2_finalize_benchmark_target_is_available():
     assert "argon2id-xen-finalize" in source
     assert "ns_per_finalize" in source
     assert "sample_hash" in source
+    assert "known_sample_ok" in source
+    assert "kExpectedDefaultChecksum" in source
 
 
 def test_mine_unit_uses_hash_api_batch_size_tuning_without_overriding_manual_limit():
