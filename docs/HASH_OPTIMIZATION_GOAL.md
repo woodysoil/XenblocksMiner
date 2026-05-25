@@ -88,14 +88,16 @@ Next cycle:
 3. Build or reuse a clean Release CUDA binary.
 4. Run CUDA golden hashes with and without `--gpu-first-blocks`.
 5. Run a short d8 auto-batch GPU-first smoke.
-6. Refresh or load the stable d8 auto-batch GPU-first baseline.
-7. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
-8. Use detailed timing to pick exactly one bottleneck.
-9. Prefer finalization isolation, result ownership cleanup, setup/lifecycle
+6. Use `argon2-finalize-benchmark` as a fast host-side finalization diagnostic
+   before trying materially different final digest implementations.
+7. Refresh or load the stable d8 auto-batch GPU-first baseline.
+8. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
+9. Use detailed timing to pick exactly one bottleneck.
+10. Prefer finalization isolation, result ownership cleanup, setup/lifecycle
    cleanup for variable `m=diff`, or a measured CUDA backend bottleneck over
    another keygen-only, one-shot prefix, or allocation-only base64/matching
    micro-optimization.
-10. Validate, benchmark, document, privacy-check, commit, and continue.
+11. Validate, benchmark, document, privacy-check, commit, and continue.
 
 ## Current State Snapshot
 
@@ -116,6 +118,17 @@ Active goal status:
 - Accepted single-lane finalization cleanup: `Argon2Params::finalize` now skips the temporary 1 KiB lane-XOR copy when `lanes == 1` and hashes the final block directly. This preserves the multi-lane path and matches the fixed single-lane goal workload. Validation passed focused Hash API tests, a Release CUDA rebuild, and CUDA golden hashes for default and `gpu_first_blocks`. A short d8/b2048 generated CUDA `gpu_first_blocks` smoke improved from about `152.03k H/s` median with `12.26%` spread to about `171.93k H/s` median with `3.97%` spread, with normal benchmark trust and zero invalid subprocesses. Treat this as accepted local smoke evidence, not a cross-GPU final plateau.
 - Miner-generated CUDA requests now opt into `gpu_first_blocks` together with existing automatic first-block chunk selection. This keeps the CLI flag available for explicit benchmarking while making the miner use the fastest validated generated-key path by default. Same-binary short d8/b2048 evidence after the single-lane finalization cleanup showed generated CUDA without `gpu_first_blocks` at about `79.11k H/s` median with `7.77%` spread, while generated CUDA with `gpu_first_blocks` reached about `171.93k H/s` median with `3.97%` spread, normal benchmark trust, and zero invalid subprocesses. Validation passed focused Hash API tests, a Release CUDA rebuild, and CUDA golden hashes for default and `gpu_first_blocks`.
 - Accepted d8 GPU-first batch-size update: after miner-generated CUDA requests moved to `gpu_first_blocks`, a clean targeted d8 generated CUDA scan with auto first-block dynamic chunks compared b3072 and b4096 for seconds `8`, warm-up `1`, repeat `3`, no-XUNI, normal benchmark trust, and zero invalid subprocesses. b3072 reached about `191.19k H/s` median with `3.15%` spread; b4096 reached about `196.86k H/s` median with `1.95%` spread and became the recommended stable candidate. The CUDA batch-size helper now recommends b4096 for difficulty up to d8 while keeping d1 at b2048 and d64 at b3072. This is local GPU-first evidence; confirm on future GPU classes before treating it as universal.
+- Measurement-only finalization diagnostic: `argon2-finalize-benchmark` now builds
+  with the hash diagnostics targets and times deterministic host
+  `Argon2Params::finalize` loops without CUDA, local paths, hardware metadata, or
+  platform code. This gives future agents a fast correctness and timing guard for
+  materially different final digest implementations before full CUDA wrapper
+  benchmarks. Validation passed focused Hash API tests, a Release CUDA rebuild,
+  the diagnostic executable, the Blake2b copy self-test, and CUDA golden hashes
+  with and without `gpu_first_blocks`. A local diagnostic run over 4096 blocks and
+  128 repeats completed about `303.74k` finalizes per second at about `3292 ns`
+  per finalize; treat this as host-side diagnostic evidence only, not a miner
+  throughput claim.
 
 Known current capabilities:
 

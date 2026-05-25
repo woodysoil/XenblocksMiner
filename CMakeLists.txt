@@ -206,4 +206,11 @@ if(XENBLOCKS_BUILD_HASH_DIAGNOSTICS)
         src/blake2b.cpp
     )
     target_include_directories(blake2b-copy-selftest PRIVATE src)
+
+    add_executable(argon2-finalize-benchmark
+        tests/cpp/argon2_finalize_benchmark.cpp
+        src/argon2params.cpp
+        src/blake2b.cpp
+    )
+    target_include_directories(argon2-finalize-benchmark PRIVATE src)
 endif()

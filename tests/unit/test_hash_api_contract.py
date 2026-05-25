@@ -372,6 +372,17 @@ def test_blake2b_copy_selftest_target_is_available():
     assert "copied_states_are_independent" in source
 
 
+def test_argon2_finalize_benchmark_target_is_available():
+    cmake = read("CMakeLists.txt")
+    source = read("tests/cpp/argon2_finalize_benchmark.cpp")
+
+    assert "argon2-finalize-benchmark" in cmake
+    assert "tests/cpp/argon2_finalize_benchmark.cpp" in cmake
+    assert "argon2id-xen-finalize" in source
+    assert "ns_per_finalize" in source
+    assert "sample_hash" in source
+
+
 def test_mine_unit_uses_hash_api_batch_size_tuning_without_overriding_manual_limit():
     implementation = read("src/MineUnit.cpp")
 
