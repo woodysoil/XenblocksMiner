@@ -434,6 +434,41 @@ def test_compare_reports_config_match_separates_first_block_dynamic_chunk_auto()
     assert any("fbda1" in item["match_key"] for item in result["comparisons"])
 
 
+def test_compare_reports_config_match_uses_requested_dynamic_chunk_for_auto_runs():
+    before = _run(
+        "auto-before",
+        100.0,
+        first_block_dynamic_chunk_size=0,
+        first_block_dynamic_chunk_auto=True,
+        first_block_dynamic_chunk_size_min=0,
+        first_block_dynamic_chunk_size_max=16,
+    )
+    after = _run(
+        "auto-after",
+        105.0,
+        first_block_dynamic_chunk_size=0,
+        first_block_dynamic_chunk_auto=True,
+        first_block_dynamic_chunk_size_min=0,
+        first_block_dynamic_chunk_size_max=16,
+    )
+    before["summary"]["first_block_dynamic_chunk_size"] = 16
+    after["summary"]["first_block_dynamic_chunk_size"] = 0
+
+    result = compare.compare_reports(
+        _report(before),
+        _report(after),
+        match_by="config",
+        min_change_pct=1.0,
+    )
+
+    assert len(result["comparisons"]) == 1
+    item = result["comparisons"][0]
+    assert item["status"] == "improved"
+    assert item["first_block_dynamic_chunk_size"] == 0
+    assert item["first_block_dynamic_chunk_size_min"] == 0
+    assert item["first_block_dynamic_chunk_size_max"] == 16
+
+
 def test_compare_reports_config_match_separates_detailed_timing_mode_by_default():
     result = compare.compare_reports(
         _report(_run("default-timing", 100.0, detailed_timings=False)),

@@ -589,6 +589,10 @@ void KernelRunner::init(std::size_t batchSize_){
 
 KernelRunner::~KernelRunner()
 {
+    if (stream != nullptr) {
+        // Variable-shape benchmark loops recreate runners; drain queued work before tearing down CUDA resources.
+        cudaStreamSynchronize(stream);
+    }
     if (start != nullptr) {
         cudaEventDestroy(start);
     }
