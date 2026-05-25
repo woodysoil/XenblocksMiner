@@ -720,6 +720,7 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     analysis = benchmark.timing_analysis(
         {
             "input_ms": 6.0,
+            "keygen_ms": 0.5,
             "setup_ms": 5.5,
             "setup_normalize_cpu_ms": 0.1,
             "setup_activate_cpu_ms": 0.2,
@@ -782,6 +783,10 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert analysis["nested_stage_pct"]["kernel_ms"] == 9.0 / 4.0 * 100.0
     assert analysis["nested_stage_pct"]["finalize_hash_ms"] == 8.0 / 3.0 * 100.0
     assert analysis["nested_stage_pct"]["argon2_finalize_ms"] == 200.0
+    assert analysis["input_explained_ms"] == 5.5
+    assert analysis["input_residual_ms"] == 0.5
+    assert analysis["input_explained_to_input"] == 5.5 / 6.0
+    assert analysis["input_residual_pct"] == 0.5 / 6.0 * 100.0
     assert analysis["first_block_cpu_sum_ms"] == 5.0
     assert analysis["first_block_cpu_sum_to_wall"] == 1.0
     assert analysis["first_block_worker_wall_to_wall"] == 0.8
@@ -803,6 +808,10 @@ def test_timing_analysis_omits_nested_percentages_without_parent_timing():
     )
 
     assert analysis["nested_stage_pct"] == {}
+    assert analysis["input_explained_ms"] == 0.0
+    assert analysis["input_residual_ms"] == 0.0
+    assert analysis["input_explained_to_input"] == 0.0
+    assert analysis["input_residual_pct"] == 0.0
     assert analysis["first_block_cpu_sum_ms"] == 2.0
     assert analysis["first_block_cpu_sum_to_wall"] == 0.0
     assert analysis["first_block_worker_wall_to_wall"] == 0.0

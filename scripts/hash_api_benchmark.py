@@ -695,7 +695,26 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
     first_block_digest_ms = float(timings.get("first_block_digest_cpu_ms", 0.0) or 0.0)
     first_block_worker_wall_ms = float(timings.get("first_block_max_worker_ms", 0.0) or 0.0)
     first_block_worker_finish_ms = float(timings.get("first_block_max_worker_finish_ms", 0.0) or 0.0)
+    input_ms = float(timings.get("input_ms", 0.0) or 0.0)
+    keygen_ms = float(timings.get("keygen_ms", 0.0) or 0.0)
     first_block_cpu_sum_ms = first_block_initial_ms + first_block_digest_ms
+    input_explained_ms = keygen_ms + first_block_wall_ms
+    input_residual_ms = (
+        input_ms - input_explained_ms
+        if input_ms > 0.0 and input_explained_ms > 0.0
+        else 0.0
+    )
+    input_residual_ms = max(0.0, input_residual_ms)
+    input_explained_to_input = (
+        input_explained_ms / input_ms
+        if input_ms > 0.0 and input_explained_ms > 0.0
+        else 0.0
+    )
+    input_residual_pct = (
+        input_residual_ms / input_ms * 100.0
+        if input_ms > 0.0 and input_residual_ms > 0.0
+        else 0.0
+    )
     first_block_cpu_sum_to_wall = (
         first_block_cpu_sum_ms / first_block_wall_ms if first_block_wall_ms > 0.0 and first_block_cpu_sum_ms > 0.0 else 0.0
     )
@@ -726,6 +745,10 @@ def timing_analysis(timings: dict[str, float]) -> dict[str, Any]:
         "dominant_stage_pct": dominant_stage_pct,
         "stage_pct": shares,
         "nested_stage_pct": nested_shares,
+        "input_explained_ms": input_explained_ms,
+        "input_residual_ms": input_residual_ms,
+        "input_explained_to_input": input_explained_to_input,
+        "input_residual_pct": input_residual_pct,
         "first_block_cpu_sum_ms": first_block_cpu_sum_ms,
         "first_block_cpu_sum_to_wall": first_block_cpu_sum_to_wall,
         "first_block_worker_wall_to_wall": first_block_worker_wall_to_wall,
