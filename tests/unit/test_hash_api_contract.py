@@ -379,6 +379,7 @@ def test_mine_unit_uses_hash_api_batch_size_tuning_without_overriding_manual_lim
     assert "globalMaxBatchSize" in implementation
     assert "selected_batch_size == 0" in implementation
     assert "batchSize = batchDecision.selected_batch_size" in implementation
+    assert "request.gpu_first_blocks = true" in implementation
 
 
 def test_hash_api_benchmark_runner_exists():
