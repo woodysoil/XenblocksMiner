@@ -109,14 +109,12 @@ Latest important resume facts:
 - Many earlier optimization commits are still visible in the normal git log. An
   `ahead N` status only reports commits ahead of the tracked remote; it does not
   mean previous local work disappeared.
-- The current resume state may include an uncommitted `gpu_final_hashes`
-  experiment. Treat it as unstable until proven otherwise. It preserved golden-hash
-  correctness in early checks and produced very high valid-sample throughput, but
-  repeated benchmark subprocesses exited with an access-violation status. Do not
-  accept, document as successful, or enable it by default unless focused tests,
-  CUDA golden hashes, and repeated wrapper benchmarks all pass with zero invalid
-  subprocesses. If no small lifecycle fix is found, revert only that experiment,
-  record the rejected evidence in `docs/HASH_OPTIMIZATION_GOAL.md`, and continue.
+- The previous uncommitted `gpu_final_hashes` experiment was reverted. It
+  preserved golden-hash correctness in early checks and produced very high
+  valid-sample throughput, but repeated benchmark subprocesses exited with an
+  access-violation status. Do not reintroduce device-side final hash output unless
+  the implementation shape materially changes and repeated wrapper benchmarks pass
+  with zero invalid subprocesses.
 - Current miner-equivalent d8 tuning evidence favors generated CUDA batches around
   b3072 with automatic first-block dynamic chunk selection, while d8/b2048 remains
   an important continuity scenario for historical comparisons.
@@ -234,10 +232,9 @@ At the start of each autonomous cycle, choose the next step by this order:
 
 1. If the worktree is dirty, identify whether it is previous-agent work, a rejected
    experiment, a user change, or an unrelated local artifact.
-2. If dirty work is the known `gpu_final_hashes` experiment, first decide whether
-   it can be stabilized with a small resource-lifetime or synchronization fix. If
-   not, revert only that experiment and preserve a public-safe rejected-experiment
-   note.
+2. Do not retry the reverted `gpu_final_hashes` experiment unless the finalization
+   buffer lifetime and synchronization design materially changes and the new shape
+   can be proven with zero invalid subprocesses.
 3. If correctness validation is stale or the binary changed, run focused tests and
    the CUDA golden hash check first.
 4. If no trustworthy current baseline exists, run or load the d8 generated-key CUDA
@@ -483,9 +480,9 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 1. Run `git status -sb`.
 2. If the worktree is dirty, classify the changes before editing. Continue useful
    previous-agent work; do not overwrite unrelated user work.
-3. If the dirty state is the `gpu_final_hashes` experiment, either stabilize it
-   with a narrow lifecycle/synchronization fix and prove zero invalid subprocesses,
-   or revert that experiment and document it as rejected.
+3. Do not restart the reverted `gpu_final_hashes` experiment as the next step.
+   Choose a different bottleneck unless a materially different finalization design
+   is available.
 4. Confirm recent commits and privacy state.
 5. Run focused Hash API unit tests.
 6. Build or reuse the clean Release CUDA binary.
