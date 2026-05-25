@@ -248,6 +248,18 @@ def test_cuda_hash_api_reuses_initialization_by_segment_blocks():
     assert "initialized_segment_blocks_ == segment_blocks" in implementation
 
 
+def test_cuda_backend_reuses_runner_when_allocation_covers_segment_blocks():
+    backend_impl = read("src/CudaBackend.cpp")
+    runner_header = read("src/kernelrunner.h")
+    runner_impl = read("src/kernelrunner.cu")
+
+    assert "runner_->canReuse(type, version, passes, lanes, segmentBlocks, batchSize)" in backend_impl
+    assert "runner_->reconfigure(type, version, passes, lanes, segmentBlocks, batchSize)" in backend_impl
+    assert "allocatedSegmentBlocks" in runner_header
+    assert "segmentBlocks_ <= allocatedSegmentBlocks" in runner_impl
+    assert "allocatedSegmentBlocks = segmentBlocks" in runner_impl
+
+
 def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     content = read("src/hashapi/HashApiCli.cpp")
     assert 'request.backend == "cuda"' in content

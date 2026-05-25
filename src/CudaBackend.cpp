@@ -37,6 +37,11 @@ void CudaBackend::init(size_t batchSize, uint32_t type, uint32_t version,
                        uint32_t passes, uint32_t lanes,
                        uint32_t segmentBlocks)
 {
+	if (runner_ != nullptr &&
+	    runner_->canReuse(type, version, passes, lanes, segmentBlocks, batchSize)) {
+		runner_->reconfigure(type, version, passes, lanes, segmentBlocks, batchSize);
+		return;
+	}
 	runner_ = std::make_unique<KernelRunner>(type, version, passes, lanes,
 	                                        segmentBlocks, batchSize);
 	runner_->init(batchSize);

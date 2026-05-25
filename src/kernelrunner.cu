@@ -564,7 +564,8 @@ KernelRunner::KernelRunner(uint32_t type, uint32_t version, uint32_t passes,
                            uint32_t lanes, uint32_t segmentBlocks,
                            size_t batchSize)
     : type(type), version(version), passes(passes), lanes(lanes),
-          segmentBlocks(segmentBlocks), batchSize(batchSize), stream(), memory(), refs(),
+          segmentBlocks(segmentBlocks), allocatedSegmentBlocks(segmentBlocks),
+          batchSize(batchSize), stream(), memory(), refs(),
           start(), end(), kernelStart(), kernelEnd(),
           blocksIn(nullptr), blocksOut(nullptr)
 {
@@ -573,9 +574,10 @@ KernelRunner::KernelRunner(uint32_t type, uint32_t version, uint32_t passes,
 
 void KernelRunner::init(std::size_t batchSize_){
     batchSize = batchSize_;
+    allocatedSegmentBlocks = segmentBlocks;
     blocksIn = std::make_unique<uint8_t[]>(batchSize * 1 * 2 * ARGON2_BLOCK_SIZE);
     blocksOut = std::make_unique<uint8_t[]>(batchSize * 1 * ARGON2_BLOCK_SIZE);
-    size_t memorySize = batchSize * 1 * segmentBlocks * ARGON2_SYNC_POINTS * ARGON2_BLOCK_SIZE;
+    size_t memorySize = batchSize * 1 * allocatedSegmentBlocks * ARGON2_SYNC_POINTS * ARGON2_BLOCK_SIZE;
 
     CudaException::check(cudaMalloc(&memory, memorySize));
 
@@ -585,6 +587,32 @@ void KernelRunner::init(std::size_t batchSize_){
     CudaException::check(cudaEventCreate(&kernelEnd));
 
     CudaException::check(cudaStreamCreate(&stream));
+}
+
+bool KernelRunner::canReuse(uint32_t type_, uint32_t version_,
+                            uint32_t passes_, uint32_t lanes_,
+                            uint32_t segmentBlocks_,
+                            std::size_t batchSize_) const
+{
+    return type == type_ &&
+           version == version_ &&
+           passes == passes_ &&
+           lanes == lanes_ &&
+           batchSize == batchSize_ &&
+           segmentBlocks_ <= allocatedSegmentBlocks;
+}
+
+void KernelRunner::reconfigure(uint32_t type_, uint32_t version_,
+                               uint32_t passes_, uint32_t lanes_,
+                               uint32_t segmentBlocks_,
+                               std::size_t batchSize_)
+{
+    type = type_;
+    version = version_;
+    passes = passes_;
+    lanes = lanes_;
+    segmentBlocks = segmentBlocks_;
+    batchSize = batchSize_;
 }
 
 KernelRunner::~KernelRunner()

@@ -7,6 +7,7 @@ class KernelRunner
 private:
     uint32_t type, version;
     uint32_t passes, lanes, segmentBlocks;
+    uint32_t allocatedSegmentBlocks;
     std::size_t batchSize;
 
     cudaEvent_t start, end, kernelStart, kernelEnd;
@@ -32,6 +33,12 @@ public:
     ~KernelRunner();
 
     void init(std::size_t batchSize);
+    bool canReuse(uint32_t type, uint32_t version,
+        uint32_t passes, uint32_t lanes,
+        uint32_t segmentBlocks, std::size_t batchSize) const;
+    void reconfigure(uint32_t type, uint32_t version,
+        uint32_t passes, uint32_t lanes,
+        uint32_t segmentBlocks, std::size_t batchSize);
 
     void* getInputMemory(std::size_t jobId) const;
     const void* getOutputMemory(std::size_t jobId) const;
