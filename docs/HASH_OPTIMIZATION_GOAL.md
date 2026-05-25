@@ -8,7 +8,7 @@ The aspirational target is at least a 1000% speed improvement over the measured 
 
 This goal is intended for Codex `/goal` long-running execution after the reusable Hash API extraction. Treat this file as the persistent operating brief.
 
-The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`. Optimize the current CUDA-capable local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
+The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`. Real mining difficulty is expected to be in the thousands to tens of thousands because this is a memory-hard hash path. Use tiny difficulties such as d1, d8, and d64 only as smoke, correctness, and harness diagnostics unless a specific low-d regression needs to be isolated. Optimize the current CUDA-capable local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
 
 Treat this as a latency-first, throughput-measured goal. Median warm attempts
 per second is the main repeatable metric, but every accepted change should also
@@ -21,7 +21,7 @@ Use `goal.md` as the short entrypoint, then keep this file as the authoritative 
 Suggested `/goal` objective:
 
 ```text
-Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed s=1, current single-lane p=1, and only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
+Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed s=1, current single-lane p=1, and only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Primary performance benchmarks must target realistic memory-cost difficulty values in the thousands to tens of thousands; use tiny difficulty values only as correctness, smoke, and benchmark-harness checks. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
 ```
 
 ## Current Control Summary
@@ -48,6 +48,10 @@ Current confirmed architecture state:
   API, marketplace API, wallet flow, or full platform API.
 - Miner-generated CUDA requests use the validated GPU first-block path and the
   automatic first-block chunk policy where supported.
+- The real optimization workload is high-memory `m=diff` in the thousands to
+  tens of thousands. Existing d1, d8, and d64 reports are useful for smoke,
+  continuity, and regression triage, but they are not representative completion
+  evidence for the mining workload.
 - Benchmark automation supports fixed difficulty, variable `m=diff` sequences,
   automatic batch sizing, GPU first blocks, first-block dynamic chunk policy,
   detailed timings, report-quality checks, and before/after comparison.
@@ -57,10 +61,15 @@ Current confirmed architecture state:
 
 Latest public-safe performance checkpoint:
 
+- No stable high-difficulty baseline in the thousands-to-tens-of-thousands
+  range has been accepted yet. Establish that before claiming further goal
+  progress or accepting low-d launch/finalization changes as mining-workload
+  wins.
 - For generated-key CUDA d8 with GPU first blocks, auto batch selection, automatic
   first-block dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal
   benchmark trust, the best current local candidate is batch size `4096` at about
-  `196.86k H/s` median with `1.95%` spread and zero invalid subprocesses.
+  `196.86k H/s` median with `1.95%` spread and zero invalid subprocesses. This
+  is low-difficulty evidence only.
 - A later pre-launch-shape refresh of the same d8/b4096 GPU-first scenario
   measured about `191.87k H/s` median with `2.05%` spread and zero invalid
   subprocesses. Treat this as the current launch-geometry baseline for the next
@@ -69,8 +78,9 @@ Latest public-safe performance checkpoint:
 - The same local scan saw batch size `3072` at about `191.19k H/s` median with
   `3.15%` spread. Keep b3072 as a nearby fallback candidate, not the current d8
   winner.
-- d1 and d64 keep their separate tuning evidence. Do not generalize the d8/b4096
-  result to every difficulty or GPU class without confirmation.
+- d1 and d64 keep their separate tuning evidence. Do not generalize any
+  low-difficulty result to realistic high-memory difficulty values or GPU
+  classes without confirmation.
 - The current post-GPU-first bottleneck should be rechecked with detailed timing,
   but recent evidence points toward CPU finalization and remaining host-side
   overhead, especially `argon2_finalize_ms`, more than first-block preparation.
@@ -129,15 +139,19 @@ Next cycle:
 2. Run focused Hash API tests if validation is stale.
 3. Build or reuse a clean Release CUDA binary.
 4. Run CUDA golden hashes with and without `--gpu-first-blocks`.
-5. Run a short d8 auto-batch GPU-first smoke.
+5. Run a short low-difficulty auto-batch GPU-first smoke only as a safety gate.
 6. Use `argon2-finalize-benchmark` as a fast host-side finalization diagnostic
    before trying materially different final digest implementations.
-7. Refresh or load the stable d8 auto-batch GPU-first baseline.
-8. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
+7. Establish or refresh a stable high-difficulty auto-batch GPU-first baseline,
+   starting with d4096 and then expanding toward tens-of-thousands difficulty
+   as memory permits.
+8. Establish or refresh a realistic variable-`m` GPU-first sequence baseline,
+   for example d4096,d8192,d16384, and add d32768 only when auto batch sizing
+   and run time remain practical.
 9. Use detailed timing to pick exactly one bottleneck.
-10. If continuing from the latest clean checkpoint, prefer a one-parameter CUDA
-   first-block launch-geometry experiment over another finalization parallelism
-   snapshot.
+10. If continuing from the latest dirty checkpoint, do not accept the current
+   first-block launch-geometry experiment from d8 evidence alone; validate it on
+   the high-d baseline or revert it.
 11. Otherwise prefer finalization isolation, setup/lifecycle cleanup for variable
    `m=diff`, or a measured CUDA backend bottleneck over another keygen-only,
    one-shot prefix, host-owned parallel finalization snapshot, or
@@ -152,7 +166,12 @@ Active goal status:
 
 - `/goal` is active for continuous Hash API and CUDA throughput optimization.
 - The branch may be ahead of the remote with many local commits. Treat those commits as retained local work, not lost work, unless the user explicitly requests a squash, reorder, push, or public history rewrite.
-- The current trusted Release continuity evidence for static/default generated-key CUDA main-target behavior is the difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, no-XUNI scenario, with about `79.2k H/s` median from the latest normal-trust refresh. Older `78.3k H/s` evidence remains useful continuity context but should not override newer trusted evidence.
+- Real mining difficulty is expected to be in the thousands to tens of
+  thousands. The low-difficulty evidence below remains useful for smoke,
+  correctness, harness, and regression continuity, but future optimization
+  acceptance should be based on realistic high-memory `m=diff` scenarios unless
+  the change is explicitly measurement-only.
+- The current trusted Release continuity evidence for static/default generated-key CUDA low-difficulty behavior is the difficulty `8`, batch size `2048`, warm-up `1`, repeat `3`, no-XUNI scenario, with about `79.2k H/s` median from the latest normal-trust refresh. Older `78.3k H/s` evidence remains useful continuity context but should not override newer trusted evidence.
 - The current accepted optimization evidence supports the automatic first-block dynamic chunk policy for covered generated-key CUDA d1, d8, and d64 batches. The latest longer d8 same-settings confirmation reached about `87.16k H/s` median at d8/b2048, about `+8.1%` over the matching static run, with normal benchmark trust. A later d64/b2048 confirmation improved from `75.63k H/s` static to `79.51k H/s` with chunk `16`, about `+5.1%`.
 - The dominant measured bottleneck after the auto policy is still CPU-side input preparation, especially first-block preparation. Latest detailed post-auto timing showed `input_ms` at about `57-59%` of wall time and `first_block_ms` at about `53-54%`. A current clean d8/b2048 generated CUDA auto refresh after the d64 policy commit stayed stable at about `86.95k H/s` median with `3.17%` spread, and a short detailed run showed `input_ms` about `58.94%`, `first_block_ms` about `54.39%`, `finalize_ms` about `29.58%`, and `keygen_ms` about `3.97%`.
 - This baseline is local evidence on a CUDA-capable GPU. Do not publish raw reports, local binary paths, hardware identifiers, or private machine details.
@@ -162,7 +181,7 @@ Active goal status:
 - Rejected `gpu_final_hashes` experiment: moving the final Argon2 `digestLong(last block -> final hash)` work onto CUDA and copying back fixed-size final hashes preserved the golden CUDA hash in early checks and produced much faster valid samples, but repeated benchmark wrapper runs produced access-violation subprocess exits with no JSON. The uncommitted source experiment was reverted. Do not retry this exact device-side final hash output path unless the finalization buffer lifetime and synchronization design materially changes and repeated wrapper benchmarks pass with zero invalid subprocesses.
 - Accepted single-lane finalization cleanup: `Argon2Params::finalize` now skips the temporary 1 KiB lane-XOR copy when `lanes == 1` and hashes the final block directly. This preserves the multi-lane path and matches the fixed single-lane goal workload. Validation passed focused Hash API tests, a Release CUDA rebuild, and CUDA golden hashes for default and `gpu_first_blocks`. A short d8/b2048 generated CUDA `gpu_first_blocks` smoke improved from about `152.03k H/s` median with `12.26%` spread to about `171.93k H/s` median with `3.97%` spread, with normal benchmark trust and zero invalid subprocesses. Treat this as accepted local smoke evidence, not a cross-GPU final plateau.
 - Miner-generated CUDA requests now opt into `gpu_first_blocks` together with existing automatic first-block chunk selection. This keeps the CLI flag available for explicit benchmarking while making the miner use the fastest validated generated-key path by default. Same-binary short d8/b2048 evidence after the single-lane finalization cleanup showed generated CUDA without `gpu_first_blocks` at about `79.11k H/s` median with `7.77%` spread, while generated CUDA with `gpu_first_blocks` reached about `171.93k H/s` median with `3.97%` spread, normal benchmark trust, and zero invalid subprocesses. Validation passed focused Hash API tests, a Release CUDA rebuild, and CUDA golden hashes for default and `gpu_first_blocks`.
-- Accepted d8 GPU-first batch-size update: after miner-generated CUDA requests moved to `gpu_first_blocks`, a clean targeted d8 generated CUDA scan with auto first-block dynamic chunks compared b3072 and b4096 for seconds `8`, warm-up `1`, repeat `3`, no-XUNI, normal benchmark trust, and zero invalid subprocesses. b3072 reached about `191.19k H/s` median with `3.15%` spread; b4096 reached about `196.86k H/s` median with `1.95%` spread and became the recommended stable candidate. The CUDA batch-size helper now recommends b4096 for difficulty up to d8 while keeping d1 at b2048 and d64 at b3072. This is local GPU-first evidence; confirm on future GPU classes before treating it as universal.
+- Accepted d8 GPU-first batch-size update: after miner-generated CUDA requests moved to `gpu_first_blocks`, a clean targeted d8 generated CUDA scan with auto first-block dynamic chunks compared b3072 and b4096 for seconds `8`, warm-up `1`, repeat `3`, no-XUNI, normal benchmark trust, and zero invalid subprocesses. b3072 reached about `191.19k H/s` median with `3.15%` spread; b4096 reached about `196.86k H/s` median with `1.95%` spread and became the recommended stable candidate. The CUDA batch-size helper now recommends b4096 for difficulty up to d8 while keeping d1 at b2048 and d64 at b3072. This is local low-difficulty GPU-first evidence; confirm on realistic high-memory difficulty values and future GPU classes before treating it as a mining-workload policy.
 - Measurement-only finalization diagnostic: `argon2-finalize-benchmark` now builds
   with the hash diagnostics targets and times deterministic host
   `Argon2Params::finalize` loops without CUDA, local paths, hardware metadata, or
@@ -753,16 +772,16 @@ Start the next cycle from the latest clean commit and this decision tree:
 3. Run the focused Hash API tests before editing performance code.
 4. Build or reuse the clean Release CUDA binary from the configured preset.
 5. Run CUDA golden hash checks with and without `--gpu-first-blocks` before trusting benchmark data.
-6. Refresh or load the d8/b4096 generated-key CUDA GPU-first baseline with auto first-block chunking, no XUNI, warm-up `1`, repeat `3`, and zero invalid subprocesses.
-7. Refresh or load the preferred variable-`m` GPU-first sequence baseline for `difficulty_sequence=1,8,64`.
+6. Refresh or load a realistic high-difficulty generated-key CUDA GPU-first baseline with auto batch sizing, no XUNI, warm-up `1`, repeat `3`, and zero invalid subprocesses. Start with d4096, then extend toward d8192, d16384, and d32768 as memory and run time permit.
+7. Refresh or load the realistic variable-`m` GPU-first sequence baseline, for example `difficulty_sequence=4096,8192,16384`.
 8. Use detailed timing to decide whether finalization, first-block launch/compute, setup/lifecycle, transfers, or matching is the current bottleneck.
-9. If continuing directly from the latest checkpoint, try one CUDA first-block launch-geometry change in `KernelRunner::runDeviceFirstBlockKernel()` and accept only if the same d8/b4096 GPU-first benchmark and golden checks stay stable.
+9. If continuing directly from the latest checkpoint, evaluate the pending CUDA first-block launch-geometry change only against the high-difficulty baseline; revert it if high-d evidence is neutral, noisy, or regressive.
 10. If launch geometry does not help, prefer finalization isolation or variable-`m` setup/lifecycle cleanup over another rejected finalization parallelism snapshot.
 11. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
-- Tune CUDA first-block launch geometry one parameter at a time, starting with thread block size only when correctness checks and same-scenario d8/b4096 GPU-first baselines are available.
+- Tune CUDA first-block launch geometry one parameter at a time, starting with thread block size only when correctness checks and same-scenario high-difficulty GPU-first baselines show launch overhead is material.
 - Inspect finalization ownership and materialization before attempting any new parallel or device-side final hash path.
 - Reduce setup/lifecycle overhead for variable `m=diff` sequences if detailed timings show repeated difficulty changes are costing wall time.
 - Reduce generated input preparation overhead only if newer timing shows host input work has become dominant again.
@@ -1051,6 +1070,18 @@ Variable-difficulty smoke:
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --preset difficulty-sequence --seconds 2 --warmup 1 --repeat 3 --no-xuni --output .benchmarks/difficulty-sequence-smoke.json
 ```
 
+Realistic high-difficulty smoke:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --scenario name=cuda-d4096-auto-batch-gfb-smoke,backend=cuda,difficulty=4096,batch_size=0,auto_batch_size=true,gpu_first_blocks=true,first_block_dynamic_chunk_auto=true,seconds=2,warmup=1,repeat=2 --no-xuni --output .benchmarks/d4096-auto-batch-gfb-smoke.json
+```
+
+Realistic variable-difficulty smoke:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --difficulty-sequence 4096,8192,16384 --sequence-auto-batch-size --sequence-first-block-dynamic-chunk-auto --gpu-first-blocks --seconds 2 --warmup 1 --repeat 2 --no-xuni --output .benchmarks/difficulty-sequence-high-gfb-smoke.json
+```
+
 Batch scan candidate search:
 
 ```bash
@@ -1060,7 +1091,7 @@ python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --de
 Serious batch scan:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-batch-size 3072 --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/batch-scan-stable.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 8 --warmup 1 --repeat 3 --scan-difficulty 1024 --scan-difficulty 4096 --scan-difficulty 8192 --scan-difficulty 16384 --scan-batch-size 0 --scan-gpu-first-blocks --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/high-diff-batch-scan-stable.json
 ```
 
 Before/after comparison:
@@ -1100,9 +1131,9 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 
 Work through this backlog before attempting high-risk kernel rewrites:
 
-1. Maintain current local CUDA baselines under `.benchmarks/` with warm-up and repeated runs, especially d8/b4096 GPU-first and the preferred `m=diff` sequence.
-2. Preserve d8/b2048 and d8/b3072 only as historical continuity or fallback scenarios when they answer a concrete comparison question.
-3. Run stable custom batch-size scans for d1, d8, d64, and variable `m=diff` sequences before changing conservative defaults.
+1. Establish and maintain realistic high-difficulty CUDA baselines under `.benchmarks/` with warm-up and repeated runs, starting at d4096 and extending toward d8192, d16384, and d32768 as memory and run time permit.
+2. Preserve d8/b2048, d8/b3072, and d8/b4096 only as historical continuity or fallback scenarios when they answer a concrete comparison question.
+3. Run stable high-difficulty auto-batch scans and realistic variable `m=diff` sequences before changing conservative defaults.
 4. Tune CUDA first-block launch geometry with one parameter per cycle when device first-block timing is material.
 5. Isolate finalization, result ownership, base64, matching, and output materialization before trying new parallel or device-side finalization designs.
 6. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
@@ -1202,8 +1233,8 @@ When resuming a long-running `/goal` session:
 5. Run focused Hash API tests if validation is stale.
 6. Build or reuse the clean Release CUDA binary.
 7. Run CUDA golden hash checks with and without `--gpu-first-blocks`.
-8. Run a short d8 GPU-first smoke.
-9. Refresh or load the current d8/b4096 GPU-first baseline and the preferred variable-`m` sequence.
+8. Run a short low-difficulty GPU-first smoke.
+9. Refresh or load the current realistic high-difficulty GPU-first baseline and the realistic variable-`m` sequence.
 10. Choose one measurable optimization.
 11. Validate correctness.
 12. Benchmark before and after.
@@ -1215,8 +1246,8 @@ Recommended first action after this revision:
 1. Run the focused Hash API tests.
 2. Build or reuse the local CUDA binary.
 3. Run golden CUDA hash checks with and without `--gpu-first-blocks`.
-4. Run or load repeated d8/b4096 GPU-first baseline evidence.
-5. Run or load the preferred variable-`m` GPU-first sequence.
-6. If no newer evidence exists, test CUDA first-block launch geometry with a single scoped change.
+4. Run or load repeated d4096 auto-batch GPU-first baseline evidence, then extend to d8192 and d16384 if practical.
+5. Run or load a realistic variable-`m` GPU-first sequence such as d4096,d8192,d16384.
+6. If no newer evidence exists, test CUDA first-block launch geometry with a single scoped change only when the high-d baseline shows launch overhead is material.
 7. Use detailed timing breakdowns to choose between finalization, launch geometry, setup caching, allocation reuse, matching, or variable-`m` lifecycle work.
 8. Do not retry rejected pinned host staging, activation caching, salt decode, first-block lane fast paths, fixed-length base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots unless the implementation shape has materially changed.

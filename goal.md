@@ -9,7 +9,7 @@ detailed operating manual, experiment ledger, and latest evidence live in
 Use this objective when starting, resuming, or recreating the goal:
 
 ```text
-/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s=1 are fixed, the current implementation is single-lane p=1, and only m=difficulty may change between sessions. Preserve exact argon2id-xen semantics, the public Hash API contract, and reproducible benchmark evidence. Keep iterating through inspect, validate, benchmark, optimize, document, privacy-check, and commit cycles until verified same-scenario warm throughput improves by at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Work autonomously without approval prompts except for the stop conditions in this file. Keep code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet/private data, local hardware identifiers, or local GPU model names.
+/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s=1 are fixed, the current implementation is single-lane p=1, and only m=difficulty may change between sessions. Primary performance benchmarks must target realistic memory-cost difficulty values in the thousands to tens of thousands; use tiny difficulty values only as correctness, smoke, and harness checks. Preserve exact argon2id-xen semantics, the public Hash API contract, and reproducible benchmark evidence. Keep iterating through inspect, validate, benchmark, optimize, document, privacy-check, and commit cycles until verified same-scenario warm throughput improves by at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Work autonomously without approval prompts except for the stop conditions in this file. Keep code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, wallet/private data, local hardware identifiers, or local GPU model names.
 ```
 
 If `/goal` is already active and points at this repository's hash optimization
@@ -31,6 +31,9 @@ The workload is narrow by design:
 - `s = 1` is fixed.
 - `p = 1` / single-lane execution is fixed as represented by the current code.
 - `m = difficulty` / `diff` is the only workload parameter expected to change.
+- Real mining `m = diff` is expected to be in the thousands to tens of
+  thousands. Treat low values such as `1`, `8`, and `64` as smoke tests and
+  diagnostic harness checks, not as the main optimization target.
 
 The primary metric is warm steady-state generated-key CUDA attempts per second
 for the same Hash API scenario. Secondary metrics are median milliseconds per
@@ -82,9 +85,13 @@ short state below is only the resume snapshot.
   and automatic first-block chunk selection where supported.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
-  benchmark trust, and zero invalid subprocesses.
-- d1 and d64 tuning remain separate from d8. Do not generalize the local d8
-  batch-size result to all GPU classes without confirmation.
+  benchmark trust, and zero invalid subprocesses. This is low-difficulty
+  evidence and must not be treated as representative of the real high-memory
+  workload.
+- d1, d8, and d64 tuning remain smoke and continuity evidence. Do not accept a
+  performance change for the real mining goal unless it is also validated on a
+  realistic high `m=diff` scenario or the change is explicitly
+  measurement-only.
 - The recent `Blake2b` / `digestLong` one-shot prefix experiment was rejected
   because it preserved correctness but regressed d8 GPU-first throughput in a
   same-scenario smoke. Do not keep or retry that exact shape.
@@ -163,6 +170,8 @@ Baseline selection:
 - use the earliest trustworthy machine-readable CUDA benchmark for the same
   scenario after Hash API extraction
 - if no trustworthy report exists, create a new baseline and document it
+- prefer realistic memory-cost `m=diff` values in the thousands to tens of
+  thousands for goal progress; low-difficulty reports are smoke evidence only
 - keep raw reports ignored under `.benchmarks/` or `benchmark-results/`
 
 Best result selection:
@@ -207,8 +216,10 @@ Default resume sequence:
 7. Run focused correctness tests when code changed or validation is stale.
 8. Build or reuse a clean Release CUDA binary.
 9. Run CUDA golden-hash checks before trusting CUDA benchmarks.
-10. Refresh or load the current d8 generated-key CUDA GPU-first baseline.
-11. Refresh or load the preferred variable-`m` sequence baseline.
+10. Refresh or load the current realistic high-difficulty generated-key CUDA
+    GPU-first baseline.
+11. Refresh or load a realistic variable-`m` sequence baseline in the thousands
+    to tens-of-thousands range.
 12. Pick exactly one measurable bottleneck.
 13. Make the smallest useful source, test, benchmark, or docs change.
 14. Re-run focused validation.
@@ -237,8 +248,9 @@ Choose the next step in this order:
    rejected experiment, a user change, or an unrelated local artifact.
 2. If correctness validation is stale, run focused tests and golden CUDA checks.
 3. If the binary changed, rebuild before benchmarking.
-4. If no trustworthy current baseline exists, run a short smoke and then a stable
-   d8 generated-key CUDA GPU-first baseline.
+4. If no trustworthy current baseline exists, run a short low-difficulty smoke
+   for safety and then create a stable realistic high-difficulty generated-key
+   CUDA GPU-first baseline.
 5. If benchmark results are noisy or invalid, improve measurement quality or rerun
    a narrower scenario before changing performance code.
 6. If `argon2_finalize_ms` or `finalize_ms` dominates after GPU-first first-block
@@ -285,16 +297,22 @@ Rs/bYUkZR8dczsQh/KvLAyJGThm8HtjnIJVJEkldK+TQtBLdGf2tULquitejKRO7URrkbgieR7Sq42k5
 Also run the same golden check with `--gpu-first-blocks` after CUDA backend or
 GPU-first changes.
 
-Short d8 GPU-first smoke:
+Short low-difficulty GPU-first smoke:
 
 ```bash
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --scenario name=cuda-d8-auto-batch-gfb-smoke,backend=cuda,difficulty=8,batch_size=0,auto_batch_size=true,gpu_first_blocks=true,first_block_dynamic_chunk_auto=true,seconds=2,warmup=1,repeat=2 --no-xuni --output .benchmarks/d8-auto-batch-gfb-smoke.json
 ```
 
-Preferred variable-`m` smoke:
+Preferred realistic high-difficulty smoke:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --difficulty-sequence 1,8,64 --sequence-auto-batch-size --sequence-first-block-dynamic-chunk-auto --gpu-first-blocks --seconds 2 --warmup 1 --repeat 2 --no-xuni --output .benchmarks/difficulty-sequence-gfb-smoke.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --scenario name=cuda-d4096-auto-batch-gfb-smoke,backend=cuda,difficulty=4096,batch_size=0,auto_batch_size=true,gpu_first_blocks=true,first_block_dynamic_chunk_auto=true,seconds=2,warmup=1,repeat=2 --no-xuni --output .benchmarks/d4096-auto-batch-gfb-smoke.json
+```
+
+Preferred realistic variable-`m` smoke:
+
+```bash
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --difficulty-sequence 4096,8192,16384 --sequence-auto-batch-size --sequence-first-block-dynamic-chunk-auto --gpu-first-blocks --seconds 2 --warmup 1 --repeat 2 --no-xuni --output .benchmarks/difficulty-sequence-gfb-smoke.json
 ```
 
 Stable comparison rules:
@@ -436,9 +454,9 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 2. Run focused Hash API tests.
 3. Build or reuse the clean Release CUDA binary.
 4. Run CUDA golden hashes with and without `--gpu-first-blocks`.
-5. Run a short d8 auto-batch GPU-first smoke.
-6. Run or load a stable d8 auto-batch GPU-first baseline.
-7. Run or load a preferred variable-`m` GPU-first sequence baseline.
+5. Run a short low-difficulty auto-batch GPU-first smoke.
+6. Run or load a stable realistic high-difficulty auto-batch GPU-first baseline.
+7. Run or load a realistic variable-`m` GPU-first sequence baseline.
 8. Use detailed timing to confirm whether finalization, input/first-block work,
    setup, or CUDA compute dominates now.
 9. Pick one bottleneck and one implementation shape.
