@@ -20,6 +20,74 @@ Suggested `/goal` objective:
 Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed s=1, current single-lane p=1, and only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
 ```
 
+## Current Control Summary
+
+Read this section first after every resume. The experiment ledger below preserves
+older evidence; when an older "current state" bullet conflicts with this summary,
+this summary is the newer control point.
+
+The goal is active and should keep running autonomous optimization cycles. Do not
+ask for approval for routine inspection, tests, builds, benchmarks, source edits,
+documentation edits, privacy checks, or small validated commits.
+
+Current confirmed architecture state:
+
+- Hash API extraction is complete enough for isolated optimization.
+- The current automation surface is the CLI Hash API: `hash-one`, `hash-batch`,
+  and `hash-benchmark`. This is not a hosted HTTP API, websocket API, frontend
+  API, marketplace API, wallet flow, or full platform API.
+- Miner-generated CUDA requests use the validated GPU first-block path and the
+  automatic first-block chunk policy where supported.
+- Benchmark automation supports fixed difficulty, variable `m=diff` sequences,
+  automatic batch sizing, GPU first blocks, first-block dynamic chunk policy,
+  detailed timings, report-quality checks, and before/after comparison.
+- The Hash API boundary should remain independent of frontend, marketplace,
+  wallet, settlement, auth, lease, and devfee code unless a narrow integration
+  fix is required.
+
+Latest public-safe performance checkpoint:
+
+- For generated-key CUDA d8 with GPU first blocks, auto batch selection, automatic
+  first-block dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal
+  benchmark trust, the best current local candidate is batch size `4096` at about
+  `196.86k H/s` median with `1.95%` spread and zero invalid subprocesses.
+- The same local scan saw batch size `3072` at about `191.19k H/s` median with
+  `3.15%` spread. Keep b3072 as a nearby fallback candidate, not the current d8
+  winner.
+- d1 and d64 keep their separate tuning evidence. Do not generalize the d8/b4096
+  result to every difficulty or GPU class without confirmation.
+- The current post-GPU-first bottleneck should be rechecked with detailed timing,
+  but recent evidence points toward CPU finalization and remaining host-side
+  overhead, especially `argon2_finalize_ms`, more than first-block preparation.
+
+Current rejected experiment checkpoint:
+
+- The uncommitted `Blake2b::updateWithUint32Prefix` / `Argon2Params::digestLong`
+  one-shot length-prefix experiment preserved focused tests, the Blake2b copy
+  self-test, Release CUDA build, and CUDA golden hashes, but regressed the d8
+  auto-batch GPU-first smoke from about `196.81k H/s` median to about
+  `179.40k H/s` median. The source experiment was reverted. Do not retry this
+  exact one-shot prefix update shape.
+- The rejected `gpu_final_hashes` experiment must stay rejected unless final hash
+  output ownership, synchronization, and subprocess teardown stability are
+  materially redesigned and repeated wrapper benchmarks pass with zero invalid
+  subprocesses.
+
+Next cycle:
+
+1. Confirm the worktree is clean or classify dirty files.
+2. Run focused Hash API tests if validation is stale.
+3. Build or reuse a clean Release CUDA binary.
+4. Run CUDA golden hashes with and without `--gpu-first-blocks`.
+5. Run a short d8 auto-batch GPU-first smoke.
+6. Refresh or load the stable d8 auto-batch GPU-first baseline.
+7. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
+8. Use detailed timing to pick exactly one bottleneck.
+9. Prefer finalization isolation, result ownership cleanup, setup/lifecycle
+   cleanup for variable `m=diff`, or a measured CUDA backend bottleneck over
+   another keygen-only or one-shot prefix micro-optimization.
+10. Validate, benchmark, document, privacy-check, commit, and continue.
+
 ## Current State Snapshot
 
 The reusable Hash API extraction is already in place. The optimization work should build on it instead of going back to the platform monolith.
