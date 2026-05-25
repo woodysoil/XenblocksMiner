@@ -106,9 +106,17 @@ Latest important resume facts:
 - The branch can be ahead of the remote during autonomous work. Ahead commits are
   retained local progress unless the user explicitly asks to squash, push, reorder,
   or rewrite history.
-- Many earlier optimization commits are still visible in the normal git log; an
-  `ahead 1` status means only the final local commit is currently ahead of the
-  tracked remote, not that earlier work disappeared.
+- Many earlier optimization commits are still visible in the normal git log. An
+  `ahead N` status only reports commits ahead of the tracked remote; it does not
+  mean previous local work disappeared.
+- The current resume state may include an uncommitted `gpu_final_hashes`
+  experiment. Treat it as unstable until proven otherwise. It preserved golden-hash
+  correctness in early checks and produced very high valid-sample throughput, but
+  repeated benchmark subprocesses exited with an access-violation status. Do not
+  accept, document as successful, or enable it by default unless focused tests,
+  CUDA golden hashes, and repeated wrapper benchmarks all pass with zero invalid
+  subprocesses. If no small lifecycle fix is found, revert only that experiment,
+  record the rejected evidence in `docs/HASH_OPTIMIZATION_GOAL.md`, and continue.
 - Current miner-equivalent d8 tuning evidence favors generated CUDA batches around
   b3072 with automatic first-block dynamic chunk selection, while d8/b2048 remains
   an important continuity scenario for historical comparisons.
@@ -226,24 +234,28 @@ At the start of each autonomous cycle, choose the next step by this order:
 
 1. If the worktree is dirty, identify whether it is previous-agent work, a rejected
    experiment, a user change, or an unrelated local artifact.
-2. If correctness validation is stale or the binary changed, run focused tests and
+2. If dirty work is the known `gpu_final_hashes` experiment, first decide whether
+   it can be stabilized with a small resource-lifetime or synchronization fix. If
+   not, revert only that experiment and preserve a public-safe rejected-experiment
+   note.
+3. If correctness validation is stale or the binary changed, run focused tests and
    the CUDA golden hash check first.
-3. If no trustworthy current baseline exists, run or load the d8 generated-key CUDA
+4. If no trustworthy current baseline exists, run or load the d8 generated-key CUDA
    continuity baseline.
-4. If benchmark results are noisy, improve measurement quality or rerun a narrower
+5. If benchmark results are noisy, improve measurement quality or rerun a narrower
    scenario before changing performance code.
-5. If `input_ms` or `first_block_ms` dominates, target generated input,
+6. If `input_ms` or `first_block_ms` dominates, target generated input,
    salt/key materialization, and Argon2 first-block preparation.
-6. If setup or lifecycle cost dominates, target Hash API/CUDA backend lifetime,
+7. If setup or lifecycle cost dominates, target Hash API/CUDA backend lifetime,
    difficulty-derived setup, validation, device selection, or allocation churn.
-7. If CUDA compute, transfer, or launch timing dominates, target CUDA memory,
+8. If CUDA compute, transfer, or launch timing dominates, target CUDA memory,
    launch geometry, occupancy, streams, or transfer overlap with profiler-backed
    evidence.
-8. If finalization dominates, isolate argon2 finalization, base64, matching, and
+9. If finalization dominates, isolate argon2 finalization, base64, matching, and
    result collection before changing ownership or threading.
-9. If stable manual settings repeatedly beat defaults, add conservative autotuning
+10. If stable manual settings repeatedly beat defaults, add conservative autotuning
    based on public device properties and measured stability.
-10. If same-difficulty gains flatten, validate variable `m=diff` sequences before
+11. If same-difficulty gains flatten, validate variable `m=diff` sequences before
     choosing another fixed-`m` change.
 
 Avoid broad rewrites unless smaller measured changes are blocked by the current
@@ -471,26 +483,29 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 1. Run `git status -sb`.
 2. If the worktree is dirty, classify the changes before editing. Continue useful
    previous-agent work; do not overwrite unrelated user work.
-3. Confirm recent commits and privacy state.
-4. Run focused Hash API unit tests.
-5. Build or reuse the clean Release CUDA binary.
-6. Run the golden CUDA hash check.
-7. Run a short main-target CUDA benchmark.
-8. Refresh or load the d8 generated-key CUDA continuity baseline.
-9. Refresh or load the preferred variable-`m` sequence baseline.
-10. Use detailed timings to choose one Track C or Track D step.
-11. Prefer first-block digest/preparation structure, generated input
+3. If the dirty state is the `gpu_final_hashes` experiment, either stabilize it
+   with a narrow lifecycle/synchronization fix and prove zero invalid subprocesses,
+   or revert that experiment and document it as rejected.
+4. Confirm recent commits and privacy state.
+5. Run focused Hash API unit tests.
+6. Build or reuse the clean Release CUDA binary.
+7. Run the golden CUDA hash check.
+8. Run a short main-target CUDA benchmark.
+9. Refresh or load the d8 generated-key CUDA continuity baseline.
+10. Refresh or load the preferred variable-`m` sequence baseline.
+11. Use detailed timings to choose one Track C or Track D step.
+12. Prefer first-block digest/preparation structure, generated input
     materialization, setup/lifecycle cleanup, variable-`m` lifecycle reuse, or
     carefully isolated finalization diagnostics over more keygen-only work.
-12. Do not retry rejected salt caching, decoded salt caching, activation caching,
+13. Do not retry rejected salt caching, decoded salt caching, activation caching,
     pinned host staging, runner-cache shapes, first-block lane fast paths,
     digestLong specializations, `_rotr64`, fixed-64-byte base64 fast path, initial
     hash prefix cache, indexed key-generation fill, or broad finalization
     parallelism unless the implementation shape materially changes.
-13. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected
+14. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected
     evidence.
-14. Commit validated slices with English messages and no private local details.
-15. Continue immediately to the next loop until a stop condition or completion
+15. Commit validated slices with English messages and no private local details.
+16. Continue immediately to the next loop until a stop condition or completion
     rule is reached.
 
 The next agent should make measurable progress instead of restating this plan.
