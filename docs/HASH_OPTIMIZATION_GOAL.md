@@ -76,6 +76,12 @@ Current rejected experiment checkpoint:
   experiment was reverted. Do not retry this allocation-only finalization shape
   unless result ownership, output materialization, and benchmark stability are
   redesigned together.
+- The final-hash Blake2b prefix-state cache experiment was rejected by the fast
+  correctness gate. It reused a prepared `digestLong` output-length prefix state
+  for `Argon2Params::finalize`, but the finalization diagnostic and both CUDA
+  golden hash commands exited without JSON. The source experiment was reverted,
+  and the diagnostic plus CUDA golden checks passed again after rebuilding. Do
+  not retry this exact final-prefix cache shape.
 - The rejected `gpu_final_hashes` experiment must stay rejected unless final hash
   output ownership, synchronization, and subprocess teardown stability are
   materially redesigned and repeated wrapper benchmarks pass with zero invalid
