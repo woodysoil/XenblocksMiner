@@ -20,6 +20,12 @@ the runtime handle and this file as the stronger local contract.
 Continuously reduce the time required to complete each valid Hash API CUDA hash
 attempt.
 
+This is a throughput-first long-running optimization goal. The agent should keep
+running measurable optimization cycles instead of treating this file as a static
+planning document. Each cycle must either improve verified throughput, improve
+the measurement/validation system needed for throughput work, document a rejected
+experiment that prevents repeated waste, or identify an evidence-backed plateau.
+
 The workload is intentionally narrow:
 
 - `t = 1` is fixed.
@@ -27,6 +33,11 @@ The workload is intentionally narrow:
 - `p = 1` / single-lane execution is fixed as represented by the current code.
 - `m = difficulty` / `diff` is the only expected workload parameter that may
   change between benchmark or mining sessions.
+
+The primary metric is warm steady-state valid hash attempts per second for the
+same Hash API scenario. Secondary metrics are median milliseconds per valid hash,
+stage-level wall-time percentages, and correctness-preserving portability across
+CUDA-capable local GPUs, RTX 3050-class GPUs, and higher-end CUDA GPUs.
 
 Optimize the current CUDA-capable local GPU first, but keep the architecture
 portable to RTX 3050-class and higher-end CUDA GPUs. Use public device
@@ -36,6 +47,11 @@ evidence instead of local machine assumptions.
 The aspirational target is a verified 1000% throughput improvement over the
 selected same-scenario baseline. If that target is not reachable on the current
 GPU, continue until profiler or benchmark evidence supports a practical plateau.
+
+The agent should prefer changes that shorten the end-to-end time for fixed
+`t=1`, fixed `s=1`, current `p=1`, and changing `m=diff`; do not spend cycles on
+features that only make the platform broader without making this hash path faster
+or easier to optimize.
 
 ## Scope
 
@@ -157,6 +173,23 @@ Normal optimization cycles must not ask for approval. The agent may autonomously
 
 Stop only for the stop conditions in this file.
 
+Run as an autonomous loop:
+
+```text
+inspect -> validate -> benchmark -> change one thing -> validate -> benchmark -> decide -> document -> commit -> repeat
+```
+
+Do not wait for user approval between loop iterations. If a command fails, reduce
+the scope and continue with the smallest diagnostic or corrective step that keeps
+the goal moving. If an experiment regresses or becomes unstable, either revert
+only that experiment or record the rejected evidence when the result is useful for
+future agents. Avoid leaving half-finished dirty changes across iterations.
+
+Each performance iteration must have one hypothesis, one changed implementation
+shape, and one same-scenario before/after comparison. Measurement-only iterations
+may skip a speed claim, but they must improve benchmark quality, correctness
+confidence, or future optimization choice.
+
 Default continuation turn:
 
 1. Read `goal.md`.
@@ -215,6 +248,72 @@ At the start of each autonomous cycle, choose the next step by this order:
 
 Avoid broad rewrites unless smaller measured changes are blocked by the current
 structure.
+
+## Optimization Tracks
+
+Use these tracks to keep long-running work organized. Pick exactly one track per
+cycle unless a narrow validation fix is required.
+
+### Track A: Measurement Integrity
+
+- keep benchmarks repeatable with warm-up, repeated samples, median-first
+  summaries, spread reporting, and invalid-run rejection
+- keep raw artifacts ignored and public-safe summaries committed only when useful
+- add timing fields only when they clarify the next optimization decision
+- prefer sanitized benchmark metadata over local paths, hostnames, or hardware
+  identifiers
+
+### Track B: Hash API Architecture
+
+- keep the reusable hash core independent from frontend, marketplace, wallet,
+  settlement, and hosted platform concerns
+- preserve stable CLI entrypoints for `hash-one`, `hash-batch`, and
+  `hash-benchmark`
+- make backend lifetime, request validation, difficulty-derived setup, and result
+  formatting separable so future optimizations can target one cost at a time
+- keep the public contract strict enough for AI agents to compare correctness
+  across experiments
+
+### Track C: Generated Input And First-Block Preparation
+
+- target CPU-side input generation, salt/key materialization, first-block
+  preparation, digest expansion, and scheduling overhead while `input_ms` and
+  `first_block_ms` dominate
+- preserve exact generated attempt indexing and salt/key semantics
+- avoid retrying rejected cache or lane-specialization experiments unless the
+  implementation shape has materially changed
+- use detailed timing only for diagnosis; confirm speed claims with normal
+  benchmark mode when possible
+
+### Track D: CUDA Backend And Memory Lifecycle
+
+- target allocation churn, device/host buffer reuse, setup reuse, launch geometry,
+  transfer overlap, and occupancy only when timing evidence points there
+- keep GPU-specific behavior guarded by public device properties and safe
+  fallbacks
+- prefer runtime tuning and conservative defaults over hard-coded local machine
+  assumptions
+- run golden-hash correctness checks before trusting CUDA benchmark results
+
+### Track E: Variable `m=diff` Readiness
+
+- validate both fixed-difficulty and variable-difficulty sequences because only
+  `m` is expected to change between sessions
+- compare same-`m` warm loops against `difficulty_sequence` runs to isolate setup
+  and lifecycle costs
+- keep sequence batch sizing and first-block dynamic chunk selection measurable
+- do not optimize only a single fixed `m` if the change harms variable-`m`
+  behavior without evidence-backed justification
+
+### Track F: Portability And Autotuning
+
+- prepare for RTX 3050-class and higher-end CUDA GPUs using compute capability,
+  memory size, runtime device properties, and measured tuning profiles
+- keep autotuning optional, reproducible, and outside measured steady-state timing
+- cache only public-safe tuning facts, never local paths or private hardware
+  identifiers
+- document tuning decisions as portable rules, not as facts about one private
+  workstation
 
 ## Standard Validation
 
@@ -370,23 +469,28 @@ cycles.
 Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 
 1. Run `git status -sb`.
-2. Confirm recent commits and privacy state.
-3. Run focused Hash API unit tests.
-4. Build or reuse the clean Release CUDA binary.
-5. Run the golden CUDA hash check.
-6. Run a short main-target CUDA benchmark.
-7. Refresh or load the d8 generated-key CUDA continuity baseline.
-8. Refresh or load the preferred variable-`m` sequence baseline.
-9. Use detailed timings to choose one Track C or Track D step.
-10. Prefer first-block digest/preparation structure, generated input
-    materialization, setup/lifecycle cleanup, or carefully isolated finalization
-    diagnostics over more keygen-only work.
-11. Do not retry rejected salt caching, decoded salt caching, activation caching,
+2. If the worktree is dirty, classify the changes before editing. Continue useful
+   previous-agent work; do not overwrite unrelated user work.
+3. Confirm recent commits and privacy state.
+4. Run focused Hash API unit tests.
+5. Build or reuse the clean Release CUDA binary.
+6. Run the golden CUDA hash check.
+7. Run a short main-target CUDA benchmark.
+8. Refresh or load the d8 generated-key CUDA continuity baseline.
+9. Refresh or load the preferred variable-`m` sequence baseline.
+10. Use detailed timings to choose one Track C or Track D step.
+11. Prefer first-block digest/preparation structure, generated input
+    materialization, setup/lifecycle cleanup, variable-`m` lifecycle reuse, or
+    carefully isolated finalization diagnostics over more keygen-only work.
+12. Do not retry rejected salt caching, decoded salt caching, activation caching,
     pinned host staging, runner-cache shapes, first-block lane fast paths,
     digestLong specializations, `_rotr64`, fixed-64-byte base64 fast path, initial
     hash prefix cache, indexed key-generation fill, or broad finalization
     parallelism unless the implementation shape materially changes.
-12. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected
+13. Keep `docs/HASH_OPTIMIZATION_GOAL.md` updated with accepted and rejected
     evidence.
+14. Commit validated slices with English messages and no private local details.
+15. Continue immediately to the next loop until a stop condition or completion
+    rule is reached.
 
 The next agent should make measurable progress instead of restating this plan.
