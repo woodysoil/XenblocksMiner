@@ -7,6 +7,8 @@
 #if defined(XENBLOCKS_BUILD_MINER)
 #include "CudaHashBackend.h"
 #include "../CudaBackend.h"
+#include "../CudaException.h"
+#include <cuda_runtime.h>
 #endif
 
 #include <algorithm>
@@ -298,6 +300,25 @@ std::unique_ptr<IHashBackend> makeReusableBackend(const HashApiRequest& request)
     return std::make_unique<CpuHashBackend>();
 }
 
+#if defined(XENBLOCKS_BUILD_MINER)
+std::size_t queryCudaFreeMemory(int device_id)
+{
+    int previous_device = 0;
+    const cudaError_t current_result = cudaGetDevice(&previous_device);
+    const bool has_previous_device = current_result == cudaSuccess;
+
+    CudaException::check(cudaSetDevice(device_id));
+    std::size_t free_memory = 0;
+    std::size_t total_memory = 0;
+    CudaException::check(cudaMemGetInfo(&free_memory, &total_memory));
+
+    if (has_previous_device && previous_device != device_id) {
+        CudaException::check(cudaSetDevice(previous_device));
+    }
+    return free_memory;
+}
+#endif
+
 std::size_t selectAutomaticCudaBatchSize(const HashApiRequest& request,
                                          const std::vector<std::uint32_t>& difficulty_sequence,
                                          std::size_t explicit_max_batch_size)
@@ -306,9 +327,7 @@ std::size_t selectAutomaticCudaBatchSize(const HashApiRequest& request,
         throw std::runtime_error("--auto-batch-size is only supported with --backend cuda");
     }
 #if defined(XENBLOCKS_BUILD_MINER)
-    CudaBackend backend(request.device_id);
-    backend.activate();
-    const std::size_t free_memory = backend.getFreeMemory();
+    const std::size_t free_memory = queryCudaFreeMemory(request.device_id);
     const auto decision = difficulty_sequence.empty()
         ? selectCudaBatchSize(free_memory, request.difficulty, explicit_max_batch_size)
         : selectCudaBatchSizeForDifficultySequence(free_memory, difficulty_sequence, explicit_max_batch_size);
