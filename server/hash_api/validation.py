@@ -84,5 +84,7 @@ def validate_hash_payload(payload: dict[str, Any], require_key: bool = False) ->
     if device_id < 0:
         errors.append("device_id must be non-negative")
 
-    return errors
+    if payload.get("gpu_first_blocks") and backend != "cuda":
+        errors.append("gpu_first_blocks requires backend=cuda")
 
+    return errors

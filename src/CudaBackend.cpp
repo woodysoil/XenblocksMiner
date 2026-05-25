@@ -57,6 +57,23 @@ const void* CudaBackend::getOutputMemory(size_t jobId) const
 	return runner_->getOutputMemory(jobId);
 }
 
+bool CudaBackend::prepareInputBlocksOnDevice(const std::vector<std::string>& passwords,
+                                             const std::vector<std::uint8_t>& saltBytes,
+                                             std::uint32_t outputLength,
+                                             std::uint32_t memoryCost,
+                                             std::uint32_t timeCost,
+                                             std::uint32_t version,
+                                             std::uint32_t type,
+                                             std::uint32_t lanes)
+{
+	if (runner_ == nullptr) {
+		return false;
+	}
+	return runner_->prepareInputBlocksOnDevice(passwords, saltBytes, outputLength,
+	                                          memoryCost, timeCost, version,
+	                                          type, lanes);
+}
+
 void CudaBackend::run()
 {
 	runner_->run();
@@ -70,6 +87,11 @@ float CudaBackend::finish()
 float CudaBackend::getLastHostToDeviceMs() const
 {
 	return runner_ == nullptr ? 0.0f : runner_->getLastHostToDeviceMs();
+}
+
+float CudaBackend::getLastGpuFirstBlockMs() const
+{
+	return runner_ == nullptr ? 0.0f : runner_->getLastGpuFirstBlockMs();
 }
 
 float CudaBackend::getLastDeviceToHostMs() const

@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace hashapi {
 namespace {
@@ -102,6 +103,32 @@ std::size_t recommendedFirstBlockDynamicChunkSize(const HashApiRequest& request,
         return attempts <= 2048 ? 16 : 0;
     }
     return 0;
+}
+
+std::uint8_t decodeHexNibble(char value)
+{
+    if (value >= '0' && value <= '9') {
+        return static_cast<std::uint8_t>(value - '0');
+    }
+    if (value >= 'a' && value <= 'f') {
+        return static_cast<std::uint8_t>(value - 'a' + 10);
+    }
+    if (value >= 'A' && value <= 'F') {
+        return static_cast<std::uint8_t>(value - 'A' + 10);
+    }
+    throw std::invalid_argument("salt contains non-hex character");
+}
+
+std::vector<std::uint8_t> decodeHexBytes(const std::string& hex)
+{
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(hex.size() / 2);
+    for (std::size_t i = 0; i < hex.size(); i += 2) {
+        const std::uint8_t high = decodeHexNibble(hex[i]);
+        const std::uint8_t low = decodeHexNibble(hex[i + 1]);
+        bytes.push_back(static_cast<std::uint8_t>((high << 4) | low));
+    }
+    return bytes;
 }
 
 void fillPasswordBlocks(ComputeBackend& backend,
@@ -269,6 +296,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
     result.backend = "cuda";
     result.device_id = request.device_id;
     result.batch_size = request.batch_size;
+    result.gpu_first_blocks = request.gpu_first_blocks;
 
     const auto validation_start = std::chrono::steady_clock::now();
     const auto errors = validateRequest(request);
@@ -354,7 +382,33 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         password_storage_.clear();
         password_storage_.reserve(attempts);
 
-        if (result.first_block_worker_count <= 1) {
+        if (request.gpu_first_blocks) {
+            const auto keygen_start = std::chrono::steady_clock::now();
+            if (single_key) {
+                password_storage_.push_back(fixed_key);
+            } else {
+                RandomHexKeyGenerator key_generator(prefix, kHashApiKeyLength);
+                for (std::size_t i = 0; i < attempts; ++i) {
+                    password_storage_.push_back(key_generator.nextRandomKey());
+                }
+            }
+            result.timings.keygen_ms = elapsedMillis(keygen_start, std::chrono::steady_clock::now());
+
+            const auto device_first_block_start = std::chrono::steady_clock::now();
+            const auto salt_bytes = decodeHexBytes(salt);
+            if (!compute_backend.prepareInputBlocksOnDevice(password_storage_,
+                                                            salt_bytes,
+                                                            params.getOutputLength(),
+                                                            params.getMemoryCost(),
+                                                            params.getTimeCost(),
+                                                            params.getVersion(),
+                                                            params.getType(),
+                                                            params.getLanes())) {
+                throw std::runtime_error("cuda backend does not support gpu_first_blocks");
+            }
+            result.timings.first_block_ms += elapsedMillis(device_first_block_start,
+                                                           std::chrono::steady_clock::now());
+        } else if (result.first_block_worker_count <= 1) {
             if (single_key) {
                 const auto keygen_start = std::chrono::steady_clock::now();
                 password_storage_.push_back(fixed_key);
@@ -411,6 +465,7 @@ HashApiResult CudaHashBackend::runBatch(const HashApiRequest& request)
         compute_backend.run();
         result.timings.kernel_ms = static_cast<double>(compute_backend.finish());
         result.timings.host_to_device_ms = static_cast<double>(compute_backend.getLastHostToDeviceMs());
+        result.timings.gpu_first_block_ms = static_cast<double>(compute_backend.getLastGpuFirstBlockMs());
         result.timings.device_to_host_ms = static_cast<double>(compute_backend.getLastDeviceToHostMs());
         result.timings.compute_ms = elapsedMillis(compute_start, std::chrono::steady_clock::now());
 

@@ -5,7 +5,11 @@
 
 #include "kernelrunner.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
+#include <vector>
 
 #include "CudaException.h"
 
@@ -19,6 +23,10 @@
 #define ARGON2_BLOCK_SIZE 1024
 #define ARGON2_QWORDS_IN_BLOCK (ARGON2_BLOCK_SIZE / 8)
 #define ARGON2_SYNC_POINTS 4
+#define ARGON2_PREHASH_DIGEST_LENGTH 64
+#define ARGON2_PREHASH_SEED_LENGTH 72
+#define BLAKE2B_BLOCK_BYTES 128
+#define BLAKE2B_OUT_BYTES 64
 
 #define THREADS_PER_LANE 32
 #define QWORDS_PER_THREAD (ARGON2_QWORDS_IN_BLOCK / 32)
@@ -47,6 +55,41 @@ __device__ __forceinline__ uint64_t u64_shuffle(uint64_t v, uint32_t thread_src)
     return ((uint64_t)hi << 32) | lo;
 }
 
+__device__ __forceinline__ void device_store32(void* dst, uint32_t v)
+{
+    uint8_t* out = static_cast<uint8_t*>(dst);
+    out[0] = static_cast<uint8_t>(v);
+    out[1] = static_cast<uint8_t>(v >> 8);
+    out[2] = static_cast<uint8_t>(v >> 16);
+    out[3] = static_cast<uint8_t>(v >> 24);
+}
+
+__device__ __forceinline__ void device_store64(void* dst, uint64_t v)
+{
+    uint8_t* out = static_cast<uint8_t*>(dst);
+    out[0] = static_cast<uint8_t>(v);
+    out[1] = static_cast<uint8_t>(v >> 8);
+    out[2] = static_cast<uint8_t>(v >> 16);
+    out[3] = static_cast<uint8_t>(v >> 24);
+    out[4] = static_cast<uint8_t>(v >> 32);
+    out[5] = static_cast<uint8_t>(v >> 40);
+    out[6] = static_cast<uint8_t>(v >> 48);
+    out[7] = static_cast<uint8_t>(v >> 56);
+}
+
+__device__ __forceinline__ uint64_t device_load64(const void* src)
+{
+    const uint8_t* in = static_cast<const uint8_t*>(src);
+    return static_cast<uint64_t>(in[0]) |
+           (static_cast<uint64_t>(in[1]) << 8) |
+           (static_cast<uint64_t>(in[2]) << 16) |
+           (static_cast<uint64_t>(in[3]) << 24) |
+           (static_cast<uint64_t>(in[4]) << 32) |
+           (static_cast<uint64_t>(in[5]) << 40) |
+           (static_cast<uint64_t>(in[6]) << 48) |
+           (static_cast<uint64_t>(in[7]) << 56);
+}
+
 struct __align__(16) block_g {
     uint64_t data[ARGON2_QWORDS_IN_BLOCK];
 };
@@ -58,6 +101,13 @@ struct __align__(16) block_l {
 
 struct __align__(32) block_th {
     uint64_t a, b, c, d;
+};
+
+struct Blake2bDeviceState {
+    uint64_t h[8];
+    uint64_t t[2];
+    uint8_t buf[BLAKE2B_BLOCK_BYTES];
+    uint32_t buf_len;
 };
 
 __device__ __forceinline__ uint64_t cmpeq_mask(uint32_t test, uint32_t ref)
@@ -164,6 +214,238 @@ __device__ void block_l_load_xor(struct block_th* dst,
 __device__ uint64_t rotr64(uint64_t x, uint32_t n)
 {
     return (x >> n) | (x << (64 - n));
+}
+
+__device__ __constant__ uint64_t blake2b_iv_device[8] = {
+    UINT64_C(0x6a09e667f3bcc908), UINT64_C(0xbb67ae8584caa73b),
+    UINT64_C(0x3c6ef372fe94f82b), UINT64_C(0xa54ff53a5f1d36f1),
+    UINT64_C(0x510e527fade682d1), UINT64_C(0x9b05688c2b3e6c1f),
+    UINT64_C(0x1f83d9abfb41bd6b), UINT64_C(0x5be0cd19137e2179)
+};
+
+__device__ __constant__ uint8_t blake2b_sigma_device[12][16] = {
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+    {14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3},
+    {11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4},
+    {7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8},
+    {9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13},
+    {2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9},
+    {12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11},
+    {13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10},
+    {6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5},
+    {10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+    {14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3},
+};
+
+__device__ __forceinline__ uint64_t device_blake_rotr64(uint64_t x, uint32_t n)
+{
+    return (x >> n) | (x << (64 - n));
+}
+
+__device__ __forceinline__ void device_blake_g(
+    const uint64_t* m, uint32_t r, uint32_t i,
+    uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d)
+{
+    a = a + b + m[blake2b_sigma_device[r][2 * i + 0]];
+    d = device_blake_rotr64(d ^ a, 32);
+    c = c + d;
+    b = device_blake_rotr64(b ^ c, 24);
+    a = a + b + m[blake2b_sigma_device[r][2 * i + 1]];
+    d = device_blake_rotr64(d ^ a, 16);
+    c = c + d;
+    b = device_blake_rotr64(b ^ c, 63);
+}
+
+__device__ __forceinline__ void device_blake_round(uint64_t* m, uint64_t* v, uint32_t r)
+{
+    device_blake_g(m, r, 0, v[0], v[4], v[8], v[12]);
+    device_blake_g(m, r, 1, v[1], v[5], v[9], v[13]);
+    device_blake_g(m, r, 2, v[2], v[6], v[10], v[14]);
+    device_blake_g(m, r, 3, v[3], v[7], v[11], v[15]);
+    device_blake_g(m, r, 4, v[0], v[5], v[10], v[15]);
+    device_blake_g(m, r, 5, v[1], v[6], v[11], v[12]);
+    device_blake_g(m, r, 6, v[2], v[7], v[8], v[13]);
+    device_blake_g(m, r, 7, v[3], v[4], v[9], v[14]);
+}
+
+__device__ void device_blake2b_compress(Blake2bDeviceState* state, const void* block, uint64_t f0)
+{
+    uint64_t m[16];
+    uint64_t v[16];
+    const uint8_t* in = static_cast<const uint8_t*>(block);
+
+#pragma unroll
+    for (uint32_t i = 0; i < 16; ++i) {
+        m[i] = device_load64(in + i * sizeof(uint64_t));
+    }
+
+#pragma unroll
+    for (uint32_t i = 0; i < 8; ++i) {
+        v[i] = state->h[i];
+        v[i + 8] = blake2b_iv_device[i];
+    }
+    v[12] ^= state->t[0];
+    v[13] ^= state->t[1];
+    v[14] ^= f0;
+
+#pragma unroll
+    for (uint32_t r = 0; r < 12; ++r) {
+        device_blake_round(m, v, r);
+    }
+
+#pragma unroll
+    for (uint32_t i = 0; i < 8; ++i) {
+        state->h[i] ^= v[i] ^ v[i + 8];
+    }
+}
+
+__device__ void device_blake2b_increment_counter(Blake2bDeviceState* state, uint64_t inc)
+{
+    state->t[0] += inc;
+    state->t[1] += (state->t[0] < inc);
+}
+
+__device__ void device_blake2b_init(Blake2bDeviceState* state, uint32_t out_len)
+{
+    state->t[0] = 0;
+    state->t[1] = 0;
+    state->buf_len = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < 8; ++i) {
+        state->h[i] = blake2b_iv_device[i];
+    }
+    state->h[0] ^= static_cast<uint64_t>(out_len) |
+                   (UINT64_C(1) << 16) | (UINT64_C(1) << 24);
+}
+
+__device__ void device_blake2b_update(Blake2bDeviceState* state, const void* input, uint32_t input_len)
+{
+    const uint8_t* in = static_cast<const uint8_t*>(input);
+    if (state->buf_len + input_len > BLAKE2B_BLOCK_BYTES) {
+        const uint32_t have = state->buf_len;
+        const uint32_t left = BLAKE2B_BLOCK_BYTES - have;
+        for (uint32_t i = 0; i < left; ++i) {
+            state->buf[have + i] = in[i];
+        }
+
+        device_blake2b_increment_counter(state, BLAKE2B_BLOCK_BYTES);
+        device_blake2b_compress(state, state->buf, 0);
+
+        state->buf_len = 0;
+        input_len -= left;
+        in += left;
+
+        while (input_len > BLAKE2B_BLOCK_BYTES) {
+            device_blake2b_increment_counter(state, BLAKE2B_BLOCK_BYTES);
+            device_blake2b_compress(state, in, 0);
+            input_len -= BLAKE2B_BLOCK_BYTES;
+            in += BLAKE2B_BLOCK_BYTES;
+        }
+    }
+    for (uint32_t i = 0; i < input_len; ++i) {
+        state->buf[state->buf_len + i] = in[i];
+    }
+    state->buf_len += input_len;
+}
+
+__device__ void device_blake2b_final(Blake2bDeviceState* state, void* out, uint32_t out_len)
+{
+    device_blake2b_increment_counter(state, state->buf_len);
+    for (uint32_t i = state->buf_len; i < BLAKE2B_BLOCK_BYTES; ++i) {
+        state->buf[i] = 0;
+    }
+    device_blake2b_compress(state, state->buf, UINT64_C(0xFFFFFFFFFFFFFFFF));
+
+    uint8_t buffer[BLAKE2B_OUT_BYTES];
+#pragma unroll
+    for (uint32_t i = 0; i < 8; ++i) {
+        device_store64(buffer + i * sizeof(uint64_t), state->h[i]);
+    }
+    uint8_t* output = static_cast<uint8_t*>(out);
+    for (uint32_t i = 0; i < out_len; ++i) {
+        output[i] = buffer[i];
+    }
+}
+
+__device__ void device_digest_long(void* out, uint32_t out_len, const void* input, uint32_t input_len)
+{
+    uint8_t* output = static_cast<uint8_t*>(out);
+    uint8_t out_len_bytes[sizeof(uint32_t)];
+    uint8_t out_buffer[BLAKE2B_OUT_BYTES];
+    Blake2bDeviceState blake;
+
+    device_store32(out_len_bytes, out_len);
+    if (out_len <= BLAKE2B_OUT_BYTES) {
+        device_blake2b_init(&blake, out_len);
+        device_blake2b_update(&blake, out_len_bytes, sizeof(out_len_bytes));
+        device_blake2b_update(&blake, input, input_len);
+        device_blake2b_final(&blake, out, out_len);
+        return;
+    }
+
+    device_blake2b_init(&blake, BLAKE2B_OUT_BYTES);
+    device_blake2b_update(&blake, out_len_bytes, sizeof(out_len_bytes));
+    device_blake2b_update(&blake, input, input_len);
+    device_blake2b_final(&blake, out_buffer, BLAKE2B_OUT_BYTES);
+
+    for (uint32_t i = 0; i < BLAKE2B_OUT_BYTES / 2; ++i) {
+        *output++ = out_buffer[i];
+    }
+
+    uint32_t to_produce = out_len - BLAKE2B_OUT_BYTES / 2;
+    while (to_produce > BLAKE2B_OUT_BYTES) {
+        device_blake2b_init(&blake, BLAKE2B_OUT_BYTES);
+        device_blake2b_update(&blake, out_buffer, BLAKE2B_OUT_BYTES);
+        device_blake2b_final(&blake, out_buffer, BLAKE2B_OUT_BYTES);
+
+        for (uint32_t i = 0; i < BLAKE2B_OUT_BYTES / 2; ++i) {
+            *output++ = out_buffer[i];
+        }
+        to_produce -= BLAKE2B_OUT_BYTES / 2;
+    }
+
+    device_blake2b_init(&blake, to_produce);
+    device_blake2b_update(&blake, out_buffer, BLAKE2B_OUT_BYTES);
+    device_blake2b_final(&blake, output, to_produce);
+}
+
+__device__ void device_initial_hash(void* out,
+                                    const uint8_t* password,
+                                    uint32_t password_len,
+                                    const uint8_t* salt,
+                                    uint32_t salt_len,
+                                    uint32_t output_len,
+                                    uint32_t memory_cost,
+                                    uint32_t time_cost,
+                                    uint32_t version,
+                                    uint32_t type,
+                                    uint32_t lanes)
+{
+    Blake2bDeviceState blake;
+    device_blake2b_init(&blake, ARGON2_PREHASH_DIGEST_LENGTH);
+
+    uint8_t header[7 * sizeof(uint32_t)];
+    device_store32(header + 0 * sizeof(uint32_t), lanes);
+    device_store32(header + 1 * sizeof(uint32_t), output_len);
+    device_store32(header + 2 * sizeof(uint32_t), memory_cost);
+    device_store32(header + 3 * sizeof(uint32_t), time_cost);
+    device_store32(header + 4 * sizeof(uint32_t), version);
+    device_store32(header + 5 * sizeof(uint32_t), type);
+    device_store32(header + 6 * sizeof(uint32_t), password_len);
+    device_blake2b_update(&blake, header, sizeof(header));
+    device_blake2b_update(&blake, password, password_len);
+
+    uint8_t value[sizeof(uint32_t)];
+    device_store32(value, salt_len);
+    device_blake2b_update(&blake, value, sizeof(value));
+    device_blake2b_update(&blake, salt, salt_len);
+
+    device_store32(value, 0);
+    device_blake2b_update(&blake, value, sizeof(value));
+    device_blake2b_update(&blake, value, sizeof(value));
+
+    device_blake2b_final(&blake, out, ARGON2_PREHASH_DIGEST_LENGTH);
 }
 
 __device__ uint64_t f(uint64_t x, uint64_t y)
@@ -560,13 +842,56 @@ __global__ void argon2_kernel_oneshot(
     mem_curr = mem_lane;
 }
 
+__global__ void argon2_first_blocks_kernel(
+        struct block_g* __restrict__ memory,
+        const uint8_t* __restrict__ keys,
+        uint32_t key_length,
+        const uint8_t* __restrict__ salt,
+        uint32_t salt_length,
+        uint32_t output_length,
+        uint32_t memory_cost,
+        uint32_t time_cost,
+        uint32_t version,
+        uint32_t type,
+        uint32_t lanes,
+        uint32_t segment_blocks,
+        size_t batch_size)
+{
+    const size_t job_id = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    if (job_id >= batch_size) {
+        return;
+    }
+
+    const uint8_t* password = keys + job_id * key_length;
+    uint8_t init_hash[ARGON2_PREHASH_SEED_LENGTH];
+    device_initial_hash(init_hash, password, key_length, salt, salt_length,
+                        output_length, memory_cost, time_cost, version, type, lanes);
+
+    const uint32_t lane_blocks = ARGON2_SYNC_POINTS * segment_blocks;
+    uint8_t* output = reinterpret_cast<uint8_t*>(memory + job_id * lane_blocks);
+
+    device_store32(init_hash + ARGON2_PREHASH_DIGEST_LENGTH, 0);
+    device_store32(init_hash + ARGON2_PREHASH_DIGEST_LENGTH + 4, 0);
+    device_digest_long(output, ARGON2_BLOCK_SIZE, init_hash, sizeof(init_hash));
+
+    device_store32(init_hash + ARGON2_PREHASH_DIGEST_LENGTH, 1);
+    device_store32(init_hash + ARGON2_PREHASH_DIGEST_LENGTH + 4, 0);
+    device_digest_long(output + ARGON2_BLOCK_SIZE, ARGON2_BLOCK_SIZE, init_hash, sizeof(init_hash));
+}
+
 KernelRunner::KernelRunner(uint32_t type, uint32_t version, uint32_t passes,
                            uint32_t lanes, uint32_t segmentBlocks,
                            size_t batchSize)
     : type(type), version(version), passes(passes), lanes(lanes),
           segmentBlocks(segmentBlocks), allocatedSegmentBlocks(segmentBlocks),
           batchSize(batchSize), stream(), memory(), refs(),
-          start(), end(), kernelStart(), kernelEnd(),
+          deviceKeys(), deviceSalt(), deviceKeysCapacity(0), deviceSaltCapacity(0),
+          deviceFirstBlocksReady(false), deviceFirstBlockKeyLength(0),
+          deviceFirstBlockSaltLength(0), deviceFirstBlockOutputLength(0),
+          deviceFirstBlockMemoryCost(0), deviceFirstBlockTimeCost(0),
+          deviceFirstBlockVersion(0), deviceFirstBlockType(0),
+          deviceFirstBlockLanes(0), lastUsedDeviceFirstBlocks(false),
+          start(), end(), copyStart(), copyEnd(), firstBlockStart(), firstBlockEnd(), kernelStart(), kernelEnd(),
           blocksIn(nullptr), blocksOut(nullptr)
 {
 
@@ -583,6 +908,10 @@ void KernelRunner::init(std::size_t batchSize_){
 
     CudaException::check(cudaEventCreate(&start));
     CudaException::check(cudaEventCreate(&end));
+    CudaException::check(cudaEventCreate(&copyStart));
+    CudaException::check(cudaEventCreate(&copyEnd));
+    CudaException::check(cudaEventCreate(&firstBlockStart));
+    CudaException::check(cudaEventCreate(&firstBlockEnd));
     CudaException::check(cudaEventCreate(&kernelStart));
     CudaException::check(cudaEventCreate(&kernelEnd));
 
@@ -613,6 +942,8 @@ void KernelRunner::reconfigure(uint32_t type_, uint32_t version_,
     lanes = lanes_;
     segmentBlocks = segmentBlocks_;
     batchSize = batchSize_;
+    deviceFirstBlocksReady = false;
+    lastUsedDeviceFirstBlocks = false;
 }
 
 KernelRunner::~KernelRunner()
@@ -626,6 +957,18 @@ KernelRunner::~KernelRunner()
     }
     if (end != nullptr) {
         cudaEventDestroy(end);
+    }
+    if (copyStart != nullptr) {
+        cudaEventDestroy(copyStart);
+    }
+    if (copyEnd != nullptr) {
+        cudaEventDestroy(copyEnd);
+    }
+    if (firstBlockStart != nullptr) {
+        cudaEventDestroy(firstBlockStart);
+    }
+    if (firstBlockEnd != nullptr) {
+        cudaEventDestroy(firstBlockEnd);
     }
     if (kernelStart != nullptr) {
         cudaEventDestroy(kernelStart);
@@ -641,6 +984,12 @@ KernelRunner::~KernelRunner()
     }
     if (refs != nullptr) {
         cudaFree(refs);
+    }
+    if (deviceKeys != nullptr) {
+        cudaFree(deviceKeys);
+    }
+    if (deviceSalt != nullptr) {
+        cudaFree(deviceSalt);
     }
 }
 
@@ -682,6 +1031,98 @@ void KernelRunner::copyOutputBlocks()
                              stream));
 }
 
+bool KernelRunner::prepareInputBlocksOnDevice(const std::vector<std::string>& passwords,
+                                              const std::vector<std::uint8_t>& saltBytes,
+                                              std::uint32_t outputLength,
+                                              std::uint32_t memoryCost,
+                                              std::uint32_t timeCost,
+                                              std::uint32_t version_,
+                                              std::uint32_t type_,
+                                              std::uint32_t lanes_)
+{
+    deviceFirstBlocksReady = false;
+    if (passwords.empty() || passwords.size() != batchSize ||
+        outputLength != BLAKE2B_OUT_BYTES ||
+        timeCost != 1 ||
+        lanes_ != 1 ||
+        saltBytes.empty() ||
+        saltBytes.size() > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        return false;
+    }
+
+    const std::size_t keyLength = passwords.front().size();
+    if (keyLength == 0 || keyLength > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        return false;
+    }
+    for (const std::string& password : passwords) {
+        if (password.size() != keyLength) {
+            return false;
+        }
+    }
+
+    const std::size_t keyBytes = keyLength * passwords.size();
+    std::vector<std::uint8_t> flatKeys(keyBytes);
+    std::uint8_t* cursor = flatKeys.data();
+    for (const std::string& password : passwords) {
+        std::copy(password.begin(), password.end(), cursor);
+        cursor += password.size();
+    }
+
+    if (deviceKeysCapacity < keyBytes) {
+        if (deviceKeys != nullptr) {
+            CudaException::check(cudaFree(deviceKeys));
+            deviceKeys = nullptr;
+        }
+        CudaException::check(cudaMalloc(&deviceKeys, keyBytes));
+        deviceKeysCapacity = keyBytes;
+    }
+    if (deviceSaltCapacity < saltBytes.size()) {
+        if (deviceSalt != nullptr) {
+            CudaException::check(cudaFree(deviceSalt));
+            deviceSalt = nullptr;
+        }
+        CudaException::check(cudaMalloc(&deviceSalt, saltBytes.size()));
+        deviceSaltCapacity = saltBytes.size();
+    }
+
+    CudaException::check(cudaMemcpy(deviceKeys, flatKeys.data(), keyBytes,
+                                    cudaMemcpyHostToDevice));
+    CudaException::check(cudaMemcpy(deviceSalt, saltBytes.data(), saltBytes.size(),
+                                    cudaMemcpyHostToDevice));
+
+    deviceFirstBlocksReady = true;
+    deviceFirstBlockKeyLength = keyLength;
+    deviceFirstBlockSaltLength = static_cast<std::uint32_t>(saltBytes.size());
+    deviceFirstBlockOutputLength = outputLength;
+    deviceFirstBlockMemoryCost = memoryCost;
+    deviceFirstBlockTimeCost = timeCost;
+    deviceFirstBlockVersion = version_;
+    deviceFirstBlockType = type_;
+    deviceFirstBlockLanes = lanes_;
+    return true;
+}
+
+void KernelRunner::runDeviceFirstBlockKernel()
+{
+    const std::size_t threadsPerBlock = 128;
+    const std::size_t grid = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+    argon2_first_blocks_kernel
+            <<<dim3(grid), dim3(threadsPerBlock), 0, stream>>>(
+                static_cast<struct block_g*>(memory),
+                static_cast<const uint8_t*>(deviceKeys),
+                static_cast<std::uint32_t>(deviceFirstBlockKeyLength),
+                static_cast<const uint8_t*>(deviceSalt),
+                deviceFirstBlockSaltLength,
+                deviceFirstBlockOutputLength,
+                deviceFirstBlockMemoryCost,
+                deviceFirstBlockTimeCost,
+                deviceFirstBlockVersion,
+                deviceFirstBlockType,
+                deviceFirstBlockLanes,
+                segmentBlocks,
+                batchSize);
+}
+
 
 void KernelRunner::runKernelOneshot()
 {
@@ -695,8 +1136,23 @@ void KernelRunner::runKernelOneshot()
 void KernelRunner::run()
 {
     CudaException::check(cudaEventRecord(start, stream));
+    CudaException::check(cudaEventRecord(copyStart, stream));
 
-    copyInputBlocks();
+    const bool useDeviceFirstBlocks = deviceFirstBlocksReady;
+    lastUsedDeviceFirstBlocks = useDeviceFirstBlocks;
+    if (useDeviceFirstBlocks) {
+        CudaException::check(cudaEventRecord(copyEnd, stream));
+        CudaException::check(cudaEventRecord(firstBlockStart, stream));
+        runDeviceFirstBlockKernel();
+        CudaException::check(cudaGetLastError());
+        CudaException::check(cudaEventRecord(firstBlockEnd, stream));
+    } else {
+        copyInputBlocks();
+        CudaException::check(cudaEventRecord(copyEnd, stream));
+        CudaException::check(cudaEventRecord(firstBlockStart, stream));
+        CudaException::check(cudaEventRecord(firstBlockEnd, stream));
+    }
+    deviceFirstBlocksReady = false;
 
     CudaException::check(cudaEventRecord(kernelStart, stream));
     
@@ -722,7 +1178,17 @@ float KernelRunner::finish()
 float KernelRunner::getLastHostToDeviceMs() const
 {
     float time = 0.0f;
-    CudaException::check(cudaEventElapsedTime(&time, start, kernelStart));
+    CudaException::check(cudaEventElapsedTime(&time, copyStart, copyEnd));
+    return time;
+}
+
+float KernelRunner::getLastGpuFirstBlockMs() const
+{
+    if (!lastUsedDeviceFirstBlocks) {
+        return 0.0f;
+    }
+    float time = 0.0f;
+    CudaException::check(cudaEventElapsedTime(&time, firstBlockStart, firstBlockEnd));
     return time;
 }
 

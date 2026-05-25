@@ -119,5 +119,7 @@ class HashCliClient:
             args.extend(["--seconds", str(payload.get("seconds", 30))])
         if payload.get("allow_xuni") is False:
             args.append("--no-xuni")
+        if payload.get("gpu_first_blocks") is True:
+            args.append("--gpu-first-blocks")
 
         return args

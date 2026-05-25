@@ -28,6 +28,7 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "first_block_dynamic_chunk_size_max": 0,
         "first_block_chunk_size_min": 0,
         "first_block_chunk_size_max": 0,
+        "gpu_first_blocks": False,
         "elapsed_ms": 1000.0,
         "hashrate": hashrate,
         "timings": timings or {},
@@ -110,6 +111,14 @@ def test_parse_scenario_supports_fixed_key():
 
     assert scenario.name == "cuda-fixed"
     assert scenario.key == fixed_key
+
+
+def test_parse_scenario_supports_gpu_first_blocks_flag():
+    scenario = benchmark.parse_scenario(
+        "backend=cuda,difficulty=8,batch_size=64,seconds=3,gpu_first_blocks=true",
+    )
+
+    assert scenario.gpu_first_blocks is True
 
 
 def test_parse_scenario_supports_difficulty_sequence():
@@ -524,6 +533,7 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["stable_spread_pct"] == 10.0
     assert aggregate["attempts"] == 60
     assert aggregate["first_block_workers"] == 0
+    assert aggregate["gpu_first_blocks"] is False
     assert aggregate["elapsed_ms"] == 3000.0
     assert aggregate["ms_per_attempt"] == 50.0
     assert aggregate["difficulty_mode"] == "fixed"
@@ -540,6 +550,21 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["sample_count"] == 3
     assert aggregate["ok_sample_count"] == 3
     assert aggregate["ok"] is True
+
+
+def test_summarize_iterations_reports_gpu_first_blocks_flag():
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-gpu-first-blocks",
+        backend="cuda",
+        difficulty=8,
+        batch_size=64,
+        seconds=1,
+        gpu_first_blocks=True,
+    )
+
+    aggregate = benchmark.summarize_iterations(scenario, [_summary(100.0, attempts=100)])
+
+    assert aggregate["gpu_first_blocks"] is True
 
 
 def test_summarize_iterations_marks_stable_repeated_samples():
@@ -739,6 +764,7 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
             "compute_ms": 4.0,
             "kernel_ms": 9.0,
             "host_to_device_ms": 11.0,
+            "gpu_first_block_ms": 10.0,
             "device_to_host_ms": 12.0,
             "finalize_ms": 3.0,
             "finalize_hash_ms": 8.0,
@@ -765,6 +791,7 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert "setup_backend_init_cpu_ms" not in analysis["stage_pct"]
     assert "kernel_ms" not in analysis["stage_pct"]
     assert "host_to_device_ms" not in analysis["stage_pct"]
+    assert "gpu_first_block_ms" not in analysis["stage_pct"]
     assert "device_to_host_ms" not in analysis["stage_pct"]
     assert "finalize_hash_ms" not in analysis["stage_pct"]
     assert "argon2_finalize_ms" not in analysis["stage_pct"]
@@ -781,6 +808,7 @@ def test_timing_analysis_treats_sub_timings_as_nested_timing():
     assert round(analysis["nested_stage_pct"]["first_block_worker_finish_span_ms"], 6) == 88.0
     assert analysis["nested_stage_pct"]["setup_activate_cpu_ms"] == 0.2 / 5.5 * 100.0
     assert analysis["nested_stage_pct"]["kernel_ms"] == 9.0 / 4.0 * 100.0
+    assert analysis["nested_stage_pct"]["gpu_first_block_ms"] == 10.0 / 4.0 * 100.0
     assert analysis["nested_stage_pct"]["finalize_hash_ms"] == 8.0 / 3.0 * 100.0
     assert analysis["nested_stage_pct"]["argon2_finalize_ms"] == 200.0
     assert analysis["input_explained_ms"] == 5.5
@@ -1137,6 +1165,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "first_block_dynamic_chunk_size_max": 64,
             "first_block_chunk_size_min": 32,
             "first_block_chunk_size_max": 32,
+            "gpu_first_blocks": False,
             "median_hashrate": 150.0,
             "min_hashrate": 150.0,
             "max_hashrate": 150.0,
@@ -1164,6 +1193,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "first_block_dynamic_chunk_size_max": 0,
             "first_block_chunk_size_min": 0,
             "first_block_chunk_size_max": 0,
+            "gpu_first_blocks": False,
             "median_hashrate": 120.0,
             "min_hashrate": 120.0,
             "max_hashrate": 120.0,

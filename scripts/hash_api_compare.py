@@ -154,6 +154,7 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
             "first_block_chunk_size_max",
             _int_value(summary, "first_block_chunk_size", 0),
         ),
+        "gpu_first_blocks": _bool_value(summary, "gpu_first_blocks", _bool_value(scenario, "gpu_first_blocks", False)),
         "attempts": _int_value(summary, "attempts", 0),
         "elapsed_ms": _float_value(summary, "elapsed_ms", 0.0),
         "hashrate": _float_value(summary, "hashrate", 0.0),
@@ -202,6 +203,7 @@ def run_config_key(run: dict[str, Any], ignore_detailed_timings: bool = False) -
         run["first_block_workers"],
         run["first_block_dynamic_chunk_size"],
         run["first_block_dynamic_chunk_auto"],
+        run["gpu_first_blocks"],
     )
 
 
@@ -236,6 +238,7 @@ def format_run_key(key: RunKey) -> str:
         first_block_workers,
         first_block_dynamic_chunk_size,
         first_block_dynamic_chunk_auto,
+        gpu_first_blocks,
     ) = key
     if difficulty_mode == "sequence":
         difficulty_label = "x".join(str(item) for item in difficulty_sequence)
@@ -251,7 +254,7 @@ def format_run_key(key: RunKey) -> str:
         f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size_label}:"
         f"{key_mode}:dchanges{difficulty_changes}:bchanges{batch_size_changes}:s{seconds}:w{warmup}:r{repeat}:"
         f"{xuni_label}:{detail_label}:fbw{first_block_workers}:fbd{first_block_dynamic_chunk_size}:"
-        f"fbda{int(first_block_dynamic_chunk_auto)}"
+        f"fbda{int(first_block_dynamic_chunk_auto)}:gfb{int(gpu_first_blocks)}"
     )
 
 
@@ -497,6 +500,7 @@ def compare_reports(
                     "first_block_chunk_size_max",
                     (after or before or {}).get("first_block_chunk_size", 0),
                 ),
+                "gpu_first_blocks": (after or before or {}).get("gpu_first_blocks", False),
                 "timing_deltas": compare_timings(before, after),
                 "timing_per_attempt_deltas": compare_timing_per_attempt(before, after),
                 "stage_pct_deltas": compare_stage_pct(before, after),
@@ -569,6 +573,7 @@ def format_text(report: Report) -> str:
             "first_block_dynamic_chunk_size_max",
             "first_block_chunk_size_min",
             "first_block_chunk_size_max",
+            "gpu_first_blocks",
             "dominant_timing_delta",
             "dominant_timing_per_attempt_delta",
             "dominant_stage_pct_delta",
@@ -657,6 +662,7 @@ def format_text(report: Report) -> str:
                 str(item["first_block_dynamic_chunk_size_max"]),
                 str(item["first_block_chunk_size_min"]),
                 str(item["first_block_chunk_size_max"]),
+                "true" if item["gpu_first_blocks"] else "false",
                 dominant_timing_delta,
                 dominant_per_attempt_delta,
                 dominant_stage_pct_delta,

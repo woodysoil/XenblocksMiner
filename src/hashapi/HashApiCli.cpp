@@ -26,9 +26,9 @@ void printUsage()
 {
     std::cout
         << "Hash API commands:\n"
-        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
-        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--auto-batch-size] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--auto-batch-size] [--batch-size-sequence <n,n,...>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n";
+        << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--gpu-first-blocks] [--json]\n"
+        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--auto-batch-size] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--gpu-first-blocks] [--json]\n"
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--auto-batch-size] [--batch-size-sequence <n,n,...>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--gpu-first-blocks] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -41,7 +41,8 @@ std::unordered_map<std::string, std::string> parseArgs(int argc, const char* con
         }
         if (key == "--json" || key == "--no-xuni" || key == "--detailed-timings" ||
             key == "--auto-batch-size" ||
-            key == "--first-block-dynamic-chunk-auto") {
+            key == "--first-block-dynamic-chunk-auto" ||
+            key == "--gpu-first-blocks") {
             args[key] = "true";
             continue;
         }
@@ -189,6 +190,7 @@ void addTimings(HashApiTimings& target, const HashApiTimings& source)
     target.compute_ms += source.compute_ms;
     target.kernel_ms += source.kernel_ms;
     target.host_to_device_ms += source.host_to_device_ms;
+    target.gpu_first_block_ms += source.gpu_first_block_ms;
     target.device_to_host_ms += source.device_to_host_ms;
     target.finalize_ms += source.finalize_ms;
     target.finalize_hash_ms += source.finalize_hash_ms;
@@ -215,6 +217,7 @@ HashApiRequest baseRequest(const std::unordered_map<std::string, std::string>& a
     request.first_block_workers = getSizeArg(args, "--first-block-workers", 0);
     request.first_block_dynamic_chunk_size = getSizeArg(args, "--first-block-dynamic-chunk-size", 0);
     request.first_block_dynamic_chunk_auto = getArg(args, "--first-block-dynamic-chunk-auto") == "true";
+    request.gpu_first_blocks = getArg(args, "--gpu-first-blocks") == "true";
     return request;
 }
 
@@ -451,6 +454,7 @@ int runBenchmark(HashApiRequest request,
         aggregate.first_block_dynamic_chunk_auto = current.first_block_dynamic_chunk_auto;
         aggregate.first_block_worker_count = current.first_block_worker_count;
         aggregate.first_block_chunk_size = current.first_block_chunk_size;
+        aggregate.gpu_first_blocks = current.gpu_first_blocks;
         update_first_block_ranges(current);
         addTimings(aggregate.timings, current.timings);
         if (!request.key.empty()) {

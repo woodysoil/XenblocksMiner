@@ -18,6 +18,7 @@ class HashRequestBase(BaseModel):
     batch_size: int = 1
     device_id: int = Field(0, alias="device")
     allow_xuni: bool = True
+    gpu_first_blocks: bool = False
 
 
 class HashOneRequest(HashRequestBase):
@@ -30,4 +31,3 @@ class HashBatchRequest(HashRequestBase):
 
 class HashBenchmarkRequest(HashRequestBase):
     seconds: int = 30
-

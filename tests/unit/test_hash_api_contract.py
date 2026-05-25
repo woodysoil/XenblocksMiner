@@ -40,6 +40,7 @@ def test_hash_api_request_fields_exist():
         "first_block_workers",
         "first_block_dynamic_chunk_size",
         "first_block_dynamic_chunk_auto",
+        "gpu_first_blocks",
     ]:
         assert field in content
 
@@ -56,6 +57,7 @@ def test_hash_api_validation_rules_are_implemented():
         "difficulty must be greater than zero",
         "batch_size must be greater than zero",
         "device_id must be non-negative",
+        "gpu_first_blocks requires backend=cuda",
     ]:
         assert rule in content
 
@@ -143,6 +145,7 @@ def test_hash_api_result_exposes_machine_readable_timings():
         "compute_ms",
         "kernel_ms",
         "host_to_device_ms",
+        "gpu_first_block_ms",
         "device_to_host_ms",
         "finalize_ms",
         "finalize_hash_ms",
@@ -191,6 +194,25 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
     assert "request.difficulty == 64" in cuda_impl
     assert "attempts <= 2048 ? 16 : 0" in cuda_impl
     assert "next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed)" in cuda_impl
+
+
+def test_hash_api_exposes_gpu_first_block_experiment_flag():
+    types = read("src/hashapi/HashApiTypes.h")
+    json_impl = read("src/hashapi/HashApiJson.cpp")
+    cli_impl = read("src/hashapi/HashApiCli.cpp")
+    compute = read("src/ComputeBackend.h")
+    cuda = read("src/hashapi/CudaHashBackend.cpp")
+    runner = read("src/kernelrunner.cu")
+
+    assert "bool gpu_first_blocks = false" in types
+    assert "gpu_first_blocks" in json_impl
+    assert "--gpu-first-blocks" in cli_impl
+    assert "prepareInputBlocksOnDevice" in compute
+    assert "getLastGpuFirstBlockMs" in compute
+    assert "request.gpu_first_blocks" in cuda
+    assert "prepareInputBlocksOnDevice(password_storage_" in cuda
+    assert "argon2_first_blocks_kernel" in runner
+    assert "getLastGpuFirstBlockMs" in runner
 
 
 def test_hash_api_result_exposes_batch_size_range_metadata():

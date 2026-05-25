@@ -99,6 +99,44 @@ def test_batch_endpoint_invokes_hash_batch_command():
     assert fake.calls[0][1]["allow_xuni"] is False
 
 
+def test_batch_endpoint_forwards_gpu_first_blocks_flag():
+    fake = FakeHashClient()
+    client = TestClient(create_app(fake))
+
+    response = client.post(
+        "/hash/v1/batch",
+        json={
+            "salt": "aabbccddeeff0011",
+            "backend": "cuda",
+            "difficulty": 8,
+            "batch_size": 3,
+            "gpu_first_blocks": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert fake.calls[0][1]["gpu_first_blocks"] is True
+
+
+def test_validate_rejects_gpu_first_blocks_for_cpu():
+    errors = validate_hash_payload(
+        {
+            "algorithm": "argon2id-xen",
+            "backend": "cpu",
+            "salt_hex": "aabbccddeeff0011",
+            "key_prefix": "",
+            "target_pattern": "XEN11",
+            "difficulty": 8,
+            "batch_size": 1,
+            "device_id": 0,
+            "gpu_first_blocks": True,
+        }
+    )
+
+    assert "gpu_first_blocks requires backend=cuda" in errors
+
+
 def test_hash_one_validation_requires_key():
     client = TestClient(create_app(FakeHashClient()))
 

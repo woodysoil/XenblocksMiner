@@ -116,6 +116,10 @@ std::vector<std::string> validateRequest(const HashApiRequest& request)
         errors.push_back("device_id must be non-negative");
     }
 
+    if (request.gpu_first_blocks && request.backend != "cuda") {
+        errors.push_back("gpu_first_blocks requires backend=cuda");
+    }
+
     return errors;
 }
 

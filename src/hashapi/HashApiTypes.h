@@ -28,6 +28,7 @@ struct HashApiRequest {
     std::size_t first_block_workers = 0;
     std::size_t first_block_dynamic_chunk_size = 0;
     bool first_block_dynamic_chunk_auto = false;
+    bool gpu_first_blocks = false;
 };
 
 struct HashApiMatch {
@@ -60,6 +61,7 @@ struct HashApiTimings {
     double compute_ms = 0.0;
     double kernel_ms = 0.0;
     double host_to_device_ms = 0.0;
+    double gpu_first_block_ms = 0.0;
     double device_to_host_ms = 0.0;
     double finalize_ms = 0.0;
     double finalize_hash_ms = 0.0;
@@ -88,6 +90,7 @@ struct HashApiResult {
     std::size_t first_block_dynamic_chunk_size_max = 0;
     std::size_t first_block_chunk_size_min = 0;
     std::size_t first_block_chunk_size_max = 0;
+    bool gpu_first_blocks = false;
     double elapsed_ms = 0.0;
     double hashrate = 0.0;
     HashApiTimings timings;

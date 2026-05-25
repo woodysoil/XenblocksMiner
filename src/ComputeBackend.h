@@ -32,9 +32,30 @@ public:
 	virtual void* getInputMemory(size_t jobId) const = 0;
 	virtual const void* getOutputMemory(size_t jobId) const = 0;
 
+	virtual bool prepareInputBlocksOnDevice(const std::vector<std::string>& passwords,
+	                                        const std::vector<std::uint8_t>& saltBytes,
+	                                        std::uint32_t outputLength,
+	                                        std::uint32_t memoryCost,
+	                                        std::uint32_t timeCost,
+	                                        std::uint32_t version,
+	                                        std::uint32_t type,
+	                                        std::uint32_t lanes)
+	{
+		(void)passwords;
+		(void)saltBytes;
+		(void)outputLength;
+		(void)memoryCost;
+		(void)timeCost;
+		(void)version;
+		(void)type;
+		(void)lanes;
+		return false;
+	}
+
 	virtual void run() = 0;
 	virtual float finish() = 0;
 	virtual float getLastHostToDeviceMs() const { return 0.0f; }
+	virtual float getLastGpuFirstBlockMs() const { return 0.0f; }
 	virtual float getLastDeviceToHostMs() const { return 0.0f; }
 };
 

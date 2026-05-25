@@ -35,6 +35,7 @@ def _run(
     first_block_dynamic_chunk_size_max: int | None = None,
     first_block_chunk_size_min: int | None = None,
     first_block_chunk_size_max: int | None = None,
+    gpu_first_blocks: bool = False,
 ) -> dict:
     sequence = difficulty_sequence or []
     batch_sequence = batch_size_sequence or []
@@ -60,6 +61,7 @@ def _run(
             "first_block_workers": first_block_workers,
             "first_block_dynamic_chunk_size": first_block_dynamic_chunk_size,
             "first_block_dynamic_chunk_auto": first_block_dynamic_chunk_auto,
+            "gpu_first_blocks": gpu_first_blocks,
             "detailed_timings": detailed_timings,
         },
         "summary": {
@@ -107,6 +109,7 @@ def _run(
             "first_block_dynamic_chunk_size_max": dynamic_max,
             "first_block_chunk_size_min": chunk_min,
             "first_block_chunk_size_max": chunk_max,
+            "gpu_first_blocks": gpu_first_blocks,
         },
     }
 
@@ -450,6 +453,19 @@ def test_compare_reports_config_match_separates_first_block_dynamic_chunk_auto()
     assert any("fbda1" in item["match_key"] for item in result["comparisons"])
 
 
+def test_compare_reports_config_match_separates_gpu_first_blocks():
+    result = compare.compare_reports(
+        _report(_run("cpu-first-blocks", 100.0)),
+        _report(_run("gpu-first-blocks", 110.0, gpu_first_blocks=True)),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+    assert {item["gpu_first_blocks"] for item in result["comparisons"]} == {False, True}
+    assert any("gfb1" in item["match_key"] for item in result["comparisons"])
+
+
 def test_compare_reports_config_match_uses_requested_dynamic_chunk_for_auto_runs():
     before = _run(
         "auto-before",
@@ -643,6 +659,7 @@ def test_format_text_outputs_automation_friendly_rows():
     assert row[header.index("first_block_dynamic_chunk_size_max")] == "64"
     assert row[header.index("first_block_chunk_size_min")] == "8"
     assert row[header.index("first_block_chunk_size_max")] == "256"
+    assert row[header.index("gpu_first_blocks")] == "false"
     assert "input_ms:-3.000ms" in text
     assert "input_ms:-0.003000ms/attempt" in text
     assert "input_ms:10.000pp" in text
