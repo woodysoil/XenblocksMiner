@@ -96,7 +96,7 @@ std::size_t recommendedFirstBlockDynamicChunkSize(const HashApiRequest& request,
         return 16;
     }
     if (request.difficulty == 8) {
-        return 32;
+        return attempts >= 2048 ? 16 : 32;
     }
     if (request.difficulty == 64) {
         return 16;

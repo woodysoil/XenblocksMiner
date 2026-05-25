@@ -187,6 +187,7 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
     assert "request.first_block_dynamic_chunk_auto" in cuda_impl
     assert "request.difficulty == 1" in cuda_impl
     assert "request.difficulty == 8" in cuda_impl
+    assert "attempts >= 2048 ? 16 : 32" in cuda_impl
     assert "request.difficulty == 64" in cuda_impl
     assert "next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed)" in cuda_impl
 
