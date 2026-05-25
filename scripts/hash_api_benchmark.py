@@ -198,6 +198,24 @@ def default_scenarios(seconds: int, backend: str, device: int, warmup: int, repe
     return preset_scenarios("smoke", seconds, backend, device, warmup, repeat)
 
 
+def enable_gpu_first_blocks(scenarios: list[BenchmarkScenario]) -> list[BenchmarkScenario]:
+    enabled: list[BenchmarkScenario] = []
+    for scenario in scenarios:
+        if scenario.gpu_first_blocks:
+            enabled.append(scenario)
+            continue
+        enabled.append(
+            BenchmarkScenario(
+                **{
+                    **asdict(scenario),
+                    "name": f"{scenario.name}-gfb",
+                    "gpu_first_blocks": True,
+                }
+            )
+        )
+    return enabled
+
+
 def scan_scenarios(
     difficulties: list[int],
     batch_sizes: list[int],
@@ -210,15 +228,18 @@ def scan_scenarios(
     warmup: int,
     repeat: int,
     first_block_dynamic_chunk_auto: bool = False,
+    scan_gpu_first_blocks: bool = False,
 ) -> list[BenchmarkScenario]:
     worker_caps = first_block_workers or [0]
     dynamic_chunk_sizes = first_block_dynamic_chunk_sizes or [0]
+    gpu_first_block_modes = [False, True] if scan_gpu_first_blocks else [False]
     return [
         BenchmarkScenario(
             name=f"{backend}-scan-d{difficulty}-b{batch_size}"
             + ("" if worker_cap == 0 else f"-fbw{worker_cap}")
             + ("" if dynamic_chunk_size == 0 else f"-fbd{dynamic_chunk_size}")
-            + ("-fbda" if first_block_dynamic_chunk_auto else ""),
+            + ("-fbda" if first_block_dynamic_chunk_auto else "")
+            + ("-gfb" if gpu_first_blocks else ""),
             backend=backend,
             difficulty=difficulty,
             batch_size=batch_size,
@@ -229,12 +250,14 @@ def scan_scenarios(
             first_block_workers=worker_cap,
             first_block_dynamic_chunk_size=dynamic_chunk_size,
             first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
+            gpu_first_blocks=gpu_first_blocks,
             detailed_timings=detailed_timings,
         )
         for difficulty in difficulties
         for batch_size in batch_sizes
         for worker_cap in worker_caps
         for dynamic_chunk_size in dynamic_chunk_sizes
+        for gpu_first_blocks in gpu_first_block_modes
     ]
 
 
@@ -1321,6 +1344,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--warmup", default=0, type=int, help="Warm-up runs per scenario before measured repeats.")
     parser.add_argument("--repeat", default=1, type=int, help="Measured repeats per scenario.")
     parser.add_argument("--no-xuni", action="store_true", help="Disable secondary XUNI matching in generated scenarios.")
+    parser.add_argument(
+        "--gpu-first-blocks",
+        action="store_true",
+        help="Enable explicit CUDA device-side first-block preparation for generated scenarios.",
+    )
     parser.add_argument("--output", type=Path, help="Optional path to write the aggregate JSON report.")
     parser.add_argument(
         "--sanitized-output",
@@ -1360,6 +1388,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--scan-first-block-dynamic-chunk-auto",
         action="store_true",
         help="Enable backend-selected first-block dynamic chunks for generated scan scenarios.",
+    )
+    parser.add_argument(
+        "--scan-gpu-first-blocks",
+        action="store_true",
+        help="Add both default and explicit GPU first-block variants to generated scan scenarios.",
     )
     parser.add_argument(
         "--scan-detailed-timings",
@@ -1419,6 +1452,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.gpu_first_blocks and args.scan_gpu_first_blocks:
+            raise ValueError("--gpu-first-blocks and --scan-gpu-first-blocks cannot be used together")
         scenarios = [
             scenario
             for preset in args.preset
@@ -1443,6 +1478,7 @@ def main(argv: list[str]) -> int:
                     args.warmup,
                     args.repeat,
                     args.scan_first_block_dynamic_chunk_auto,
+                    args.scan_gpu_first_blocks,
                 )
             )
         if args.difficulty_sequence or args.sequence_batch_size or args.sequence_auto_batch_size or args.batch_size_sequence:
@@ -1505,6 +1541,8 @@ def main(argv: list[str]) -> int:
                 )
         if not scenarios:
             scenarios = default_scenarios(args.seconds, args.backend, args.device, args.warmup, args.repeat)
+        if args.gpu_first_blocks:
+            scenarios = enable_gpu_first_blocks(scenarios)
         if args.no_xuni:
             scenarios = [BenchmarkScenario(**{**asdict(scenario), "allow_xuni": False}) for scenario in scenarios]
         ensure_unique_scenario_names(scenarios)

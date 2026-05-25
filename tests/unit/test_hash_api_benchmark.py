@@ -2162,6 +2162,56 @@ def test_main_combines_custom_scan_scenarios(monkeypatch, tmp_path):
     assert captured_dynamic_auto == [True] * 8
 
 
+def test_main_scan_can_include_gpu_first_block_variants(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    _stub_metadata(monkeypatch)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scan-difficulty",
+            "8",
+            "--scan-batch-size",
+            "2048",
+            "--scan-gpu-first-blocks",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert [scenario.name for scenario in captured] == [
+        "cuda-scan-d8-b2048",
+        "cuda-scan-d8-b2048-gfb",
+    ]
+    assert [scenario.gpu_first_blocks for scenario in captured] == [False, True]
+    assert "--gpu-first-blocks" not in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[0])
+    assert "--gpu-first-blocks" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[1])
+
+
 def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
     captured = []
 
@@ -2212,6 +2262,52 @@ def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
     assert [scenario.difficulty_sequence for scenario in captured] == [(1, 1, 1, 1), (1, 8, 1, 8)]
     assert [scenario.detailed_timings for scenario in captured] == [True, True]
     assert all("--difficulty-sequence" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
+
+
+def test_main_global_gpu_first_blocks_updates_generated_sequence(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0, batch_size=2048, batch_size_min=2048, batch_size_max=2048),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    _stub_metadata(monkeypatch)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--difficulty-sequence",
+            "1,8,64",
+            "--sequence-auto-batch-size",
+            "--sequence-first-block-dynamic-chunk-auto",
+            "--gpu-first-blocks",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert [scenario.name for scenario in captured] == ["cuda-difficulty-sequence-d1x8x64-bauto-gfb"]
+    assert captured[0].gpu_first_blocks is True
+    assert "--gpu-first-blocks" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[0])
 
 
 def test_main_combines_paired_batch_size_sequence_scenarios(monkeypatch, tmp_path):
@@ -2335,6 +2431,24 @@ def test_main_rejects_partial_custom_scan(capsys):
 
     assert exit_code == 2
     assert "--scan-difficulty and --scan-batch-size must be used together" in capsys.readouterr().err
+
+
+def test_main_rejects_global_and_scan_gpu_first_blocks(capsys):
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--scan-difficulty",
+            "8",
+            "--scan-batch-size",
+            "2048",
+            "--gpu-first-blocks",
+            "--scan-gpu-first-blocks",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "--gpu-first-blocks and --scan-gpu-first-blocks cannot be used together" in capsys.readouterr().err
 
 
 def test_main_rejects_partial_difficulty_sequence(capsys):
