@@ -92,6 +92,16 @@ Current rejected experiment checkpoint:
   output ownership, synchronization, and subprocess teardown stability are
   materially redesigned and repeated wrapper benchmarks pass with zero invalid
   subprocesses.
+- The host-owned parallel finalization snapshot experiment was rejected. It
+  copied CUDA output blocks into host-owned memory before CPU-threaded
+  `Argon2Params::finalize` and base64 encoding, but stable acceptance failed:
+  the parallel-match sub-shape returned structured `bad allocation`, and the
+  safer chunked finalize/base64-only sub-shape later produced no-JSON
+  access-violation subprocess exits in the d8/b4096 GPU-first confirmation. The
+  source experiment was reverted. Do not retry host-owned parallel finalization
+  snapshots unless thread lifetime, per-thread output ownership, subprocess
+  teardown stability, and repeated wrapper zero-invalid checks are redesigned
+  together.
 
 Next cycle:
 
@@ -105,10 +115,10 @@ Next cycle:
 7. Refresh or load the stable d8 auto-batch GPU-first baseline.
 8. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
 9. Use detailed timing to pick exactly one bottleneck.
-10. Prefer finalization isolation, result ownership cleanup, setup/lifecycle
-   cleanup for variable `m=diff`, or a measured CUDA backend bottleneck over
-   another keygen-only, one-shot prefix, or allocation-only base64/matching
-   micro-optimization.
+10. Prefer finalization isolation, setup/lifecycle cleanup for variable
+   `m=diff`, or a measured CUDA backend bottleneck over another keygen-only,
+   one-shot prefix, host-owned parallel finalization snapshot, or
+   allocation-only base64/matching micro-optimization.
 11. Validate, benchmark, document, privacy-check, commit, and continue.
 
 ## Current State Snapshot
@@ -683,6 +693,20 @@ Measurement cautions:
 - Accepted auto-batch stability fix: CUDA automatic batch-size selection now queries free device memory through a lightweight CUDA runtime helper instead of constructing a temporary full `CudaBackend`. This preserves the reusable Hash API backend lifecycle for real work and avoids the no-JSON subprocess crash seen in direct `--auto-batch-size` probes. Validation passed focused Hash API tests, a Release CUDA rebuild, direct fixed-d8 auto-batch JSON smoke, direct `difficulty_sequence=1,8,64` auto-batch JSON smoke, and CUDA golden hash checks with and without `--gpu-first-blocks`.
 - Measurement-only variable-`m` GPU first-block confirmation: after the auto-batch fix, clean normal-trust wrapper runs for the preferred `difficulty_sequence=1,8,64`, `--sequence-auto-batch-size`, `--sequence-first-block-dynamic-chunk-auto`, seconds `8`, warm-up `1`, repeat `3`, and no XUNI completed for both default and explicit GPU first-block paths. The default path selected fixed b2048 and reached about `76.52k H/s` median with `11.24%` spread, slightly above the stability gate. The `gpu_first_blocks=true` path selected the same fixed b2048, reached about `117.34k H/s` median with `6.34%` spread, and improved median throughput by about `+53.34%` versus that same-run default median. Treat this as strong support for continuing GPU-first policy work, but do not enable it by default until fixed-difficulty d8/b2048 and d8/b3072 confirmations are also clean enough.
 - Measurement-only fixed-d8 GPU first-block confirmation: a normal-trust generated CUDA no-XUNI scan over d8/b2048 and d8/b3072 with seconds `8`, warm-up `1`, repeat `3`, and paired default/GPU-first variants produced strong fixed-`m` evidence but not full auto-policy proof. The b2048 rows were clean and stable: default reached about `77.60k H/s` with `2.87%` spread, while `gpu_first_blocks=true` reached about `179.67k H/s` with `1.60%` spread, about `+131.55%` versus the same-run default row. The b3072 default row was also clean and stable at about `82.16k H/s` with `1.15%` spread, and the b3072 GPU-first measured samples were stable at about `186.09k H/s` with `5.84%` spread, but its warm-up subprocess exited without JSON, leaving the combined report invalid. A follow-up serialized b3072 GPU-first repeat completed with normal report quality and no invalid subprocesses at about `180.20k H/s`, but spread was `10.36%`, just above the `10%` stability gate. Keep GPU-first as a high-confidence opt-in optimization for d8/b2048 and variable-`m` b2048; require one more clean b3072 confirmation before enabling any automatic policy for larger d8 batches.
+- Rejected host-owned parallel finalization snapshot: copying CUDA output blocks
+  into local host memory and CPU-threading finalization/base64 preserved the
+  CUDA golden hashes and produced promising clean smokes, including d8/b4096
+  GPU-first samples above the previous local checkpoint and a preferred
+  variable-`m` GPU-first sequence at about `194.77k H/s` with `3.57%` spread.
+  It was not stable enough to keep. The parallel-match sub-shape returned
+  structured `bad allocation`, and the safer chunked finalize/base64-only
+  sub-shape later produced no-JSON access-violation exits during a d8/b4096
+  GPU-first repeat-3 confirmation even though two measured samples were valid.
+  Focused Hash API tests, the Release CUDA build, Blake2b self-test,
+  finalization diagnostic, and CUDA golden hashes were used during the cycle,
+  but wrapper stability failed the acceptance gate. The source experiment was
+  reverted; do not retry host-owned parallel finalization snapshots without a
+  materially different ownership and subprocess-teardown design.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
