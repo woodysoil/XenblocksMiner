@@ -17,6 +17,7 @@ def _run(
     timing_per_attempt: dict | None = None,
     stage_pct: dict | None = None,
     nested_stage_pct: dict | None = None,
+    analysis_metrics: dict | None = None,
     spread_pct: float = 2.0,
     difficulty_sequence: list[int] | None = None,
     batch_size: int = 64,
@@ -95,6 +96,7 @@ def _run(
             "timing_analysis": {
                 "stage_pct": stage_pct or {},
                 "nested_stage_pct": nested_stage_pct or {},
+                **(analysis_metrics or {}),
             },
             "first_block_workers": first_block_workers,
             "first_block_dynamic_chunk_size": first_block_dynamic_chunk_size,
@@ -239,6 +241,20 @@ def test_compare_reports_includes_top_level_stage_percentage_deltas():
     assert timing_deltas["setup_ms"]["delta_pct_points"] == -10.0
     assert timing_deltas["setup_ms"]["change_pct"] == -50.0
     assert timing_deltas["input_ms"]["delta_pct_points"] == 10.0
+
+
+def test_compare_reports_includes_analysis_metric_deltas():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0, analysis_metrics={"input_residual_pct": 4.0})),
+        _report(_run("cuda-a", 120.0, analysis_metrics={"input_residual_pct": 1.0})),
+    )
+
+    timing_deltas = result["comparisons"][0]["analysis_metric_deltas"]
+
+    assert timing_deltas["input_residual_pct"]["before_value"] == 4.0
+    assert timing_deltas["input_residual_pct"]["after_value"] == 1.0
+    assert timing_deltas["input_residual_pct"]["delta_value"] == -3.0
+    assert timing_deltas["input_residual_pct"]["change_pct"] == -75.0
 
 
 def test_compare_reports_includes_difficulty_sequence_metadata():
@@ -574,6 +590,7 @@ def test_format_text_outputs_automation_friendly_rows():
                 timing_per_attempt={"input_ms": 0.010, "compute_ms": 0.005},
                 stage_pct={"setup_ms": 20.0, "input_ms": 60.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 300.0},
+                analysis_metrics={"input_residual_pct": 4.0},
                 first_block_worker_count=4,
                 first_block_dynamic_chunk_size=64,
                 first_block_dynamic_chunk_auto=True,
@@ -592,6 +609,7 @@ def test_format_text_outputs_automation_friendly_rows():
                 timing_per_attempt={"input_ms": 0.007, "compute_ms": 0.006},
                 stage_pct={"setup_ms": 10.0, "input_ms": 70.0},
                 nested_stage_pct={"first_block_digest_cpu_ms": 240.0},
+                analysis_metrics={"input_residual_pct": 1.0},
                 first_block_worker_count=8,
                 first_block_dynamic_chunk_size=64,
                 first_block_dynamic_chunk_auto=True,
@@ -629,6 +647,7 @@ def test_format_text_outputs_automation_friendly_rows():
     assert "input_ms:-0.003000ms/attempt" in text
     assert "input_ms:10.000pp" in text
     assert "first_block_digest_cpu_ms:-60.000pp" in text
+    assert "input_residual_pct:-3.000000" in text
 
 
 def test_format_text_escapes_csv_fields():

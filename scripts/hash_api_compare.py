@@ -16,6 +16,18 @@ RunKey = str | tuple[Any, ...]
 RunMap = dict[RunKey, dict[str, Any]]
 
 
+def _numeric_analysis_metrics(analysis: dict[str, Any]) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for key, value in analysis.items():
+        if isinstance(value, bool) or isinstance(value, (dict, list, str)):
+            continue
+        try:
+            metrics[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return metrics
+
+
 def load_report(path: Path) -> Report:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -89,6 +101,7 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
 def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     summary = _summary_for(run)
     scenario = _scenario_for(run)
+    timing_analysis = summary.get("timing_analysis") or {}
     name = str(summary.get("name") or scenario.get("name") or "")
     if not name:
         raise ValueError("benchmark run is missing a scenario name")
@@ -159,8 +172,9 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "batch_size_max": _int_value(summary, "batch_size_max", _int_value(summary, "batch_size", 0)),
         "timings": summary.get("timings", {}),
         "timing_per_attempt": summary.get("timing_per_attempt", {}),
-        "stage_pct": (summary.get("timing_analysis") or {}).get("stage_pct", {}),
-        "nested_stage_pct": (summary.get("timing_analysis") or {}).get("nested_stage_pct", {}),
+        "stage_pct": timing_analysis.get("stage_pct", {}),
+        "nested_stage_pct": timing_analysis.get("nested_stage_pct", {}),
+        "analysis_metrics": _numeric_analysis_metrics(timing_analysis),
         "matches": _int_value(summary, "matches", 0),
         "ok": bool(summary.get("ok")),
         "error": str(summary.get("error") or ""),
@@ -350,6 +364,27 @@ def compare_nested_stage_pct(
     return comparison
 
 
+def compare_analysis_metrics(
+    before: dict[str, Any] | None,
+    after: dict[str, Any] | None,
+) -> dict[str, dict[str, float | None]]:
+    before_metrics = (before or {}).get("analysis_metrics") or {}
+    after_metrics = (after or {}).get("analysis_metrics") or {}
+    comparison: dict[str, dict[str, float | None]] = {}
+
+    for key in sorted(set(before_metrics) | set(after_metrics)):
+        before_value = _float_value(before_metrics, key, 0.0)
+        after_value = _float_value(after_metrics, key, 0.0)
+        comparison[key] = {
+            "before_value": before_value,
+            "after_value": after_value,
+            "delta_value": after_value - before_value,
+            "change_pct": _percent_change(before_value, after_value),
+        }
+
+    return comparison
+
+
 def _status(
     before: dict[str, Any] | None,
     after: dict[str, Any] | None,
@@ -466,6 +501,7 @@ def compare_reports(
                 "timing_per_attempt_deltas": compare_timing_per_attempt(before, after),
                 "stage_pct_deltas": compare_stage_pct(before, after),
                 "nested_stage_pct_deltas": compare_nested_stage_pct(before, after),
+                "analysis_metric_deltas": compare_analysis_metrics(before, after),
                 "before": before,
                 "after": after,
             }
@@ -537,6 +573,7 @@ def format_text(report: Report) -> str:
             "dominant_timing_per_attempt_delta",
             "dominant_stage_pct_delta",
             "dominant_nested_stage_pct_delta",
+            "dominant_analysis_metric_delta",
         ]
     )
     for item in report["comparisons"]:
@@ -579,6 +616,16 @@ def format_text(report: Report) -> str:
             dominant_nested_pct_delta = (
                 f"{dominant_stage}:{float(dominant_delta.get('delta_pct_points') or 0.0):.3f}pp"
             )
+        analysis_metric_deltas = item.get("analysis_metric_deltas") or {}
+        dominant_analysis_metric_delta = ""
+        if analysis_metric_deltas:
+            dominant_stage, dominant_delta = max(
+                analysis_metric_deltas.items(),
+                key=lambda pair: abs(float(pair[1].get("delta_value") or 0.0)),
+            )
+            dominant_analysis_metric_delta = (
+                f"{dominant_stage}:{float(dominant_delta.get('delta_value') or 0.0):.6f}"
+            )
         writer.writerow(
             [
                 item["name"],
@@ -614,6 +661,7 @@ def format_text(report: Report) -> str:
                 dominant_per_attempt_delta,
                 dominant_stage_pct_delta,
                 dominant_nested_pct_delta,
+                dominant_analysis_metric_delta,
             ]
         )
     return output.getvalue().rstrip("\n")
