@@ -63,6 +63,8 @@ Current progress:
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, top-level and nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API comparison tooling can match by config while ignoring only detailed-timing mode with `--ignore-detailed-timings`, which helps compare default and diagnostic reports for the same scenario without changing other matching fields.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
+- Current measurement-only work is extending those variable-`m` scenarios so the same benchmark lifecycle can also vary batch size, for example pairing `difficulty_sequence=1,8,64` with `batch_size_sequence=2048,3072,3072`. Finish this tooling slice before starting another hot-path performance experiment.
+- Mixed difficulty/batch-size sequence runs should report public-safe metadata such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`, and should be excluded from fixed-shape batch-size recommendations.
 - Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
 - CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers`, can enable backend-selected first-block dynamic chunks with `--scan-first-block-dynamic-chunk-auto`, and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
 - CUDA Hash API scenarios can set `first_block_dynamic_chunk_size` / `--first-block-dynamic-chunk-size` to benchmark dynamic first-block chunk distribution. The default `0` keeps static chunking and current miner behavior; nonzero values are explicit experiments for worker start skew and load-balance diagnostics.
@@ -532,13 +534,14 @@ Do not retry rejected experiments unless the implementation shape has changed en
 Start the next cycle from the latest clean commit and this decision tree:
 
 1. If the worktree is dirty, identify whether it is a previous-agent experiment. Revert only rejected experiments owned by the current goal.
-2. Run the focused Hash API tests before editing performance code.
-3. Build or reuse the clean Release CUDA binary from the configured preset.
-4. Run the CUDA golden hash check before trusting benchmark data.
-5. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
-6. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
-7. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate, using the post-auto detailed timing evidence as the current selector.
-8. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
+2. If the dirty work is the variable batch-size sequence benchmark slice, finish its tests, documentation, CUDA smoke, privacy scan, and measurement-only commit before editing performance code.
+3. Run the focused Hash API tests before editing performance code.
+4. Build or reuse the clean Release CUDA binary from the configured preset.
+5. Run the CUDA golden hash check before trusting benchmark data.
+6. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
+7. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
+8. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate, using the post-auto detailed timing evidence as the current selector.
+9. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
 
 Good next experiment shapes:
 
