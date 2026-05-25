@@ -68,6 +68,14 @@ Current rejected experiment checkpoint:
   auto-batch GPU-first smoke from about `196.81k H/s` median to about
   `179.40k H/s` median. The source experiment was reverted. Do not retry this
   exact one-shot prefix update shape.
+- The fixed char-buffer base64 plus `std::string_view` matching experiment
+  reduced nested base64 timing in short detailed diagnostics, but did not produce
+  a stable end-to-end win. The final clean d8/b4096 generated CUDA GPU-first
+  confirmation regressed from about `196.86k H/s` to about `192.78k H/s`, and a
+  rerun stayed unstable at about `195.35k H/s` with high spread. The source
+  experiment was reverted. Do not retry this allocation-only finalization shape
+  unless result ownership, output materialization, and benchmark stability are
+  redesigned together.
 - The rejected `gpu_final_hashes` experiment must stay rejected unless final hash
   output ownership, synchronization, and subprocess teardown stability are
   materially redesigned and repeated wrapper benchmarks pass with zero invalid
@@ -85,7 +93,8 @@ Next cycle:
 8. Use detailed timing to pick exactly one bottleneck.
 9. Prefer finalization isolation, result ownership cleanup, setup/lifecycle
    cleanup for variable `m=diff`, or a measured CUDA backend bottleneck over
-   another keygen-only or one-shot prefix micro-optimization.
+   another keygen-only, one-shot prefix, or allocation-only base64/matching
+   micro-optimization.
 10. Validate, benchmark, document, privacy-check, commit, and continue.
 
 ## Current State Snapshot

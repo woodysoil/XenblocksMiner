@@ -56,9 +56,13 @@ short state below is only the resume snapshot.
   benchmark trust, and zero invalid subprocesses.
 - d1 and d64 tuning remain separate from d8. Do not generalize the local d8
   batch-size result to all GPU classes without confirmation.
-- The most recent uncommitted `Blake2b` / `digestLong` one-shot prefix experiment
-  was rejected because it preserved correctness but regressed d8 GPU-first
-  throughput in a same-scenario smoke. Do not keep or retry that exact shape.
+- The recent `Blake2b` / `digestLong` one-shot prefix experiment was rejected
+  because it preserved correctness but regressed d8 GPU-first throughput in a
+  same-scenario smoke. Do not keep or retry that exact shape.
+- The recent fixed char-buffer base64 plus `std::string_view` matching experiment
+  was rejected because it reduced nested base64 timing but failed stable
+  end-to-end d8/b4096 GPU-first confirmation. Do not retry that exact shape
+  unless finalization output ownership and result materialization are redesigned.
 - The earlier `gpu_final_hashes` design was rejected because it produced
   access-violation subprocess exits. Do not reintroduce device-side final hash
   output unless output lifetime, synchronization, and repeated wrapper stability
@@ -195,7 +199,8 @@ Choose the next step in this order:
    a narrower scenario before changing performance code.
 6. If `argon2_finalize_ms` or `finalize_ms` dominates after GPU-first first-block
    preparation, isolate finalization, result collection, base64, matching, and
-   output ownership before changing parallelism or device finalization.
+   output ownership before changing parallelism, device finalization, or
+   allocation-only encoding shapes.
 7. If `input_ms` or `first_block_ms` again dominates, target generated input,
    salt/key materialization, and Argon2 first-block preparation.
 8. If setup dominates variable `m=diff` sequences, target safe backend lifecycle
