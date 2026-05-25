@@ -4,11 +4,15 @@
 
 Continuously improve the Xenblocks Hash API hashing throughput until performance gains plateau, correctness risk becomes unacceptable, or the implementation is close enough to the practical hardware limit.
 
-The aspirational target is at least a 1000% speed improvement over the measured baseline where feasible. Treat that as a direction, not permission to weaken correctness. Every optimization must preserve the real `argon2id-xen` result semantics.
+The aspirational target is at least a 1000% speed improvement over the measured baseline where feasible. A 1000% throughput improvement means `11x` the baseline, not just `10x`. Treat that as a direction, not permission to weaken correctness. Every optimization must preserve the real `argon2id-xen` result semantics.
 
 This goal is intended for Codex `/goal` long-running execution after the reusable Hash API extraction. Treat this file as the persistent operating brief.
 
-The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`. Optimize the current local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
+The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`. Optimize the current CUDA-capable local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
+
+Treat this as a latency-first, throughput-measured goal. Median warm attempts
+per second is the main repeatable metric, but every accepted change should also
+reduce or explain median time per attempt for the same real hash path.
 
 ## `/goal` Starter
 
@@ -29,6 +33,12 @@ this summary is the newer control point.
 The goal is active and should keep running autonomous optimization cycles. Do not
 ask for approval for routine inspection, tests, builds, benchmarks, source edits,
 documentation edits, privacy checks, or small validated commits.
+
+Routine long-run work is authorized by the goal contract. Agents may run
+non-destructive local commands, create ignored benchmark artifacts, edit
+hash-path code, validate, benchmark, document, privacy-check, and make coherent
+English commits without pausing. Ask only for the explicit stop conditions near
+the end of this file.
 
 Current confirmed architecture state:
 
@@ -51,6 +61,11 @@ Latest public-safe performance checkpoint:
   first-block dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal
   benchmark trust, the best current local candidate is batch size `4096` at about
   `196.86k H/s` median with `1.95%` spread and zero invalid subprocesses.
+- A later pre-launch-shape refresh of the same d8/b4096 GPU-first scenario
+  measured about `191.87k H/s` median with `2.05%` spread and zero invalid
+  subprocesses. Treat this as the current launch-geometry baseline for the next
+  kernel-runner experiment, while keeping the earlier `196.86k H/s` checkpoint
+  as the best accepted public-safe d8/b4096 result.
 - The same local scan saw batch size `3072` at about `191.19k H/s` median with
   `3.15%` spread. Keep b3072 as a nearby fallback candidate, not the current d8
   winner.
@@ -59,6 +74,11 @@ Latest public-safe performance checkpoint:
 - The current post-GPU-first bottleneck should be rechecked with detailed timing,
   but recent evidence points toward CPU finalization and remaining host-side
   overhead, especially `argon2_finalize_ms`, more than first-block preparation.
+- Current GPU-first timing also exposes a measurable first-block launch component
+  around the first-block device path. One near-term safe experiment is CUDA
+  first-block launch geometry in `KernelRunner::runDeviceFirstBlockKernel()`,
+  changing one launch parameter at a time and accepting only stable same-scenario
+  wins.
 
 Current rejected experiment checkpoint:
 
@@ -115,11 +135,14 @@ Next cycle:
 7. Refresh or load the stable d8 auto-batch GPU-first baseline.
 8. Refresh or load the preferred variable-`m` GPU-first sequence baseline.
 9. Use detailed timing to pick exactly one bottleneck.
-10. Prefer finalization isolation, setup/lifecycle cleanup for variable
+10. If continuing from the latest clean checkpoint, prefer a one-parameter CUDA
+   first-block launch-geometry experiment over another finalization parallelism
+   snapshot.
+11. Otherwise prefer finalization isolation, setup/lifecycle cleanup for variable
    `m=diff`, or a measured CUDA backend bottleneck over another keygen-only,
    one-shot prefix, host-owned parallel finalization snapshot, or
    allocation-only base64/matching micro-optimization.
-11. Validate, benchmark, document, privacy-check, commit, and continue.
+12. Validate, benchmark, document, privacy-check, commit, and continue.
 
 ## Current State Snapshot
 
@@ -265,6 +288,17 @@ The end state should make hash optimization easy for humans and AI agents:
 - Make GPU tuning parameters explicit, measurable, and isolated from business logic.
 - Prefer backend refactors before kernel rewrites when the current structure hides timing, forces repeated allocation, or mixes validation with hot-path hashing.
 - Design tuning decisions around runtime device properties or compute capability, not local device names or private machine details.
+- Keep generated-key indexing, salt/key materialization, Argon2 setup, CUDA
+  execution, finalization, encoding, and matching separable in both code and
+  timing metadata.
+- Keep variable `m = diff` sequences cheap to benchmark through one reusable
+  automation surface.
+- Prefer narrow architecture cleanup when it unlocks repeated AI optimization,
+  but avoid platform rewrites that do not shorten the hash path.
+
+The future program architecture should make it practical to take this Hash API
+and tune it on another CUDA machine, including RTX 3050-class or higher-end
+GPUs, without copying frontend, wallet, marketplace, or deployment state.
 
 ## Operating Rules For Codex
 
@@ -718,18 +752,21 @@ Start the next cycle from the latest clean commit and this decision tree:
 2. If the worktree contains another measurement-only tooling slice, finish its tests, documentation, CUDA smoke, privacy scan, and commit before editing performance code.
 3. Run the focused Hash API tests before editing performance code.
 4. Build or reuse the clean Release CUDA binary from the configured preset.
-5. Run the CUDA golden hash check before trusting benchmark data.
-6. Refresh or load the d8/b2048 generated-key CUDA baseline with build metadata.
-7. If the baseline is unstable, rerun d8/b2048 and include d8/b1024 as a supplemental comparison before changing code.
-8. Prefer a Track C experiment while `input_ms` and `first_block_ms` dominate, using the post-auto detailed timing evidence as the current selector.
-9. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, or `_rotr64` rotate changes without a materially different implementation shape.
+5. Run CUDA golden hash checks with and without `--gpu-first-blocks` before trusting benchmark data.
+6. Refresh or load the d8/b4096 generated-key CUDA GPU-first baseline with auto first-block chunking, no XUNI, warm-up `1`, repeat `3`, and zero invalid subprocesses.
+7. Refresh or load the preferred variable-`m` GPU-first sequence baseline for `difficulty_sequence=1,8,64`.
+8. Use detailed timing to decide whether finalization, first-block launch/compute, setup/lifecycle, transfers, or matching is the current bottleneck.
+9. If continuing directly from the latest checkpoint, try one CUDA first-block launch-geometry change in `KernelRunner::runDeviceFirstBlockKernel()` and accept only if the same d8/b4096 GPU-first benchmark and golden checks stay stable.
+10. If launch geometry does not help, prefer finalization isolation or variable-`m` setup/lifecycle cleanup over another rejected finalization parallelism snapshot.
+11. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
-- Inspect first-block digest/preparation structure for avoidable allocations, copies, or repeated materialization that are not already covered by rejected experiments.
-- Reduce generated input preparation overhead if inspection finds a narrow hot path that preserves exact generated-key attempt indexing and salt/key semantics.
-- Isolate finalization only if a focused measurement can separate `argon2_finalize_ms`, base64 encoding, matching, and result collection without changing result ownership or thread-safety.
-- Treat further scheduling work as secondary unless a new detailed run shows scheduling overhead again dominates first-block wall time. The current auto policy already reduced post-worker overhead to a small share of the sample.
+- Tune CUDA first-block launch geometry one parameter at a time, starting with thread block size only when correctness checks and same-scenario d8/b4096 GPU-first baselines are available.
+- Inspect finalization ownership and materialization before attempting any new parallel or device-side final hash path.
+- Reduce setup/lifecycle overhead for variable `m=diff` sequences if detailed timings show repeated difficulty changes are costing wall time.
+- Reduce generated input preparation overhead only if newer timing shows host input work has become dominant again.
+- Treat old CPU first-block scheduling work as secondary now that GPU first blocks are the miner-generated default.
 - Improve architecture boundaries that let CUDA backend state, difficulty-derived setup, or timing metadata be reused safely without activation or runner lifetime regressions.
 
 ## Phase Plan
@@ -1063,18 +1100,18 @@ Keep reports concise. Do not commit raw local benchmark dumps unless they are sa
 
 Work through this backlog before attempting high-risk kernel rewrites:
 
-1. Maintain current local CUDA baselines under `.benchmarks/` with warm-up and repeated runs, including d8/b2048 for continuity and d8/b1024 when b2048 is unstable locally.
-2. Run stable custom batch-size scans for common difficulty ranges, keeping d8/b2048 for continuity and d8/b1024 for the current local unstable-baseline case.
-3. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
-4. Reduce CPU-side generated-key and first-block preparation overhead where `input_ms` dominates.
-5. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
-6. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
-7. Measure CUDA allocation, copy, launch, and finalization overhead before rewriting kernel logic.
-8. Revisit pinned host memory only if profiling shows transfer cost dominates after input/setup overhead is reduced.
-9. Extend batch-size tuning toward runtime autotuning after stable cross-difficulty data exists.
-10. Tune launch parameters only after CPU-side overhead is under control.
+1. Maintain current local CUDA baselines under `.benchmarks/` with warm-up and repeated runs, especially d8/b4096 GPU-first and the preferred `m=diff` sequence.
+2. Preserve d8/b2048 and d8/b3072 only as historical continuity or fallback scenarios when they answer a concrete comparison question.
+3. Run stable custom batch-size scans for d1, d8, d64, and variable `m=diff` sequences before changing conservative defaults.
+4. Tune CUDA first-block launch geometry with one parameter per cycle when device first-block timing is material.
+5. Isolate finalization, result ownership, base64, matching, and output materialization before trying new parallel or device-side finalization designs.
+6. Measure same-`m` warm loops versus alternating `m=diff` warm loops.
+7. Cache difficulty-derived setup only when `m`, salt, key mode, batch shape, backend state, and device state make it provably safe.
+8. Reduce per-batch allocations and repeated normalization inside `src/hashapi/CudaHashBackend.cpp`.
+9. Revisit transfer overlap, streams, or pinned memory only if profiling shows transfer cost dominates after current GPU-first and finalization work.
+10. Extend batch-size and launch-shape tuning toward runtime autotuning after stable cross-difficulty data exists.
 11. Add optional autotuning once enough benchmark data justifies it.
-12. Add profiler-backed CUDA kernel work only after benchmark timing shows compute is the dominant bottleneck.
+12. Add profiler-backed CUDA kernel work when benchmark timing shows compute or launch overhead is a dominant bottleneck.
 
 Every backlog item must still follow the correctness and reporting rules above.
 
@@ -1162,18 +1199,24 @@ When resuming a long-running `/goal` session:
 2. Read this file.
 3. Read the latest benchmark-related commits.
 4. Identify the last known baseline and best result.
-5. Run a short smoke benchmark.
-6. Choose one measurable optimization.
-7. Validate correctness.
-8. Benchmark before and after.
-9. Commit if stable.
+5. Run focused Hash API tests if validation is stale.
+6. Build or reuse the clean Release CUDA binary.
+7. Run CUDA golden hash checks with and without `--gpu-first-blocks`.
+8. Run a short d8 GPU-first smoke.
+9. Refresh or load the current d8/b4096 GPU-first baseline and the preferred variable-`m` sequence.
+10. Choose one measurable optimization.
+11. Validate correctness.
+12. Benchmark before and after.
+13. Privacy-check the staged diff.
+14. Commit if stable.
 
 Recommended first action after this revision:
 
 1. Run the focused Hash API tests.
 2. Build or reuse the local CUDA binary.
-3. Run the golden CUDA hash check.
-4. Run a short main-target CUDA benchmark.
-5. Run or load repeated d8/b2048 and d8/b1024 baselines.
-6. Use detailed timing breakdowns to choose between input generation, first-block preparation, setup caching, allocation reuse, launch tuning, or matching/finalization work.
-7. Do not retry rejected pinned host staging, activation caching, salt decode, or first-block lane fast-path experiments unless the implementation shape has materially changed.
+3. Run golden CUDA hash checks with and without `--gpu-first-blocks`.
+4. Run or load repeated d8/b4096 GPU-first baseline evidence.
+5. Run or load the preferred variable-`m` GPU-first sequence.
+6. If no newer evidence exists, test CUDA first-block launch geometry with a single scoped change.
+7. Use detailed timing breakdowns to choose between finalization, launch geometry, setup caching, allocation reuse, matching, or variable-`m` lifecycle work.
+8. Do not retry rejected pinned host staging, activation caching, salt decode, first-block lane fast paths, fixed-length base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots unless the implementation shape has materially changed.

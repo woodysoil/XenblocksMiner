@@ -20,6 +20,11 @@ file as the local control contract.
 
 Minimize end-to-end time per valid Hash API CUDA hash attempt.
 
+Treat the goal as latency-first and throughput-measured. The practical target is
+to make each valid `m = difficulty` hash finish in the shortest defensible time,
+while using warm steady-state attempts per second as the main repeatable metric.
+Do not optimize a proxy path that is not the real hash path.
+
 The workload is narrow by design:
 
 - `t = 1` is fixed.
@@ -33,9 +38,33 @@ attempt, stage-level timing percentages, invalid subprocess rate, and portabilit
 across CUDA-capable local GPUs, RTX 3050-class GPUs, and higher-end CUDA GPUs.
 
 The aspirational target is a verified 1000% throughput improvement over the
-selected same-scenario baseline. A 1000% improvement means `11x` the baseline,
-not merely `10x` the baseline. If the target is not reachable on the current
-GPU, continue until profiler or benchmark evidence supports a practical plateau.
+selected same-scenario baseline, or an equivalent reduction in median time per
+attempt. A 1000% throughput improvement means `11x` the baseline, not merely
+`10x` the baseline. If the target is not reachable on the current GPU, continue
+until profiler or benchmark evidence supports a practical plateau.
+
+Optimize on the current CUDA-capable local GPU first, but keep every accepted
+change portable enough for RTX 3050-class and higher-end CUDA GPUs. Future AI
+agents should be able to keep iterating by changing isolated Hash API, CUDA,
+benchmark, or tuning code without rebuilding frontend or platform features.
+
+## Long-Run Autonomy Contract
+
+This file is intended to let `/goal` continue for many iterations without the
+user restating "continue".
+
+Routine actions do not require approval:
+
+- reading repository files and git history
+- running tests, builds, CUDA smoke checks, and benchmarks
+- writing ignored benchmark artifacts under `.benchmarks/`
+- editing hash-path source, focused tests, scripts, and docs within scope
+- reverting this goal's own rejected uncommitted experiment
+- making small English commits after validation and privacy review
+
+Ask the user only for the stop conditions listed below. Do not stop merely
+because a single experiment fails, a benchmark is noisy, or a better next step
+requires inspection.
 
 ## Current Truth
 
@@ -109,6 +138,21 @@ The target architecture should provide:
 
 If the current structure blocks serious optimization, refactor toward this
 boundary first, then continue performance work.
+
+Architecture health is part of the performance goal. Prefer changes that make
+the hash path easier to benchmark, profile, tune, and replace independently:
+
+- keep business/platform concepts out of timed hash execution
+- keep generated-key indexing, salt/key materialization, Argon2 setup, CUDA
+  execution, finalization, encoding, and matching separable in code and timing
+- keep CPU/reference behavior available as a correctness oracle
+- keep CUDA tuning choices explicit in request metadata or benchmark scenarios
+- make variable `m = diff` sequences cheap to test and safe to optimize
+- avoid hard-coding local GPU behavior as a universal default
+
+If a deeper refactor is required before meaningful speed work can continue, make
+the smallest architecture slice that unlocks one measurable optimization path,
+validate it, document it, commit it, and resume performance work.
 
 ## Progress Accounting
 
