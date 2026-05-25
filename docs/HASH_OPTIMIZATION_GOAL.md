@@ -8,7 +8,7 @@ The aspirational target is at least a 1000% speed improvement over the measured 
 
 This goal is intended for Codex `/goal` long-running execution after the reusable Hash API extraction. Treat this file as the persistent operating brief.
 
-The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1` / `p=1`, and variable `m=diff`. Optimize the current local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
+The practical optimization target is simple: complete the same valid hash attempts in as little time as possible for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`. Optimize the current local GPU first, then keep the architecture and tuning system ready for RTX 3050-class and higher-end GPUs.
 
 ## `/goal` Starter
 
@@ -17,7 +17,7 @@ Use `goal.md` as the short entrypoint, then keep this file as the authoritative 
 Suggested `/goal` objective:
 
 ```text
-Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1 and s=1/p=1 with only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
+Continuously execute goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Optimize XenblocksMiner Hash API CUDA hashing throughput for fixed t=1, fixed s=1, current single-lane p=1, and only m=difficulty changing between sessions, preserving real argon2id-xen semantics. Iterate through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval unless a listed blocker is reached. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, raw benchmark reports, local hardware identifiers, or private machine details.
 ```
 
 ## Current State Snapshot

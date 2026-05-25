@@ -5,7 +5,7 @@
 Use this exact command when starting or recreating the long-running goal:
 
 ```text
-/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s=1/p=1 are fixed and only m=difficulty may change between sessions. Keep iterating until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, privacy-clean staged diffs, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, private wallet data, or local hardware identifiers.
+/goal Follow goal.md and docs/HASH_OPTIMIZATION_GOAL.md. Continuously optimize XenblocksMiner Hash API CUDA hashing throughput for the real mining workload where t=1 and s=1 are fixed, the current implementation runs single-lane/parallelism p=1, and only m=difficulty may change between sessions. Keep iterating until the best verified warm steady-state rate is at least 1000% over the recorded baseline, or until evidence-backed plateau/practical-limit criteria are met. Verify progress with machine-readable Hash API benchmarks, golden hash checks, focused tests, privacy-clean staged diffs, and small validated commits. Preserve exact argon2id-xen semantics and the public Hash API contract. Work autonomously through inspect, benchmark, optimize, validate, document, and commit cycles without asking for approval except for the listed stop conditions. Keep all code, docs, tests, benchmark names, and commit messages in English. Never commit local paths, private machine details, raw benchmark reports, secrets, private wallet data, or local hardware identifiers.
 ```
 
 This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.md` is the detailed operating manual, phase plan, and experiment ledger. A running `/goal` agent should read this file first, then use the detailed document for current evidence, rejected experiments, and the next measurable step.
@@ -59,7 +59,8 @@ Do not store private raw reports in git. Store raw JSON and stdout only under ig
 Run an autonomous, long-lived optimization loop for the extracted Hash API and CUDA backend. The practical target is to reduce time per real hash attempt as far as possible for the fixed workload:
 
 - `t = 1`
-- `s = 1` / `p = 1`
+- `s = 1`
+- `p = 1` / single-lane execution as represented by the current implementation
 - `m = diff` / `difficulty`, which may change between sessions or benchmark sequences
 
 The aspirational target is a verified 1000% throughput increase over the selected baseline. If that target is not reachable on the current hardware, keep iterating until the remaining bottleneck is supported by benchmark or profiler evidence and the risk of further changes is higher than the expected gain.
@@ -94,7 +95,7 @@ If the active objective has a minor wording issue but still points at these file
 
 The current long-running objective is:
 
-- optimize the extracted Hash API CUDA path for fixed `t=1`, fixed `s=1` / `p=1`, and variable `m=diff`
+- optimize the extracted Hash API CUDA path for fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff`
 - keep iterating through measurement, architecture cleanup, hot-path optimization, validation, documentation, and small commits
 - preserve real `argon2id-xen` semantics and Hash API compatibility
 - keep all tracked files and commit history public-safe
@@ -135,7 +136,7 @@ This section should be refreshed whenever it would prevent duplicated work after
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
 - Variable-shape benchmark tooling can pair variable `m=diff` values with their miner-equivalent batch sizes in one backend lifecycle, for example `difficulty_sequence=1,8,64` and `batch_size_sequence=2048,3072,3072`.
 - Variable-shape benchmark summaries expose public-safe fields such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`. Recommendation logic does not treat mixed-shape runs as fixed-shape batch-size evidence.
-- A short CUDA smoke validated the variable-shape path with fixed `t=1`, fixed `s/p=1`, variable `m=diff`, and variable batch sizes in the same command. Treat that result as measurement-tool validation only unless a longer repeated benchmark confirms a performance claim.
+- A short CUDA smoke validated the variable-shape path with fixed `t=1`, fixed `s=1`, current single-lane `p=1`, variable `m=diff`, and variable batch sizes in the same command. Treat that result as measurement-tool validation only unless a longer repeated benchmark confirms a performance claim.
 
 ## Strong Goal Shape
 
@@ -218,7 +219,8 @@ Reports marked `benchmark_trust: low` are useful for diagnosing local environmen
 The optimization target is the real mining hash workload:
 
 - `t = 1` is fixed
-- `s = 1` and `p = 1` are fixed as represented by the current implementation
+- `s = 1` is fixed
+- `p = 1` / single-lane execution is fixed as represented by the current implementation
 - `m = difficulty` / `diff` is the only workload parameter expected to vary between benchmark or mining sessions
 - salt, key, prefix, difficulty, matching, and result semantics must stay compatible with the current Hash API contract
 
@@ -227,6 +229,14 @@ The primary metric is warm steady-state CUDA attempts per second. The secondary 
 Optimize same-difficulty warm loops first because they are the easiest to compare. Then confirm that the architecture also handles variable `m=diff` sequences without repeated setup or allocation costs dominating the run.
 
 When choosing between alternatives, prefer designs that keep `m=diff` explicit and cheap to retune. Do not bake in one local difficulty, one local batch size, one local GPU name, or one private build path.
+
+## Variable Difficulty Strategy
+
+Treat `m=diff` as the only expected changing workload parameter. The goal agent should optimize fixed-`m` warm loops first, then validate mixed-`m` sequences such as `difficulty_sequence=1,8,64` paired with miner-equivalent batch sizes. This prevents changes from overfitting one local difficulty while keeping the main before/after comparisons stable.
+
+When an optimization is accepted for one difficulty, look for the next cheapest confirmation across at least one lower and one higher `m` value before turning it into a default tuning policy. If the optimization helps one difficulty but hurts another, keep it behind an explicit option or an autotune decision until there is stable evidence.
+
+Future GPU support should use public device properties, compute capability, memory limits, and benchmark-selected tuning values. Do not encode private local GPU names, host identifiers, absolute paths, or one-machine assumptions into code, docs, benchmark names, or commit messages.
 
 ## Non-Negotiable Correctness Rules
 
@@ -395,7 +405,7 @@ Track C: generated input and first-block preparation
 
 - Prioritize this track while `input_ms`, `keygen_ms`, or `first_block_ms` dominate.
 - Optimize generated-key construction, salt/key materialization, Argon2 first-block preparation, CPU parallelism, and data layout.
-- Preserve fixed `t=1`, fixed `s/p=1`, and variable `m=diff` semantics.
+- Preserve fixed `t=1`, fixed `s=1`, current single-lane `p=1`, and variable `m=diff` semantics.
 - Do not retry rejected keygen, salt caching, or first-block fast-path experiments unless the implementation shape materially changed.
 
 Track D: CUDA warm execution
