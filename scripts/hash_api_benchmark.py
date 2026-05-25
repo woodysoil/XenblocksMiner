@@ -971,6 +971,24 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def add_recommendation_quality(recommendations: dict[str, Any], environment: dict[str, Any]) -> dict[str, Any]:
+    annotated = dict(recommendations)
+    benchmark_trust = str(environment.get("benchmark_trust") or "unknown")
+    high_cpu_load = bool(environment.get("high_cpu_load", False))
+    environment_available = bool(environment.get("available", False))
+    try:
+        sample_count = int(environment.get("sample_count", 0) or 0)
+    except (TypeError, ValueError):
+        sample_count = 0
+
+    annotated["benchmark_trust"] = benchmark_trust
+    annotated["environment_available"] = environment_available
+    annotated["environment_sample_count"] = sample_count
+    annotated["high_cpu_load"] = high_cpu_load
+    annotated["report_quality_ok"] = bool(annotated.get("report_ok", True)) and benchmark_trust != "low" and not high_cpu_load
+    return annotated
+
+
 def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
     safe_keys = (
         "name",
@@ -1387,6 +1405,8 @@ def main(argv: list[str]) -> int:
         return 2
 
     runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
+    environment = report_environment_metadata(runs)
+    recommendations = add_recommendation_quality(build_recommendations(runs), environment)
     report = {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "created_at_unix": time.time(),
@@ -1398,11 +1418,11 @@ def main(argv: list[str]) -> int:
         },
         "build": collect_build_metadata(args.build_cache),
         "hardware": collect_hardware_metadata(),
-        "environment": report_environment_metadata(runs),
+        "environment": environment,
         "binary": str(args.binary),
         "salt": args.salt,
         "presets": args.preset,
-        "recommendations": build_recommendations(runs),
+        "recommendations": recommendations,
         "runs": runs,
     }
 

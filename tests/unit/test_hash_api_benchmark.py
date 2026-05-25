@@ -1264,6 +1264,25 @@ def test_build_recommendations_marks_clean_report():
     assert recommendations["invalid_scenarios"] == []
 
 
+def test_add_recommendation_quality_marks_low_trust_environment():
+    recommendations = {"report_ok": True, "run_count": 1}
+    environment = {
+        "available": True,
+        "benchmark_trust": "low",
+        "high_cpu_load": True,
+        "sample_count": 8,
+    }
+
+    annotated = benchmark.add_recommendation_quality(recommendations, environment)
+
+    assert annotated["report_ok"] is True
+    assert annotated["benchmark_trust"] == "low"
+    assert annotated["high_cpu_load"] is True
+    assert annotated["environment_available"] is True
+    assert annotated["environment_sample_count"] == 8
+    assert annotated["report_quality_ok"] is False
+
+
 def test_build_sanitized_report_drops_private_fields():
     fixed_key = "0" * 64
     report = {
@@ -1925,15 +1944,22 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
     stdout = json.loads(capsys.readouterr().out)
     assert list(stdout) == [
         "batch_size_by_difficulty",
+        "benchmark_trust",
         "candidates_by_difficulty",
+        "environment_available",
+        "environment_sample_count",
+        "high_cpu_load",
         "invalid_run_count",
         "invalid_scenarios",
         "report_ok",
+        "report_quality_ok",
         "run_count",
         "stable_spread_pct",
         "valid_run_count",
     ]
     assert stdout["report_ok"] is True
+    assert stdout["report_quality_ok"] is True
+    assert stdout["benchmark_trust"] == "normal"
     assert stdout["batch_size_by_difficulty"][0]["batch_size"] == 2
     assert "runs" in json.loads(output.read_text(encoding="utf-8"))
 
