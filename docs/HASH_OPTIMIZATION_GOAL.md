@@ -82,6 +82,12 @@ Current rejected experiment checkpoint:
   golden hash commands exited without JSON. The source experiment was reverted,
   and the diagnostic plus CUDA golden checks passed again after rebuilding. Do
   not retry this exact final-prefix cache shape.
+- The direct final-digest helper experiment was rejected by the hardened
+  finalization diagnostic. It added a `Blake2b` helper for the exact
+  32-bit-length-prefix plus 1024-byte final block case and preserved the expected
+  sample hash/checksum, but diagnostic throughput regressed from about
+  `276-280k` finalizes per second to about `236-238k`. The source experiment was
+  reverted before full CUDA benchmarking. Do not retry this exact helper shape.
 - The rejected `gpu_final_hashes` experiment must stay rejected unless final hash
   output ownership, synchronization, and subprocess teardown stability are
   materially redesigned and repeated wrapper benchmarks pass with zero invalid
