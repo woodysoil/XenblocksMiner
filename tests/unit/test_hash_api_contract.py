@@ -309,14 +309,18 @@ def test_cuda_batch_size_tuning_helper_exists():
         "struct CudaBatchSizeDecision",
         "estimateCudaMemoryBatchLimit",
         "recommendedCudaBatchSize",
+        "recommendedCudaBatchSizeForDifficultySequence",
         "selectCudaBatchSize",
+        "selectCudaBatchSizeForDifficultySequence",
     ]:
         assert token in header
 
     for token in [
         "estimateCudaMemoryBatchLimit",
         "recommendedCudaBatchSize",
+        "recommendedCudaBatchSizeForDifficultySequence",
         "selectCudaBatchSize",
+        "selectCudaBatchSizeForDifficultySequence",
     ]:
         assert token in implementation
 
@@ -326,6 +330,8 @@ def test_cuda_batch_size_tuning_helper_exists():
     assert "difficulty <= 8" in implementation
     assert implementation.count("return 3072") >= 2
     assert "difficulty <= 64" in implementation
+    assert "std::min(selected, recommended)" in implementation
+    assert "std::max_element(difficulties.begin(), difficulties.end())" in implementation
     assert "explicit_max_batch_size > 0" in implementation
     assert "src/hashapi/HashApiTuning.cpp" in cmake
 

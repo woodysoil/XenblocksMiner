@@ -12,6 +12,22 @@ This file is the compact persistent goal contract. `docs/HASH_OPTIMIZATION_GOAL.
 
 The goal is thread-scoped and evidence-based. Do not mark it complete because one iteration finished, the context is long, a benchmark is noisy, or the next step is uncertain. Completion requires concrete evidence from tests, benchmark output, changed files, privacy checks, and the documented completion rule.
 
+## Automation Objective Snapshot
+
+The long-running agent's first responsibility is to keep improving the reusable Hash API CUDA hashing core, not the frontend, platform services, wallet flow, marketplace flow, or network integration. The target workload is intentionally narrow and stable:
+
+- `t = 1` is fixed.
+- `s = 1` is fixed.
+- The current implementation's single-lane execution model is fixed unless a future correctness-preserving architecture change proves otherwise.
+- `m = difficulty` / `diff` is the only expected workload parameter that may change regularly.
+- The agent should optimize same-`m` warm loops first, then validate mixed-`m` sequences so future runs can adapt to changed difficulty without repeated setup cost.
+
+The operating objective is to make each real hash attempt finish in the shortest verified time possible. The aspirational target is at least a 1000% throughput improvement over the documented baseline for the same scenario. If that target is not reachable on the current GPU, the agent should keep producing evidence-backed improvements until profiler or benchmark evidence shows a practical plateau.
+
+The architecture should stay friendly to future AI-driven optimization on other CUDA machines, including RTX 3050-class and higher-end GPUs. Prefer clean module boundaries, explicit benchmark knobs, public device properties, runtime tuning data, deterministic tests, and small reversible commits over local assumptions or one-machine special cases.
+
+Normal optimization cycles do not require human approval. The agent may run local builds, focused tests, CUDA golden-hash checks, benchmark scripts, ignored benchmark artifact writes, scoped source edits, scoped documentation edits, and small English commits. It must still stop for the explicit stop conditions below, especially anything involving secrets, destructive git history changes, or unavailable required tools.
+
 ## Goal Runtime Protocol
 
 This goal is intended to run for many continuation turns without human approval prompts. Each turn should make one measurable step and leave a useful checkpoint for the next turn.

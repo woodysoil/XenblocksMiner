@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace hashapi {
 
@@ -21,8 +22,16 @@ std::size_t estimateCudaMemoryBatchLimit(std::size_t free_memory_bytes,
 
 std::size_t recommendedCudaBatchSize(std::uint32_t difficulty);
 
+std::size_t recommendedCudaBatchSizeForDifficultySequence(
+    const std::vector<std::uint32_t>& difficulties);
+
 CudaBatchSizeDecision selectCudaBatchSize(std::size_t free_memory_bytes,
                                           std::uint32_t difficulty,
                                           std::size_t explicit_max_batch_size);
+
+CudaBatchSizeDecision selectCudaBatchSizeForDifficultySequence(
+    std::size_t free_memory_bytes,
+    const std::vector<std::uint32_t>& difficulties,
+    std::size_t explicit_max_batch_size);
 
 } // namespace hashapi

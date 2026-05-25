@@ -287,6 +287,8 @@ Use `--no-xuni` with `scripts/hash_api_benchmark.py` when benchmarking the norma
 
 Current conservative defaults are `2048` attempts through difficulty `1`, `3072` attempts through difficulty `8`, and `3072` attempts through difficulty `64`. Treat these as starting points for future autotuning, not universal hardware limits.
 
+For variable-`m` sequences, prefer a fixed batch size selected for the whole difficulty set instead of pairing each difficulty with its single-difficulty default. The sequence helper uses the most restrictive tuned default across the requested difficulties and applies the memory limit for the maximum difficulty. Current local evidence for `difficulty_sequence=1,8,64` favors fixed `2048` over `2048,3072,3072` because it avoids repeated backend setup churn.
+
 ## Local Hash Service
 
 The optional local service is a separate FastAPI app under `server/hash_api/`. It is not registered on the marketplace platform server and does not depend on marketplace routers, MQTT, leases, wallets, settlement, or SQLite.
