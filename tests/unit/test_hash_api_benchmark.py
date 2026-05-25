@@ -416,6 +416,25 @@ def test_difficulty_sequence_scenarios_can_enable_detailed_timings():
     assert [scenario.detailed_timings for scenario in scenarios] == [True]
 
 
+def test_automatic_batch_difficulty_sequence_scenarios_build_custom_matrix():
+    scenarios = benchmark.automatic_batch_difficulty_sequence_scenarios(
+        sequences=[(1, 8, 64)],
+        detailed_timings=True,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == ["cuda-difficulty-sequence-d1x8x64-bauto"]
+    assert scenarios[0].difficulty == 1
+    assert scenarios[0].batch_size == 0
+    assert scenarios[0].difficulty_sequence == (1, 8, 64)
+    assert scenarios[0].auto_batch_size is True
+    assert scenarios[0].detailed_timings is True
+
+
 def test_paired_sequence_scenarios_build_variable_shape_matrix():
     scenarios = benchmark.paired_sequence_scenarios(
         difficulty_sequences=[(1, 8, 64)],
@@ -942,6 +961,23 @@ def test_build_hash_command_adds_batch_size_sequence_when_set():
 
     assert "--batch-size-sequence" in command
     assert command[command.index("--batch-size-sequence") + 1] == "2048,3072,3072"
+
+
+def test_build_hash_command_adds_auto_batch_size_when_set():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=1,
+        batch_size=0,
+        seconds=1,
+        difficulty_sequence=(1, 8, 64),
+        auto_batch_size=True,
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--auto-batch-size" in command
+    assert "--batch-size" not in command
 
 
 def test_summarize_result_uses_selected_dynamic_chunk_size():
@@ -2189,6 +2225,55 @@ def test_main_combines_paired_batch_size_sequence_scenarios(monkeypatch, tmp_pat
     assert "--batch-size-sequence" in command
 
 
+def test_main_combines_auto_batch_difficulty_sequence_scenarios(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0, batch_size=2048, batch_size_min=2048, batch_size_max=2048),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    _stub_metadata(monkeypatch)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--difficulty-sequence",
+            "1,8,64",
+            "--sequence-auto-batch-size",
+            "--sequence-detailed-timings",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert [scenario.name for scenario in captured] == ["cuda-difficulty-sequence-d1x8x64-bauto"]
+    assert captured[0].difficulty_sequence == (1, 8, 64)
+    assert captured[0].auto_batch_size is True
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[0])
+    assert "--difficulty-sequence" in command
+    assert "--auto-batch-size" in command
+    assert "--batch-size" not in command
+
+
 def test_main_rejects_partial_custom_scan(capsys):
     exit_code = benchmark.main(
         [
@@ -2214,7 +2299,10 @@ def test_main_rejects_partial_difficulty_sequence(capsys):
     )
 
     assert exit_code == 2
-    assert "--difficulty-sequence requires --sequence-batch-size or --batch-size-sequence" in capsys.readouterr().err
+    assert (
+        "--difficulty-sequence requires --sequence-batch-size, --sequence-auto-batch-size, or --batch-size-sequence"
+        in capsys.readouterr().err
+    )
 
 
 def test_main_rejects_duplicate_scenario_names(capsys):

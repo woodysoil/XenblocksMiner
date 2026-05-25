@@ -266,6 +266,9 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "validateRequest(request)" in content
     assert "CudaHashBackend" in content
     assert "makeReusableBackend" in content
+    assert "selectAutomaticCudaBatchSize" in content
+    assert "selectCudaBatchSizeForDifficultySequence" in content
+    assert "--auto-batch-size" in content
     assert "backend->runBatch(request)" in content
     assert "--difficulty-sequence" in content
     assert "--batch-size-sequence" in content
@@ -354,6 +357,8 @@ def test_hash_api_benchmark_runner_exists():
     assert "hash-benchmark" in content
     assert "difficulty_sequence" in content
     assert "difficulty-sequence" in content
+    assert "sequence_auto_batch_size" in content
+    assert "--sequence-auto-batch-size" in content
     assert "capture_output=True" in content
     assert "nvidia-smi" in content
     assert "nvcc" in content

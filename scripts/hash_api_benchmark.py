@@ -86,6 +86,7 @@ class BenchmarkScenario:
     first_block_workers: int = 0
     first_block_dynamic_chunk_size: int = 0
     first_block_dynamic_chunk_auto: bool = False
+    auto_batch_size: bool = False
 
 
 def parse_difficulty_sequence(text: str) -> tuple[int, ...]:
@@ -258,6 +259,33 @@ def difficulty_sequence_scenarios(
         )
         for sequence in sequences
         for batch_size in batch_sizes
+    ]
+
+
+def automatic_batch_difficulty_sequence_scenarios(
+    sequences: list[tuple[int, ...]],
+    detailed_timings: bool,
+    seconds: int,
+    backend: str,
+    device: int,
+    warmup: int,
+    repeat: int,
+) -> list[BenchmarkScenario]:
+    return [
+        BenchmarkScenario(
+            name=f"{backend}-difficulty-sequence-d{difficulty_sequence_label(sequence)}-bauto",
+            backend=backend,
+            difficulty=sequence[0],
+            batch_size=0,
+            seconds=seconds,
+            difficulty_sequence=sequence,
+            device=device,
+            warmup=warmup,
+            repeat=repeat,
+            detailed_timings=detailed_timings,
+            auto_batch_size=True,
+        )
+        for sequence in sequences
     ]
 
 
@@ -745,6 +773,7 @@ def summarize_result(scenario: BenchmarkScenario, result: dict[str, Any]) -> dic
         "difficulty_changes": difficulty_change_count(scenario.difficulty_sequence),
         "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": batch_size,
+        "auto_batch_size": scenario.auto_batch_size,
         "batch_size_sequence": list(scenario.batch_size_sequence),
         "batch_size_mode": "sequence" if scenario.batch_size_sequence else "fixed",
         "batch_size_changes": batch_size_change_count(scenario.batch_size_sequence),
@@ -810,6 +839,7 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
         "key_mode": "fixed" if scenario.key else "generated",
         "batch_size": _median_int([item.get("batch_size", scenario.batch_size) for item in ok_summaries])
         or (summaries[0]["batch_size"] if summaries else scenario.batch_size),
+        "auto_batch_size": scenario.auto_batch_size,
         "batch_size_sequence": list(scenario.batch_size_sequence),
         "batch_size_mode": "sequence" if scenario.batch_size_sequence else "fixed",
         "batch_size_changes": batch_size_change_count(scenario.batch_size_sequence),
@@ -1090,8 +1120,6 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         salt,
         "--pattern",
         scenario.pattern,
-        "--batch-size",
-        str(scenario.batch_size),
         "--difficulty",
         str(scenario.difficulty),
         "--seconds",
@@ -1100,6 +1128,12 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
         str(scenario.device),
         "--json",
     ]
+    if scenario.auto_batch_size:
+        command.append("--auto-batch-size")
+        if scenario.batch_size > 0:
+            command.extend(["--batch-size", str(scenario.batch_size)])
+    else:
+        command.extend(["--batch-size", str(scenario.batch_size)])
     if scenario.key:
         command.extend(["--key", scenario.key])
     if scenario.difficulty_sequence:
@@ -1306,6 +1340,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a batch size for generated variable-difficulty scenarios. Requires --difficulty-sequence.",
     )
     parser.add_argument(
+        "--sequence-auto-batch-size",
+        action="store_true",
+        help="Use the Hash API CUDA automatic batch-size selector for generated variable-difficulty scenarios. Requires --difficulty-sequence.",
+    )
+    parser.add_argument(
         "--batch-size-sequence",
         action="append",
         default=[],
@@ -1361,14 +1400,35 @@ def main(argv: list[str]) -> int:
                     args.scan_first_block_dynamic_chunk_auto,
                 )
             )
-        if args.difficulty_sequence or args.sequence_batch_size or args.batch_size_sequence:
+        if args.difficulty_sequence or args.sequence_batch_size or args.sequence_auto_batch_size or args.batch_size_sequence:
             if args.sequence_batch_size and not args.difficulty_sequence:
                 raise ValueError("--sequence-batch-size requires --difficulty-sequence")
+            if args.sequence_auto_batch_size and not args.difficulty_sequence:
+                raise ValueError("--sequence-auto-batch-size requires --difficulty-sequence")
             if args.batch_size_sequence and not args.difficulty_sequence:
                 raise ValueError("--batch-size-sequence requires --difficulty-sequence")
-            if args.difficulty_sequence and not args.sequence_batch_size and not args.batch_size_sequence:
-                raise ValueError("--difficulty-sequence requires --sequence-batch-size or --batch-size-sequence")
+            if (
+                args.difficulty_sequence
+                and not args.sequence_batch_size
+                and not args.sequence_auto_batch_size
+                and not args.batch_size_sequence
+            ):
+                raise ValueError(
+                    "--difficulty-sequence requires --sequence-batch-size, --sequence-auto-batch-size, or --batch-size-sequence"
+                )
             difficulty_sequences = [parse_difficulty_sequence(item) for item in args.difficulty_sequence]
+            if args.sequence_auto_batch_size:
+                scenarios.extend(
+                    automatic_batch_difficulty_sequence_scenarios(
+                        difficulty_sequences,
+                        args.sequence_detailed_timings,
+                        args.seconds,
+                        args.backend,
+                        args.device,
+                        args.warmup,
+                        args.repeat,
+                    )
+                )
             if args.sequence_batch_size:
                 scenarios.extend(
                     difficulty_sequence_scenarios(

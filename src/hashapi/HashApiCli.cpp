@@ -2,6 +2,7 @@
 
 #include "CpuHashBackend.h"
 #include "HashApiJson.h"
+#include "HashApiTuning.h"
 #include "HashApiValidation.h"
 #if defined(XENBLOCKS_BUILD_MINER)
 #include "CudaHashBackend.h"
@@ -26,8 +27,8 @@ void printUsage()
     std::cout
         << "Hash API commands:\n"
         << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
-        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--batch-size-sequence <n,n,...>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n";
+        << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--auto-batch-size] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--auto-batch-size] [--batch-size-sequence <n,n,...>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -39,6 +40,7 @@ std::unordered_map<std::string, std::string> parseArgs(int argc, const char* con
             continue;
         }
         if (key == "--json" || key == "--no-xuni" || key == "--detailed-timings" ||
+            key == "--auto-batch-size" ||
             key == "--first-block-dynamic-chunk-auto") {
             args[key] = "true";
             continue;
@@ -48,6 +50,12 @@ std::unordered_map<std::string, std::string> parseArgs(int argc, const char* con
         }
     }
     return args;
+}
+
+bool hasArg(const std::unordered_map<std::string, std::string>& args,
+            const std::string& key)
+{
+    return args.find(key) != args.end();
 }
 
 std::string getArg(const std::unordered_map<std::string, std::string>& args,
@@ -287,6 +295,29 @@ std::unique_ptr<IHashBackend> makeReusableBackend(const HashApiRequest& request)
     return std::make_unique<CpuHashBackend>();
 }
 
+std::size_t selectAutomaticCudaBatchSize(const HashApiRequest& request,
+                                         const std::vector<std::uint32_t>& difficulty_sequence,
+                                         std::size_t explicit_max_batch_size)
+{
+    if (request.backend != "cuda") {
+        throw std::runtime_error("--auto-batch-size is only supported with --backend cuda");
+    }
+#if defined(XENBLOCKS_BUILD_MINER)
+    CudaBackend backend(request.device_id);
+    backend.activate();
+    const std::size_t free_memory = backend.getFreeMemory();
+    const auto decision = difficulty_sequence.empty()
+        ? selectCudaBatchSize(free_memory, request.difficulty, explicit_max_batch_size)
+        : selectCudaBatchSizeForDifficultySequence(free_memory, difficulty_sequence, explicit_max_batch_size);
+    if (decision.selected_batch_size == 0) {
+        throw std::runtime_error("automatic CUDA batch-size selection found no safe batch size");
+    }
+    return decision.selected_batch_size;
+#else
+    throw std::runtime_error("automatic CUDA batch-size selection is not available in this build");
+#endif
+}
+
 std::vector<std::uint32_t> benchmarkDifficulties(const HashApiRequest& request,
                                                  const std::vector<std::uint32_t>& difficulty_sequence)
 {
@@ -472,6 +503,12 @@ int runHashApiCli(int argc, const char* const* argv)
         }
         if (command == "hash-batch") {
             request.batch_size = getSizeArg(args, "--batch-size", 1);
+            if (hasArg(args, "--auto-batch-size")) {
+                request.batch_size = selectAutomaticCudaBatchSize(
+                    request,
+                    {},
+                    hasArg(args, "--batch-size") ? request.batch_size : 0);
+            }
             return printResult(runBackend(request), json);
         }
         if (command == "hash-benchmark") {
@@ -479,6 +516,12 @@ int runHashApiCli(int argc, const char* const* argv)
             const auto seconds = getUIntArg(args, "--seconds", 30);
             const auto difficulty_sequence = parseDifficultySequence(getArg(args, "--difficulty-sequence"));
             const auto batch_size_sequence = parseBatchSizeSequence(getArg(args, "--batch-size-sequence"));
+            if (hasArg(args, "--auto-batch-size") && batch_size_sequence.empty()) {
+                request.batch_size = selectAutomaticCudaBatchSize(
+                    request,
+                    difficulty_sequence,
+                    hasArg(args, "--batch-size") ? request.batch_size : 0);
+            }
             return runBenchmark(request, seconds, json, difficulty_sequence, batch_size_sequence);
         }
     } catch (const std::exception& ex) {
