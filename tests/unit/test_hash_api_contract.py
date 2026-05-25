@@ -359,6 +359,8 @@ def test_hash_api_benchmark_runner_exists():
     assert "difficulty-sequence" in content
     assert "sequence_auto_batch_size" in content
     assert "--sequence-auto-batch-size" in content
+    assert "sequence_first_block_dynamic_chunk_auto" in content
+    assert "--sequence-first-block-dynamic-chunk-auto" in content
     assert "capture_output=True" in content
     assert "nvidia-smi" in content
     assert "nvcc" in content

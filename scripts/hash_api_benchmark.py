@@ -238,6 +238,7 @@ def difficulty_sequence_scenarios(
     sequences: list[tuple[int, ...]],
     batch_sizes: list[int],
     detailed_timings: bool,
+    first_block_dynamic_chunk_auto: bool,
     seconds: int,
     backend: str,
     device: int,
@@ -256,6 +257,7 @@ def difficulty_sequence_scenarios(
             warmup=warmup,
             repeat=repeat,
             detailed_timings=detailed_timings,
+            first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
         )
         for sequence in sequences
         for batch_size in batch_sizes
@@ -265,6 +267,7 @@ def difficulty_sequence_scenarios(
 def automatic_batch_difficulty_sequence_scenarios(
     sequences: list[tuple[int, ...]],
     detailed_timings: bool,
+    first_block_dynamic_chunk_auto: bool,
     seconds: int,
     backend: str,
     device: int,
@@ -283,6 +286,7 @@ def automatic_batch_difficulty_sequence_scenarios(
             warmup=warmup,
             repeat=repeat,
             detailed_timings=detailed_timings,
+            first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
             auto_batch_size=True,
         )
         for sequence in sequences
@@ -293,6 +297,7 @@ def paired_sequence_scenarios(
     difficulty_sequences: list[tuple[int, ...]],
     batch_size_sequences: list[tuple[int, ...]],
     detailed_timings: bool,
+    first_block_dynamic_chunk_auto: bool,
     seconds: int,
     backend: str,
     device: int,
@@ -325,6 +330,7 @@ def paired_sequence_scenarios(
             warmup=warmup,
             repeat=repeat,
             detailed_timings=detailed_timings,
+            first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
         )
         for difficulty_sequence in difficulty_sequences
         for batch_size_sequence in batch_size_sequences
@@ -362,6 +368,7 @@ def preset_scenarios(preset: str, seconds: int, backend: str, device: int, warmu
         return difficulty_sequence_scenarios(
             [(1, 1, 1, 1), (1, 8, 1, 8), (8, 64, 8, 64)],
             [512],
+            False,
             False,
             seconds,
             backend,
@@ -1356,6 +1363,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable detailed timing diagnostics on generated variable-difficulty scenarios.",
     )
     parser.add_argument(
+        "--sequence-first-block-dynamic-chunk-auto",
+        action="store_true",
+        help="Enable backend-selected first-block dynamic chunks on generated variable-difficulty scenarios.",
+    )
+    parser.add_argument(
         "--preset",
         action="append",
         choices=PRESET_NAMES,
@@ -1422,6 +1434,7 @@ def main(argv: list[str]) -> int:
                     automatic_batch_difficulty_sequence_scenarios(
                         difficulty_sequences,
                         args.sequence_detailed_timings,
+                        args.sequence_first_block_dynamic_chunk_auto,
                         args.seconds,
                         args.backend,
                         args.device,
@@ -1435,6 +1448,7 @@ def main(argv: list[str]) -> int:
                         difficulty_sequences,
                         args.sequence_batch_size,
                         args.sequence_detailed_timings,
+                        args.sequence_first_block_dynamic_chunk_auto,
                         args.seconds,
                         args.backend,
                         args.device,
@@ -1448,6 +1462,7 @@ def main(argv: list[str]) -> int:
                         difficulty_sequences,
                         [parse_batch_size_sequence(item) for item in args.batch_size_sequence],
                         args.sequence_detailed_timings,
+                        args.sequence_first_block_dynamic_chunk_auto,
                         args.seconds,
                         args.backend,
                         args.device,

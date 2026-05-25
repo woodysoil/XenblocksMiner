@@ -374,6 +374,7 @@ def test_difficulty_sequence_scenarios_build_custom_matrix():
         sequences=[(1, 1, 1, 1), (1, 8, 1, 8)],
         batch_sizes=[512, 1024],
         detailed_timings=False,
+        first_block_dynamic_chunk_auto=False,
         seconds=3,
         backend="cuda",
         device=1,
@@ -405,6 +406,7 @@ def test_difficulty_sequence_scenarios_can_enable_detailed_timings():
         sequences=[(8, 64, 8, 64)],
         batch_sizes=[512],
         detailed_timings=True,
+        first_block_dynamic_chunk_auto=False,
         seconds=3,
         backend="cuda",
         device=1,
@@ -420,6 +422,7 @@ def test_automatic_batch_difficulty_sequence_scenarios_build_custom_matrix():
     scenarios = benchmark.automatic_batch_difficulty_sequence_scenarios(
         sequences=[(1, 8, 64)],
         detailed_timings=True,
+        first_block_dynamic_chunk_auto=True,
         seconds=3,
         backend="cuda",
         device=1,
@@ -433,6 +436,7 @@ def test_automatic_batch_difficulty_sequence_scenarios_build_custom_matrix():
     assert scenarios[0].difficulty_sequence == (1, 8, 64)
     assert scenarios[0].auto_batch_size is True
     assert scenarios[0].detailed_timings is True
+    assert scenarios[0].first_block_dynamic_chunk_auto is True
 
 
 def test_paired_sequence_scenarios_build_variable_shape_matrix():
@@ -440,6 +444,7 @@ def test_paired_sequence_scenarios_build_variable_shape_matrix():
         difficulty_sequences=[(1, 8, 64)],
         batch_size_sequences=[(2048, 3072, 3072)],
         detailed_timings=True,
+        first_block_dynamic_chunk_auto=True,
         seconds=3,
         backend="cuda",
         device=1,
@@ -455,6 +460,7 @@ def test_paired_sequence_scenarios_build_variable_shape_matrix():
     assert scenarios[0].difficulty_sequence == (1, 8, 64)
     assert scenarios[0].batch_size_sequence == (2048, 3072, 3072)
     assert scenarios[0].detailed_timings is True
+    assert scenarios[0].first_block_dynamic_chunk_auto is True
 
 
 def test_paired_sequence_scenarios_reject_mismatched_sequence_lengths():
@@ -463,6 +469,7 @@ def test_paired_sequence_scenarios_reject_mismatched_sequence_lengths():
             difficulty_sequences=[(1, 8, 64)],
             batch_size_sequences=[(2048, 3072)],
             detailed_timings=False,
+            first_block_dynamic_chunk_auto=False,
             seconds=3,
             backend="cuda",
             device=1,
@@ -2259,6 +2266,7 @@ def test_main_combines_auto_batch_difficulty_sequence_scenarios(monkeypatch, tmp
             "1,8,64",
             "--sequence-auto-batch-size",
             "--sequence-detailed-timings",
+            "--sequence-first-block-dynamic-chunk-auto",
             "--output",
             str(output),
         ]
@@ -2268,9 +2276,11 @@ def test_main_combines_auto_batch_difficulty_sequence_scenarios(monkeypatch, tmp
     assert [scenario.name for scenario in captured] == ["cuda-difficulty-sequence-d1x8x64-bauto"]
     assert captured[0].difficulty_sequence == (1, 8, 64)
     assert captured[0].auto_batch_size is True
+    assert captured[0].first_block_dynamic_chunk_auto is True
     command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[0])
     assert "--difficulty-sequence" in command
     assert "--auto-batch-size" in command
+    assert "--first-block-dynamic-chunk-auto" in command
     assert "--batch-size" not in command
 
 
