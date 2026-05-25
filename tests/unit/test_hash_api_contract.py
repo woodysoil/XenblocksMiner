@@ -193,6 +193,27 @@ def test_hash_api_result_exposes_first_block_scheduling_metadata():
     assert "next_dynamic_index.fetch_add(chunk_size, std::memory_order_relaxed)" in cuda_impl
 
 
+def test_hash_api_result_exposes_batch_size_range_metadata():
+    types = read("src/hashapi/HashApiTypes.h")
+    json_impl = read("src/hashapi/HashApiJson.cpp")
+    cli_impl = read("src/hashapi/HashApiCli.cpp")
+    docs = read("docs/hash-api.md")
+
+    for field in [
+        "batch_size_min",
+        "batch_size_max",
+    ]:
+        assert field in types
+        assert field in json_impl
+        assert field in docs
+
+    assert "--batch-size-sequence" in cli_impl
+    assert "parseBatchSizeSequence" in cli_impl
+    assert "update_batch_size_ranges(current.batch_size)" in cli_impl
+    assert "difficulty sequence and batch-size sequence lengths must match" in cli_impl
+    assert "--batch-size-sequence" in docs
+
+
 def test_hash_api_base64_encoder_avoids_incremental_string_appends():
     content = read("src/hashapi/HashApiEncoding.cpp")
     header = read("src/hashapi/HashApiEncoding.h")
@@ -235,7 +256,9 @@ def test_hash_api_cli_dispatches_cuda_backend_in_full_build():
     assert "makeReusableBackend" in content
     assert "backend->runBatch(request)" in content
     assert "--difficulty-sequence" in content
+    assert "--batch-size-sequence" in content
     assert "parseDifficultySequence" in content
+    assert "parseBatchSizeSequence" in content
     assert "aggregate.hash = current.hash" in content
     assert "aggregate.hash.clear()" in content
     assert "aggregate.first_block_dynamic_chunk_size = current.first_block_dynamic_chunk_size" in content
@@ -320,6 +343,7 @@ def test_hash_api_benchmark_runner_exists():
     assert "scripts/hash_api_benchmark.py" in docs
     assert "<miner-binary>" in docs
     assert "--difficulty-sequence" in docs
+    assert "--batch-size-sequence" in docs
 
 
 def test_random_key_generator_avoids_per_key_stream_allocation():

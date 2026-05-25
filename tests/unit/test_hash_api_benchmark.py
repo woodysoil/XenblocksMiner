@@ -16,6 +16,8 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "device_id": 0,
         "difficulty": 1,
         "batch_size": 2,
+        "batch_size_min": 2,
+        "batch_size_max": 2,
         "attempts": attempts,
         "first_block_workers": 0,
         "first_block_dynamic_chunk_size": 0,
@@ -34,6 +36,10 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "error": "" if ok else "failed",
     }
     summary.update(extra)
+    if "batch_size_min" not in extra:
+        summary["batch_size_min"] = summary["batch_size"]
+    if "batch_size_max" not in extra:
+        summary["batch_size_max"] = summary["batch_size"]
     return summary
 
 
@@ -116,6 +122,18 @@ def test_parse_scenario_supports_difficulty_sequence():
     assert scenario.difficulty_sequence == (1, 8, 1, 8)
 
 
+def test_parse_scenario_supports_batch_size_sequence():
+    scenario = benchmark.parse_scenario(
+        "backend=cuda,difficulty_sequence=1|8|64,batch_size_sequence=2048|3072|3072,seconds=2",
+    )
+
+    assert scenario.name == "cuda-seq-d1x8x64-bseq-2048x3072x3072"
+    assert scenario.difficulty == 1
+    assert scenario.batch_size == 2048
+    assert scenario.difficulty_sequence == (1, 8, 64)
+    assert scenario.batch_size_sequence == (2048, 3072, 3072)
+
+
 def test_parse_scenario_rejects_malformed_key_value_pairs():
     try:
         benchmark.parse_scenario("backend=cuda,difficulty_sequence=1,8,batch_size=512")
@@ -133,6 +151,16 @@ def test_parse_difficulty_sequence_rejects_invalid_values():
             pass
         else:
             raise AssertionError(f"expected invalid difficulty sequence rejection for {text!r}")
+
+
+def test_parse_batch_size_sequence_rejects_invalid_values():
+    for text in ["", "512,,1024", "512,zero", "512,0"]:
+        try:
+            benchmark.parse_batch_size_sequence(text)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"expected invalid batch-size sequence rejection for {text!r}")
 
 
 def test_preset_scenarios_builds_warm_short_matrix():
@@ -388,6 +416,46 @@ def test_difficulty_sequence_scenarios_can_enable_detailed_timings():
     assert [scenario.detailed_timings for scenario in scenarios] == [True]
 
 
+def test_paired_sequence_scenarios_build_variable_shape_matrix():
+    scenarios = benchmark.paired_sequence_scenarios(
+        difficulty_sequences=[(1, 8, 64)],
+        batch_size_sequences=[(2048, 3072, 3072)],
+        detailed_timings=True,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=2,
+        repeat=4,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-difficulty-sequence-d1x8x64-bseq-2048x3072x3072",
+    ]
+    assert scenarios[0].difficulty == 1
+    assert scenarios[0].batch_size == 2048
+    assert scenarios[0].difficulty_sequence == (1, 8, 64)
+    assert scenarios[0].batch_size_sequence == (2048, 3072, 3072)
+    assert scenarios[0].detailed_timings is True
+
+
+def test_paired_sequence_scenarios_reject_mismatched_sequence_lengths():
+    try:
+        benchmark.paired_sequence_scenarios(
+            difficulty_sequences=[(1, 8, 64)],
+            batch_size_sequences=[(2048, 3072)],
+            detailed_timings=False,
+            seconds=3,
+            backend="cuda",
+            device=1,
+            warmup=2,
+            repeat=4,
+        )
+    except ValueError as exc:
+        assert "difficulty sequence and batch-size sequence lengths must match" in str(exc)
+    else:
+        raise AssertionError("expected mismatched paired sequence rejection")
+
+
 def test_ensure_unique_scenario_names_rejects_duplicates():
     scenario = benchmark.BenchmarkScenario(
         name="duplicate",
@@ -435,6 +503,11 @@ def test_summarize_iterations_reports_median_min_max_and_totals():
     assert aggregate["difficulty_mode"] == "fixed"
     assert aggregate["difficulty_sequence"] == []
     assert aggregate["difficulty_changes"] == 0
+    assert aggregate["batch_size_mode"] == "fixed"
+    assert aggregate["batch_size_sequence"] == []
+    assert aggregate["batch_size_changes"] == 0
+    assert aggregate["batch_size_min"] == 2
+    assert aggregate["batch_size_max"] == 2
     assert aggregate["key_mode"] == "generated"
     assert aggregate["warmup"] == 1
     assert aggregate["repeat"] == 3
@@ -483,6 +556,7 @@ def test_summarize_iterations_reports_sequence_metadata():
             _summary(
                 10.0,
                 attempts=10,
+                batch_size=512,
                 first_block_dynamic_chunk_size_min=0,
                 first_block_dynamic_chunk_size_max=32,
                 first_block_chunk_size_min=16,
@@ -491,6 +565,7 @@ def test_summarize_iterations_reports_sequence_metadata():
             _summary(
                 20.0,
                 attempts=20,
+                batch_size=512,
                 first_block_dynamic_chunk_size_min=0,
                 first_block_dynamic_chunk_size_max=32,
                 first_block_chunk_size_min=16,
@@ -503,6 +578,9 @@ def test_summarize_iterations_reports_sequence_metadata():
     assert aggregate["difficulty_mode"] == "sequence"
     assert aggregate["difficulty_sequence"] == [1, 8, 1, 8]
     assert aggregate["difficulty_changes"] == 3
+    assert aggregate["batch_size_mode"] == "fixed"
+    assert aggregate["batch_size_min"] == 512
+    assert aggregate["batch_size_max"] == 512
     assert aggregate["first_block_dynamic_chunk_size_min"] == 0
     assert aggregate["first_block_dynamic_chunk_size_max"] == 32
     assert aggregate["first_block_chunk_size_min"] == 16
@@ -849,6 +927,23 @@ def test_build_hash_command_adds_first_block_dynamic_chunk_auto_when_set():
     assert "--first-block-dynamic-chunk-auto" in command
 
 
+def test_build_hash_command_adds_batch_size_sequence_when_set():
+    scenario = benchmark.BenchmarkScenario(
+        name="diag",
+        backend="cuda",
+        difficulty=1,
+        batch_size=2048,
+        seconds=1,
+        difficulty_sequence=(1, 8, 64),
+        batch_size_sequence=(2048, 3072, 3072),
+    )
+
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario)
+
+    assert "--batch-size-sequence" in command
+    assert command[command.index("--batch-size-sequence") + 1] == "2048,3072,3072"
+
+
 def test_summarize_result_uses_selected_dynamic_chunk_size():
     scenario = benchmark.BenchmarkScenario(
         name="diag",
@@ -864,6 +959,8 @@ def test_summarize_result_uses_selected_dynamic_chunk_size():
             "backend": "cuda",
             "device_id": 0,
             "batch_size": 2048,
+            "batch_size_min": 1024,
+            "batch_size_max": 3072,
             "attempts": 2048,
             "first_block_dynamic_chunk_size": 32,
             "first_block_dynamic_chunk_auto": True,
@@ -883,6 +980,8 @@ def test_summarize_result_uses_selected_dynamic_chunk_size():
     )
 
     assert summary["first_block_dynamic_chunk_auto"] is True
+    assert summary["batch_size_min"] == 1024
+    assert summary["batch_size_max"] == 3072
     assert summary["first_block_dynamic_chunk_size"] == 32
     assert summary["first_block_chunk_size"] == 32
     assert summary["first_block_dynamic_chunk_size_min"] == 16
@@ -915,13 +1014,24 @@ def test_summarize_iterations_reports_median_timing_per_attempt():
 
 def test_build_recommendations_selects_best_batch_per_difficulty():
     runs = [
-        {"summary": {**_summary(100.0), "name": "d1-b64", "difficulty": 1, "batch_size": 64}},
+        {
+            "summary": {
+                **_summary(100.0),
+                "name": "d1-b64",
+                "difficulty": 1,
+                "batch_size": 64,
+                "batch_size_min": 64,
+                "batch_size_max": 64,
+            }
+        },
         {
             "summary": {
                 **_summary(150.0),
                 "name": "d1-b128",
                 "difficulty": 1,
                 "batch_size": 128,
+                "batch_size_min": 128,
+                "batch_size_max": 128,
                 "first_block_workers": 4,
                 "first_block_dynamic_chunk_size": 64,
                 "first_block_dynamic_chunk_auto": True,
@@ -941,6 +1051,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
                 "name": "d8-b64",
                 "difficulty": 8,
                 "batch_size": 64,
+                "batch_size_min": 64,
+                "batch_size_max": 64,
                 "hashrate_spread_pct": 15.0,
                 "timing_analysis": {"dominant_stage": "compute_ms", "dominant_stage_pct": 55.0},
             }
@@ -962,6 +1074,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 1,
             "batch_size": 128,
+            "batch_size_min": 128,
+            "batch_size_max": 128,
             "first_block_workers": 4,
             "first_block_dynamic_chunk_size": 64,
             "first_block_dynamic_chunk_auto": True,
@@ -987,6 +1101,8 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "device_id": 0,
             "difficulty": 8,
             "batch_size": 64,
+            "batch_size_min": 64,
+            "batch_size_max": 64,
             "first_block_workers": 0,
             "first_block_dynamic_chunk_size": 0,
             "first_block_dynamic_chunk_auto": False,
@@ -1060,6 +1176,18 @@ def test_build_recommendations_ignores_sequence_runs():
                 "difficulty": 1,
                 "difficulty_sequence": [1, 8, 1, 8],
                 "batch_size": 512,
+            }
+        },
+        {
+            "summary": {
+                **_summary(250.0),
+                "name": "d1x8-bseq",
+                "difficulty": 1,
+                "difficulty_sequence": [1, 8, 64],
+                "batch_size": 3072,
+                "batch_size_sequence": [2048, 3072, 3072],
+                "batch_size_min": 2048,
+                "batch_size_max": 3072,
             }
         },
     ]
@@ -1173,6 +1301,7 @@ def test_build_sanitized_report_drops_private_fields():
                     "difficulty": 1,
                     "difficulty_sequence": [1, 8, 1, 8],
                     "batch_size": 64,
+                    "batch_size_sequence": [64, 128, 64, 128],
                     "seconds": 3,
                     "device": 0,
                     "warmup": 1,
@@ -1212,6 +1341,7 @@ def test_build_sanitized_report_drops_private_fields():
     assert sanitized["privacy"]["sanitized"] is True
     assert sanitized["runs"][0]["scenario"]["prefix_length"] == 8
     assert sanitized["runs"][0]["scenario"]["difficulty_sequence"] == [1, 8, 1, 8]
+    assert sanitized["runs"][0]["scenario"]["batch_size_sequence"] == [64, 128, 64, 128]
     assert sanitized["runs"][0]["scenario"]["key_mode"] == "fixed"
     assert "prefix" not in sanitized["runs"][0]["scenario"]
     assert "key" not in sanitized["runs"][0]["scenario"]
@@ -1976,6 +2106,63 @@ def test_main_combines_difficulty_sequence_scenarios(monkeypatch, tmp_path):
     assert all("--difficulty-sequence" in benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenario) for scenario in captured)
 
 
+def test_main_combines_paired_batch_size_sequence_scenarios(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_scenario(binary, salt, scenario):
+        captured.append(scenario)
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(
+                42.0,
+                batch_size=3072,
+                batch_size_min=2048,
+                batch_size_max=3072,
+            ),
+            "aggregate": _summary(42.0),
+            "command": benchmark.build_hash_command(binary, salt, scenario),
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    _stub_metadata(monkeypatch)
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--difficulty-sequence",
+            "1,8,64",
+            "--batch-size-sequence",
+            "2048,3072,3072",
+            "--sequence-detailed-timings",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert [scenario.name for scenario in captured] == [
+        "cuda-difficulty-sequence-d1x8x64-bseq-2048x3072x3072",
+    ]
+    assert captured[0].difficulty_sequence == (1, 8, 64)
+    assert captured[0].batch_size_sequence == (2048, 3072, 3072)
+    assert captured[0].batch_size == 2048
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, captured[0])
+    assert "--difficulty-sequence" in command
+    assert "--batch-size-sequence" in command
+
+
 def test_main_rejects_partial_custom_scan(capsys):
     exit_code = benchmark.main(
         [
@@ -2001,7 +2188,7 @@ def test_main_rejects_partial_difficulty_sequence(capsys):
     )
 
     assert exit_code == 2
-    assert "--difficulty-sequence and --sequence-batch-size must be used together" in capsys.readouterr().err
+    assert "--difficulty-sequence requires --sequence-batch-size or --batch-size-sequence" in capsys.readouterr().err
 
 
 def test_main_rejects_duplicate_scenario_names(capsys):

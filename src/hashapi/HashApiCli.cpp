@@ -27,7 +27,7 @@ void printUsage()
         << "Hash API commands:\n"
         << "  xenblocksMiner hash-one --salt <hex> --key <64-hex> [--backend cpu|cuda] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
         << "  xenblocksMiner hash-batch --salt <hex> [--backend cpu|cuda] [--prefix <hex>] [--pattern XEN11] [--batch-size <n>] [--difficulty <n>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n"
-        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n";
+        << "  xenblocksMiner hash-benchmark --salt <hex> [--backend cpu|cuda] [--key <64-hex>] [--prefix <hex>] [--seconds <n>] [--batch-size <n>] [--batch-size-sequence <n,n,...>] [--difficulty <n>] [--difficulty-sequence <n,n,...>] [--no-xuni] [--detailed-timings] [--first-block-workers <n>] [--first-block-dynamic-chunk-size <n>] [--first-block-dynamic-chunk-auto] [--json]\n";
 }
 
 std::unordered_map<std::string, std::string> parseArgs(int argc, const char* const* argv)
@@ -109,6 +109,45 @@ std::vector<std::uint32_t> parseDifficultySequence(const std::string& text)
             throw std::runtime_error("difficulty sequence values must be between 1 and UINT32_MAX");
         }
         values.push_back(static_cast<std::uint32_t>(value));
+
+        if (end == std::string::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+
+    return values;
+}
+
+std::vector<std::size_t> parseBatchSizeSequence(const std::string& text)
+{
+    std::vector<std::size_t> values;
+    if (text.empty()) {
+        return values;
+    }
+
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        const std::size_t end = text.find(',', start);
+        const std::string token = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (token.empty()) {
+            throw std::runtime_error("batch-size sequence cannot contain empty values");
+        }
+        for (char ch : token) {
+            if (ch < '0' || ch > '9') {
+                throw std::runtime_error("batch-size sequence values must be unsigned integers");
+            }
+        }
+
+        std::size_t parsed = 0;
+        const unsigned long long value = std::stoull(token, &parsed);
+        if (parsed != token.size()) {
+            throw std::runtime_error("batch-size sequence values must be unsigned integers");
+        }
+        if (value == 0 || value > static_cast<unsigned long long>(std::numeric_limits<std::size_t>::max())) {
+            throw std::runtime_error("batch-size sequence values must be between 1 and SIZE_MAX");
+        }
+        values.push_back(static_cast<std::size_t>(value));
 
         if (end == std::string::npos) {
             break;
@@ -257,15 +296,41 @@ std::vector<std::uint32_t> benchmarkDifficulties(const HashApiRequest& request,
     return {request.difficulty};
 }
 
+std::vector<std::size_t> benchmarkBatchSizes(const HashApiRequest& request,
+                                             const std::vector<std::size_t>& batch_size_sequence)
+{
+    if (!batch_size_sequence.empty()) {
+        return batch_size_sequence;
+    }
+    return {request.batch_size};
+}
+
 int runBenchmark(HashApiRequest request,
                  std::uint32_t seconds,
                  bool json,
-                 const std::vector<std::uint32_t>& difficulty_sequence)
+                 const std::vector<std::uint32_t>& difficulty_sequence,
+                 const std::vector<std::size_t>& batch_size_sequence)
 {
     const auto difficulties = benchmarkDifficulties(request, difficulty_sequence);
-    for (std::size_t i = 0; i < difficulties.size(); ++i) {
+    const auto batch_sizes = benchmarkBatchSizes(request, batch_size_sequence);
+    if (difficulties.size() != batch_sizes.size() &&
+        difficulties.size() != 1 &&
+        batch_sizes.size() != 1) {
+        HashApiResult result;
+        result.request_id = request.request_id;
+        result.algorithm = request.algorithm;
+        result.backend = request.backend;
+        result.device_id = request.device_id;
+        result.batch_size = request.batch_size;
+        result.error = "difficulty sequence and batch-size sequence lengths must match unless one sequence has length 1";
+        return printResult(result, json);
+    }
+
+    const std::size_t shape_count = std::max(difficulties.size(), batch_sizes.size());
+    for (std::size_t i = 0; i < shape_count; ++i) {
         HashApiRequest validation_request = request;
-        validation_request.difficulty = difficulties[i];
+        validation_request.difficulty = difficulties[difficulties.size() == 1 ? 0 : i];
+        validation_request.batch_size = batch_sizes[batch_sizes.size() == 1 ? 0 : i];
         const auto errors = validateRequest(validation_request);
         if (!errors.empty()) {
             HashApiResult result;
@@ -273,10 +338,10 @@ int runBenchmark(HashApiRequest request,
             result.algorithm = request.algorithm;
             result.backend = request.backend;
             result.device_id = request.device_id;
-            result.batch_size = request.batch_size;
-            result.error = difficulty_sequence.empty()
+            result.batch_size = validation_request.batch_size;
+            result.error = difficulty_sequence.empty() && batch_size_sequence.empty()
                 ? joinErrors(errors)
-                : "difficulty sequence item " + std::to_string(i) + ": " + joinErrors(errors);
+                : "benchmark sequence item " + std::to_string(i) + ": " + joinErrors(errors);
             return printResult(result, json);
         }
     }
@@ -303,6 +368,17 @@ int runBenchmark(HashApiRequest request,
     aggregate.backend = request.backend;
     aggregate.device_id = request.device_id;
     aggregate.batch_size = request.batch_size;
+    bool batch_size_range_seen = false;
+    auto update_batch_size_ranges = [&aggregate, &batch_size_range_seen](std::size_t batch_size) {
+        if (!batch_size_range_seen) {
+            aggregate.batch_size_min = batch_size;
+            aggregate.batch_size_max = batch_size;
+            batch_size_range_seen = true;
+            return;
+        }
+        aggregate.batch_size_min = std::min(aggregate.batch_size_min, batch_size);
+        aggregate.batch_size_max = std::max(aggregate.batch_size_max, batch_size);
+    };
     bool first_block_range_seen = false;
     auto update_first_block_ranges = [&aggregate, &first_block_range_seen](const HashApiResult& current) {
         if (!first_block_range_seen) {
@@ -329,14 +405,17 @@ int runBenchmark(HashApiRequest request,
 
     const auto start = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
-        request.difficulty = difficulties[difficulty_index];
-        difficulty_index = (difficulty_index + 1) % difficulties.size();
+        request.difficulty = difficulties[difficulties.size() == 1 ? 0 : difficulty_index];
+        request.batch_size = batch_sizes[batch_sizes.size() == 1 ? 0 : difficulty_index];
+        difficulty_index = (difficulty_index + 1) % shape_count;
         HashApiResult current = backend->runBatch(request);
         if (!current.ok) {
             return printResult(current, json);
         }
         aggregate.ok = true;
         aggregate.attempts += current.attempts;
+        aggregate.batch_size = current.batch_size;
+        update_batch_size_ranges(current.batch_size);
         aggregate.first_block_dynamic_chunk_size = current.first_block_dynamic_chunk_size;
         aggregate.first_block_dynamic_chunk_auto = current.first_block_dynamic_chunk_auto;
         aggregate.first_block_worker_count = current.first_block_worker_count;
@@ -399,7 +478,8 @@ int runHashApiCli(int argc, const char* const* argv)
             request.batch_size = getSizeArg(args, "--batch-size", 1);
             const auto seconds = getUIntArg(args, "--seconds", 30);
             const auto difficulty_sequence = parseDifficultySequence(getArg(args, "--difficulty-sequence"));
-            return runBenchmark(request, seconds, json, difficulty_sequence);
+            const auto batch_size_sequence = parseBatchSizeSequence(getArg(args, "--batch-size-sequence"));
+            return runBenchmark(request, seconds, json, difficulty_sequence, batch_size_sequence);
         }
     } catch (const std::exception& ex) {
         if (json) {

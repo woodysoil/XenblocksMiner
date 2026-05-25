@@ -152,6 +152,11 @@ def normalize_run(run: dict[str, Any]) -> dict[str, Any]:
         "difficulty_sequence": summary.get("difficulty_sequence") or scenario.get("difficulty_sequence") or [],
         "difficulty_changes": _int_value(summary, "difficulty_changes", _int_value(scenario, "difficulty_changes", 0)),
         "key_mode": str(summary.get("key_mode") or scenario.get("key_mode") or "generated"),
+        "batch_size_sequence": summary.get("batch_size_sequence") or scenario.get("batch_size_sequence") or [],
+        "batch_size_mode": str(summary.get("batch_size_mode") or scenario.get("batch_size_mode") or "fixed"),
+        "batch_size_changes": _int_value(summary, "batch_size_changes", _int_value(scenario, "batch_size_changes", 0)),
+        "batch_size_min": _int_value(summary, "batch_size_min", _int_value(summary, "batch_size", 0)),
+        "batch_size_max": _int_value(summary, "batch_size_max", _int_value(summary, "batch_size", 0)),
         "timings": summary.get("timings", {}),
         "timing_per_attempt": summary.get("timing_per_attempt", {}),
         "stage_pct": (summary.get("timing_analysis") or {}).get("stage_pct", {}),
@@ -172,6 +177,9 @@ def run_config_key(run: dict[str, Any], ignore_detailed_timings: bool = False) -
         run["difficulty_changes"],
         run["key_mode"],
         run["batch_size"],
+        run["batch_size_mode"],
+        tuple(run["batch_size_sequence"]),
+        run["batch_size_changes"],
         run["seconds"],
         run["warmup"],
         run["repeat"],
@@ -203,6 +211,9 @@ def format_run_key(key: RunKey) -> str:
         difficulty_changes,
         key_mode,
         batch_size,
+        batch_size_mode,
+        batch_size_sequence,
+        batch_size_changes,
         seconds,
         warmup,
         repeat,
@@ -216,11 +227,15 @@ def format_run_key(key: RunKey) -> str:
         difficulty_label = "x".join(str(item) for item in difficulty_sequence)
     else:
         difficulty_label = str(difficulty)
+    if batch_size_mode == "sequence":
+        batch_size_label = "x".join(str(item) for item in batch_size_sequence)
+    else:
+        batch_size_label = str(batch_size)
     xuni_label = "xuni" if allow_xuni else "no-xuni"
     detail_label = "detailed" if detailed_timings else "default-timing"
     return (
-        f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size}:"
-        f"{key_mode}:changes{difficulty_changes}:s{seconds}:w{warmup}:r{repeat}:"
+        f"{backend}:dev{device_id}:d{difficulty_label}:b{batch_size_label}:"
+        f"{key_mode}:dchanges{difficulty_changes}:bchanges{batch_size_changes}:s{seconds}:w{warmup}:r{repeat}:"
         f"{xuni_label}:{detail_label}:fbw{first_block_workers}:fbd{first_block_dynamic_chunk_size}:"
         f"fbda{int(first_block_dynamic_chunk_auto)}"
     )
@@ -412,6 +427,17 @@ def compare_reports(
                 "difficulty_changes": (after or before or {}).get("difficulty_changes", 0),
                 "key_mode": (after or before or {}).get("key_mode", "generated"),
                 "batch_size": (after or before or {}).get("batch_size", 0),
+                "batch_size_mode": (after or before or {}).get("batch_size_mode", "fixed"),
+                "batch_size_sequence": (after or before or {}).get("batch_size_sequence", []),
+                "batch_size_changes": (after or before or {}).get("batch_size_changes", 0),
+                "batch_size_min": (after or before or {}).get(
+                    "batch_size_min",
+                    (after or before or {}).get("batch_size", 0),
+                ),
+                "batch_size_max": (after or before or {}).get(
+                    "batch_size_max",
+                    (after or before or {}).get("batch_size", 0),
+                ),
                 "seconds": (after or before or {}).get("seconds", 0),
                 "warmup": (after or before or {}).get("warmup", 0),
                 "repeat": (after or before or {}).get("repeat", 1),
@@ -489,6 +515,10 @@ def format_text(report: Report) -> str:
             "difficulty_mode",
             "difficulty_changes",
             "batch_size",
+            "batch_size_mode",
+            "batch_size_changes",
+            "batch_size_min",
+            "batch_size_max",
             "before_spread_pct",
             "after_spread_pct",
             "seconds",
@@ -562,6 +592,10 @@ def format_text(report: Report) -> str:
                 str(item["difficulty_mode"]),
                 str(item["difficulty_changes"]),
                 str(item["batch_size"]),
+                str(item["batch_size_mode"]),
+                str(item["batch_size_changes"]),
+                str(item["batch_size_min"]),
+                str(item["batch_size_max"]),
                 f"{item['before_spread_pct']:.3f}",
                 f"{item['after_spread_pct']:.3f}",
                 str(item["seconds"]),

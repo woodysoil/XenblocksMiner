@@ -106,6 +106,9 @@ HashApiResult CpuHashBackend::runBatch(const HashApiRequest& request)
 
     result.ok = true;
     result.attempts = attempts;
+    result.batch_size = attempts;
+    result.batch_size_min = attempts;
+    result.batch_size_max = attempts;
 
     const auto end = std::chrono::steady_clock::now();
     result.elapsed_ms = elapsedMillis(start, end);

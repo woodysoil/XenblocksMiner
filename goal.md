@@ -133,9 +133,9 @@ This section should be refreshed whenever it would prevent duplicated work after
 - The next default optimization target is no longer adding the auto chunk policy. Start from post-auto detailed timing and inspect first-block digest/preparation structure, generated input materialization, or a carefully measured finalization path if newer timings show `finalize_ms` overtaking first-block cost.
 - If a future struct-layout change touches the full miner binary, prefer a clean Release CUDA rebuild before trusting CLI results, because stale object files can corrupt JSON fields.
 - Do not repeat the rejected digest length-prefix static fast path unless the implementation shape materially changes. It preserved correctness but regressed the d8/b2048 generated CUDA confirmation against the refreshed trusted baseline.
-- Current dirty measurement-only work is intended to let one benchmark lifecycle pair variable `m=diff` values with their miner-equivalent batch sizes, for example `difficulty_sequence=1,8,64` and `batch_size_sequence=2048,3072,3072`. Finish that tooling, tests, docs, smoke benchmark, and commit before starting another performance-code experiment.
-- The variable-shape benchmark slice should expose public-safe summary fields such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`. Recommendation logic should not treat mixed-shape runs as fixed-shape batch-size evidence.
-- After the variable-shape tooling is committed, run a short CUDA smoke that exercises fixed `t=1`, fixed `s/p=1`, variable `m=diff`, and variable batch sizes in the same command. Use that result only as measurement-tool validation unless a longer repeated benchmark confirms a performance claim.
+- Variable-shape benchmark tooling can pair variable `m=diff` values with their miner-equivalent batch sizes in one backend lifecycle, for example `difficulty_sequence=1,8,64` and `batch_size_sequence=2048,3072,3072`.
+- Variable-shape benchmark summaries expose public-safe fields such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`. Recommendation logic does not treat mixed-shape runs as fixed-shape batch-size evidence.
+- A short CUDA smoke validated the variable-shape path with fixed `t=1`, fixed `s/p=1`, variable `m=diff`, and variable batch sizes in the same command. Treat that result as measurement-tool validation only unless a longer repeated benchmark confirms a performance claim.
 
 ## Strong Goal Shape
 

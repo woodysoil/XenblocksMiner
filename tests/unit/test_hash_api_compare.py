@@ -19,6 +19,10 @@ def _run(
     nested_stage_pct: dict | None = None,
     spread_pct: float = 2.0,
     difficulty_sequence: list[int] | None = None,
+    batch_size: int = 64,
+    batch_size_sequence: list[int] | None = None,
+    batch_size_min: int | None = None,
+    batch_size_max: int | None = None,
     key_mode: str = "generated",
     first_block_workers: int = 0,
     first_block_dynamic_chunk_size: int = 0,
@@ -32,10 +36,13 @@ def _run(
     first_block_chunk_size_max: int | None = None,
 ) -> dict:
     sequence = difficulty_sequence or []
+    batch_sequence = batch_size_sequence or []
     dynamic_min = first_block_dynamic_chunk_size if first_block_dynamic_chunk_size_min is None else first_block_dynamic_chunk_size_min
     dynamic_max = first_block_dynamic_chunk_size if first_block_dynamic_chunk_size_max is None else first_block_dynamic_chunk_size_max
     chunk_min = first_block_chunk_size if first_block_chunk_size_min is None else first_block_chunk_size_min
     chunk_max = first_block_chunk_size if first_block_chunk_size_max is None else first_block_chunk_size_max
+    batch_min = batch_size if batch_size_min is None else batch_size_min
+    batch_max = batch_size if batch_size_max is None else batch_size_max
     return {
         "scenario": {
             "name": name,
@@ -43,7 +50,8 @@ def _run(
             "difficulty": 1,
             "difficulty_sequence": sequence,
             "key_mode": key_mode,
-            "batch_size": 64,
+            "batch_size": batch_size,
+            "batch_size_sequence": batch_sequence,
             "seconds": 3,
             "device": 0,
             "warmup": 1,
@@ -58,7 +66,14 @@ def _run(
             "backend": "cuda",
             "device_id": 0,
             "difficulty": 1,
-            "batch_size": 64,
+            "batch_size": batch_size,
+            "batch_size_sequence": batch_sequence,
+            "batch_size_mode": "sequence" if batch_sequence else "fixed",
+            "batch_size_changes": sum(
+                1 for index in range(1, len(batch_sequence)) if batch_sequence[index] != batch_sequence[index - 1]
+            ),
+            "batch_size_min": batch_min,
+            "batch_size_max": batch_max,
             "attempts": 128,
             "elapsed_ms": 3000.0,
             "hashrate": hashrate,
@@ -239,6 +254,41 @@ def test_compare_reports_includes_difficulty_sequence_metadata():
     assert item["difficulty_changes"] == 3
 
 
+def test_compare_reports_includes_batch_size_sequence_metadata():
+    result = compare.compare_reports(
+        _report(
+            _run(
+                "cuda-variable-shape",
+                100.0,
+                difficulty_sequence=[1, 8, 64],
+                batch_size=3072,
+                batch_size_sequence=[2048, 3072, 3072],
+                batch_size_min=2048,
+                batch_size_max=3072,
+            )
+        ),
+        _report(
+            _run(
+                "cuda-variable-shape",
+                120.0,
+                difficulty_sequence=[1, 8, 64],
+                batch_size=3072,
+                batch_size_sequence=[2048, 3072, 3072],
+                batch_size_min=2048,
+                batch_size_max=3072,
+            )
+        ),
+    )
+
+    item = result["comparisons"][0]
+
+    assert item["batch_size_mode"] == "sequence"
+    assert item["batch_size_sequence"] == [2048, 3072, 3072]
+    assert item["batch_size_changes"] == 1
+    assert item["batch_size_min"] == 2048
+    assert item["batch_size_max"] == 3072
+
+
 def test_compare_reports_includes_key_mode_metadata():
     result = compare.compare_reports(
         _report(_run("cuda-fixed", 100.0, key_mode="fixed")),
@@ -314,6 +364,28 @@ def test_compare_reports_config_match_separates_different_settings():
 
     statuses = sorted(item["status"] for item in result["comparisons"])
     assert statuses == ["missing-after", "missing-before"]
+
+
+def test_compare_reports_config_match_separates_batch_size_sequences():
+    result = compare.compare_reports(
+        _report(_run("fixed-shape", 100.0, batch_size=3072)),
+        _report(
+            _run(
+                "variable-shape",
+                110.0,
+                batch_size=3072,
+                batch_size_sequence=[2048, 3072, 3072],
+                batch_size_min=2048,
+                batch_size_max=3072,
+            )
+        ),
+        match_by="config",
+    )
+
+    statuses = sorted(item["status"] for item in result["comparisons"])
+    assert statuses == ["missing-after", "missing-before"]
+    assert {item["batch_size_mode"] for item in result["comparisons"]} == {"fixed", "sequence"}
+    assert any("b2048x3072x3072" in item["match_key"] for item in result["comparisons"])
 
 
 def test_compare_reports_config_match_separates_first_block_workers():
@@ -511,6 +583,9 @@ def test_format_text_outputs_automation_friendly_rows():
     assert row[header.index("first_block_dynamic_chunk_auto")] == "true"
     assert row[header.index("first_block_worker_count")] == "8"
     assert row[header.index("first_block_chunk_size")] == "8"
+    assert row[header.index("batch_size_mode")] == "fixed"
+    assert row[header.index("batch_size_min")] == "64"
+    assert row[header.index("batch_size_max")] == "64"
     assert row[header.index("first_block_dynamic_chunk_size_min")] == "0"
     assert row[header.index("first_block_dynamic_chunk_size_max")] == "64"
     assert row[header.index("first_block_chunk_size_min")] == "8"
