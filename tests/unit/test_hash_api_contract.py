@@ -339,6 +339,16 @@ def test_cuda_batch_size_tuning_helper_exists():
     assert "src/hashapi/HashApiTuning.cpp" in cmake
 
 
+def test_blake2b_copy_selftest_target_is_available():
+    cmake = read("CMakeLists.txt")
+    source = read("tests/cpp/blake2b_copy_selftest.cpp")
+
+    assert "XENBLOCKS_BUILD_HASH_DIAGNOSTICS" in cmake
+    assert "blake2b-copy-selftest" in cmake
+    assert "tests/cpp/blake2b_copy_selftest.cpp" in cmake
+    assert "copied_states_are_independent" in source
+
+
 def test_mine_unit_uses_hash_api_batch_size_tuning_without_overriding_manual_limit():
     implementation = read("src/MineUnit.cpp")
 

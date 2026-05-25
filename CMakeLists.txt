@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 option(XENBLOCKS_BUILD_MINER "Build the full CUDA miner" ON)
 option(XENBLOCKS_BUILD_HASHAPI_CLI "Build the standalone Hash API CLI" OFF)
 option(XENBLOCKS_HASHAPI_STUB_BACKEND "Build hashapi-cli with a deterministic stub backend for CLI smoke tests" OFF)
+option(XENBLOCKS_BUILD_HASH_DIAGNOSTICS "Build small hash diagnostic self-test tools" ON)
 
 if(XENBLOCKS_BUILD_MINER)
     project(xenblocksMiner LANGUAGES CUDA CXX VERSION 1.0)
@@ -197,4 +198,12 @@ if(XENBLOCKS_BUILD_HASHAPI_CLI)
     if(nlohmann_json_FOUND)
         target_link_libraries(hashapi-cli PRIVATE nlohmann_json::nlohmann_json)
     endif()
+endif()
+
+if(XENBLOCKS_BUILD_HASH_DIAGNOSTICS)
+    add_executable(blake2b-copy-selftest
+        tests/cpp/blake2b_copy_selftest.cpp
+        src/blake2b.cpp
+    )
+    target_include_directories(blake2b-copy-selftest PRIVATE src)
 endif()
