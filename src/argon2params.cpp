@@ -226,6 +226,11 @@ void Argon2Params::fillFirstBlocks(
 
 void Argon2Params::finalize(void *out, const void *memory) const
 {
+    if (lanes == 1) {
+        digestLong(out, outLen, memory, argon2::ARGON2_BLOCK_SIZE);
+        return;
+    }
+
     struct block {
         std::uint64_t v[argon2::ARGON2_BLOCK_SIZE / 8];
     };
