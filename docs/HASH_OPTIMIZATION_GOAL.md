@@ -131,6 +131,23 @@ Latest public-safe performance checkpoint:
   use `40` registers. The device first-block kernel remains register-heavy at
   `255` registers with stack use, but high-difficulty benchmark timing shows it
   is not the dominant bottleneck after GPU first blocks are enabled.
+- Accepted main-kernel loop split: `argon2_kernel_oneshot` now separates the
+  Argon2id indexed-address slices from the data-dependent slices and starts the
+  first slice at offset `2`, removing the hot-loop `skip` branch and the
+  per-block `slice < ARGON2_SYNC_POINTS / 2` branch without changing memory
+  layout or hash semantics. Validation passed focused Hash API tests, a Release
+  CUDA rebuild, CUDA golden hashes with and without GPU first blocks, and
+  public-safe resource summarization. The main kernel resource shape changed to
+  sm75 `56` registers, sm80 `32` registers, sm86/sm89 `40` registers, `1024`
+  bytes shared memory, and no local memory. High-difficulty GPU-first evidence
+  stayed stable at d4096 with about `10.76k H/s` median and `2.54%` spread,
+  improved d8192 from about `5.32k H/s` to about `5.60k H/s` (`+5.16%`),
+  improved d16384 from about `2.76k H/s` to about `2.83k H/s` (`+2.84%`), and
+  improved the `4096,8192,16384` variable-`m` sequence from about `4.42k H/s`
+  to about `4.72k H/s` (`+6.86%`). Keep the change, but note that d4096 itself
+  is effectively flat and compute/kernel time remains above `93%`, so the next
+  cycle should continue with high-difficulty main-kernel or memory-behavior
+  candidates rather than CPU-side input work.
 
 Current rejected experiment checkpoint:
 

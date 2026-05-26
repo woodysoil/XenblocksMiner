@@ -92,6 +92,11 @@ short state below is only the resume snapshot.
   `92%` of wall time. Treat kernel efficiency, memory behavior, realistic
   high-difficulty batch selection, and variable-`m` lifecycle cost as the
   default next search space unless newer detailed timing contradicts it.
+- The latest accepted main-kernel loop split kept d4096 GPU-first effectively
+  flat at about `10.76k H/s`, improved d8192 to about `5.60k H/s`, improved
+  d16384 to about `2.83k H/s`, and improved the `4096,8192,16384` variable-`m`
+  sequence to about `4.72k H/s`. Compute/kernel time still dominates, so keep
+  searching high-difficulty main-kernel and memory-behavior candidates.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty

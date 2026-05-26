@@ -753,35 +753,41 @@ __device__ void argon2_core(
     store_block(mem_curr, prev, thread);
 }
 
-__device__ void argon2_step1(
+__device__ void argon2_step_indexed(
     struct block_g* memory, struct block_g* mem_curr,
     struct block_th* prev, struct block_l* tmp, struct block_th* addr,
     uint32_t segment_blocks, uint32_t thread,
     uint32_t* thread_input, uint32_t slice,
     uint32_t offset)
 {
-    uint32_t ref_index;
-
-    if (slice < ARGON2_SYNC_POINTS / 2) {
-        uint32_t addr_index = offset % ARGON2_QWORDS_IN_BLOCK;
-        if (addr_index == 0) {
-            if (thread == 6) {
-                ++* thread_input;
-            }
-            next_addresses1(addr, tmp, *thread_input, thread);
+    uint32_t addr_index = offset % ARGON2_QWORDS_IN_BLOCK;
+    if (addr_index == 0) {
+        if (thread == 6) {
+            ++* thread_input;
         }
-
-        uint32_t thr = addr_index % THREADS_PER_LANE;
-        uint32_t idx = addr_index / THREADS_PER_LANE;
-
-        uint64_t v = block_th_get(addr, idx);
-        v = u64_shuffle(v, thr);
-        ref_index = u64_lo(v);
+        next_addresses1(addr, tmp, *thread_input, thread);
     }
-    else {
-        uint64_t v = u64_shuffle(prev->a, 0);
-        ref_index = u64_lo(v);
-    }
+
+    uint32_t thr = addr_index % THREADS_PER_LANE;
+    uint32_t idx = addr_index / THREADS_PER_LANE;
+
+    uint64_t v = block_th_get(addr, idx);
+    v = u64_shuffle(v, thr);
+    uint32_t ref_index = u64_lo(v);
+
+    compute_ref_pos(segment_blocks, slice, offset, &ref_index);
+
+    argon2_core(memory, mem_curr, prev, tmp, thread, ref_index);
+}
+
+__device__ void argon2_step_dependent(
+    struct block_g* memory, struct block_g* mem_curr,
+    struct block_th* prev, struct block_l* tmp,
+    uint32_t segment_blocks, uint32_t thread,
+    uint32_t slice, uint32_t offset)
+{
+    uint64_t v = u64_shuffle(prev->a, 0);
+    uint32_t ref_index = u64_lo(v);
 
     compute_ref_pos(segment_blocks, slice, offset, &ref_index);
 
@@ -815,28 +821,39 @@ __global__ void argon2_kernel_oneshot(
 
     load_block(&prev, mem_prev, thread);
 
-    uint32_t skip = 2;
-    //#pragma unroll 4
-    for (uint32_t slice = 0; slice < ARGON2_SYNC_POINTS; ++slice) {
-        for (uint32_t offset = 0; offset < segment_blocks; ++offset) {
-            if (skip > 0) {
-                --skip;
-                continue;
-            }
+    for (uint32_t offset = 2; offset < segment_blocks; ++offset) {
+        argon2_step_indexed(
+                    memory, mem_curr, &prev, tmp, &addr,
+                    segment_blocks, thread, &thread_input,
+                    0, offset);
 
-            argon2_step1(
-                        memory, mem_curr, &prev, tmp, &addr,
-                        segment_blocks, thread, &thread_input,
+        mem_curr ++;
+    }
+
+    if (thread == 2) {
+        ++thread_input;
+    }
+    if (thread == 6) {
+        thread_input = 0;
+    }
+
+    for (uint32_t offset = 0; offset < segment_blocks; ++offset) {
+        argon2_step_indexed(
+                    memory, mem_curr, &prev, tmp, &addr,
+                    segment_blocks, thread, &thread_input,
+                    1, offset);
+
+        mem_curr ++;
+    }
+
+    for (uint32_t slice = 2; slice < ARGON2_SYNC_POINTS; ++slice) {
+        for (uint32_t offset = 0; offset < segment_blocks; ++offset) {
+            argon2_step_dependent(
+                        memory, mem_curr, &prev, tmp,
+                        segment_blocks, thread,
                         slice, offset);
 
             mem_curr ++;
-        }
-
-        if (thread == 2) {
-            ++thread_input;
-        }
-        if (thread == 6) {
-            thread_input = 0;
         }
     }
     mem_curr = mem_lane;
