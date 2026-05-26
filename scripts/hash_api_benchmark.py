@@ -1081,6 +1081,19 @@ def add_recommendation_quality(recommendations: dict[str, Any], environment: dic
     return annotated
 
 
+def build_empty_recommendations() -> dict[str, Any]:
+    return {
+        "report_ok": True,
+        "run_count": 0,
+        "valid_run_count": 0,
+        "invalid_run_count": 0,
+        "invalid_scenarios": [],
+        "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
+        "batch_size_by_difficulty": [],
+        "candidates_by_difficulty": [],
+    }
+
+
 def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
     safe_keys = (
         "name",
@@ -1331,6 +1344,47 @@ def report_environment_metadata(runs: list[dict[str, Any]]) -> dict[str, Any]:
     return collect_environment_metadata()
 
 
+def build_report(
+    args: argparse.Namespace,
+    runs: list[dict[str, Any]],
+    environment: dict[str, Any],
+    recommendations: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": "xenblocks.hashapi.benchmark.v1",
+        "created_at_unix": time.time(),
+        "host": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+            "python": platform.python_version(),
+        },
+        "build": collect_build_metadata(args.build_cache),
+        "hardware": collect_hardware_metadata(),
+        "environment": environment,
+        "binary": str(args.binary),
+        "salt": args.salt,
+        "presets": args.preset,
+        "recommendations": recommendations,
+        "runs": runs,
+    }
+
+
+def emit_report(args: argparse.Namespace, report: dict[str, Any]) -> None:
+    output = json.dumps(report, indent=2, sort_keys=True)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output + "\n", encoding="utf-8")
+    if args.sanitized_output:
+        args.sanitized_output.parent.mkdir(parents=True, exist_ok=True)
+        sanitized_output = json.dumps(build_sanitized_report(report), indent=2, sort_keys=True)
+        args.sanitized_output.write_text(sanitized_output + "\n", encoding="utf-8")
+    if args.recommendations_only:
+        print(json.dumps(report["recommendations"], indent=2, sort_keys=True))
+    else:
+        print(output)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path, help="Path to xenblocksMiner or hashapi-cli.")
@@ -1362,6 +1416,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-on-report-quality",
         action="store_true",
         help="Return a non-zero exit code when report quality is low, for example under high CPU load.",
+    )
+    parser.add_argument(
+        "--preflight-report-quality",
+        action="store_true",
+        help="Check report quality before running scenarios and skip benchmarks when the environment is already low-trust.",
     )
     parser.add_argument(
         "--scan-difficulty",
@@ -1557,40 +1616,20 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    if args.preflight_report_quality:
+        environment = collect_environment_metadata()
+        recommendations = add_recommendation_quality(build_empty_recommendations(), environment)
+        if not bool(recommendations.get("report_quality_ok", False)):
+            report = build_report(args, [], environment, recommendations)
+            emit_report(args, report)
+            print("benchmark report quality preflight failed", file=sys.stderr)
+            return 2
+
     runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
     environment = report_environment_metadata(runs)
     recommendations = add_recommendation_quality(build_recommendations(runs), environment)
-    report = {
-        "schema": "xenblocks.hashapi.benchmark.v1",
-        "created_at_unix": time.time(),
-        "host": {
-            "system": platform.system(),
-            "release": platform.release(),
-            "machine": platform.machine(),
-            "python": platform.python_version(),
-        },
-        "build": collect_build_metadata(args.build_cache),
-        "hardware": collect_hardware_metadata(),
-        "environment": environment,
-        "binary": str(args.binary),
-        "salt": args.salt,
-        "presets": args.preset,
-        "recommendations": recommendations,
-        "runs": runs,
-    }
-
-    output = json.dumps(report, indent=2, sort_keys=True)
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(output + "\n", encoding="utf-8")
-    if args.sanitized_output:
-        args.sanitized_output.parent.mkdir(parents=True, exist_ok=True)
-        sanitized_output = json.dumps(build_sanitized_report(report), indent=2, sort_keys=True)
-        args.sanitized_output.write_text(sanitized_output + "\n", encoding="utf-8")
-    if args.recommendations_only:
-        print(json.dumps(report["recommendations"], indent=2, sort_keys=True))
-    else:
-        print(output)
+    report = build_report(args, runs, environment, recommendations)
+    emit_report(args, report)
     if args.fail_on_report_quality and not bool(recommendations.get("report_quality_ok", False)):
         print("benchmark report quality check failed", file=sys.stderr)
         return 2

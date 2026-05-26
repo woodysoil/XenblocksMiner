@@ -2194,6 +2194,115 @@ def test_recommendations_only_can_fail_on_low_report_quality(monkeypatch, tmp_pa
     assert "benchmark report quality check failed" in captured.err
 
 
+def test_preflight_report_quality_skips_low_trust_benchmarks(monkeypatch, tmp_path, capsys):
+    def fail_run_scenario(binary, salt, scenario):
+        raise AssertionError("preflight should skip benchmark scenarios")
+
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 98.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+    )
+    monkeypatch.setattr(benchmark, "run_scenario", fail_run_scenario)
+    output = tmp_path / "preflight.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--output",
+            str(output),
+            "--recommendations-only",
+            "--preflight-report-quality",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    stdout = json.loads(captured.out)
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert exit_code == 2
+    assert stdout["run_count"] == 0
+    assert stdout["report_quality_ok"] is False
+    assert stdout["benchmark_trust"] == "low"
+    assert report["runs"] == []
+    assert report["recommendations"]["run_count"] == 0
+    assert "benchmark report quality preflight failed" in captured.err
+
+
+def test_preflight_report_quality_allows_normal_trust_benchmarks(monkeypatch, tmp_path, capsys):
+    calls = {"count": 0}
+
+    def fake_run_scenario(binary, salt, scenario):
+        calls["count"] += 1
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+    )
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=1,batch_size=2,seconds=1",
+            "--output",
+            str(output),
+            "--preflight-report-quality",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls["count"] == 1
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert len(report["runs"]) == 1
+    assert report["recommendations"]["report_quality_ok"] is True
+    capsys.readouterr()
+
+
 def test_main_combines_presets_and_manual_scenarios(monkeypatch, tmp_path):
     captured_names = []
 

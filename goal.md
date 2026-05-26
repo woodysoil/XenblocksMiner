@@ -361,8 +361,9 @@ Stable comparison rules:
   timing mode matched
 - compare median warm throughput first, then spread, invalid subprocesses,
   `report_ok`, `report_quality_ok`, `benchmark_trust`, and per-attempt timings
-- run serious benchmark reports with `--fail-on-report-quality` so low-trust
-  environment noise fails automation before any tuning or performance claim
+- run serious benchmark reports with `--preflight-report-quality` and
+  `--fail-on-report-quality` so low-trust environment noise fails automation
+  before any tuning or performance claim
 - treat smoke-only data as operational validation unless the doc says otherwise
 
 Comparison command:
