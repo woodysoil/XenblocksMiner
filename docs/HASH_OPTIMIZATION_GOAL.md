@@ -1347,12 +1347,13 @@ The default server mode does not open a browser window, which keeps autonomous
 long-running optimization sessions non-interactive. Use `--open-browser` only
 when a local operator wants to inspect the curve directly.
 
-The trend chart defaults to stable quality-approved points and draws separate
-series per difficulty or difficulty sequence, so low-trust diagnostics and
-different `m=diff` workloads do not get merged into one misleading curve.
-The `Diagnostics` quality mode can show invalid, low-trust, or unstable report
-points for troubleshooting only; do not use those points as performance
-evidence.
+The trend chart defaults to warm, stable, quality-approved points and draws
+separate series per difficulty or difficulty sequence, so cold-start,
+single-repeat, low-trust, and unrelated `m=diff` workloads do not get merged
+into one misleading curve. The default trusted trend requires at least one
+warm-up run and at least two repeats. The `Diagnostics` quality mode can show
+invalid, cold, low-trust, or unstable report points for troubleshooting only;
+do not use those points as performance evidence.
 Use the chart's metric selector to switch between median H/s, median
 milliseconds per attempt, compute percentage, kernel percentage, and spread.
 Median H/s remains the primary repeatable throughput metric, while

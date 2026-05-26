@@ -32,6 +32,7 @@ class TrendPoint:
     compute_pct: float
     kernel_pct: float
     run_ok: bool
+    warm_evidence: bool
     report_ok: bool
     quality_ok: bool
     stable: bool
@@ -118,6 +119,8 @@ def load_points(input_dir: Path, min_difficulty: int) -> list[TrendPoint]:
             stage_pct = timing_analysis.get("stage_pct") or {}
             nested_stage_pct = timing_analysis.get("nested_stage_pct") or {}
             median_hashrate = _float_value(summary, "median_hashrate", _float_value(summary, "hashrate", 0.0))
+            warmup = _int_value(summary, "warmup", _int_value(scenario, "warmup", 0))
+            repeat = _int_value(summary, "repeat", _int_value(scenario, "repeat", 1))
             points.append(
                 TrendPoint(
                     source=path.name,
@@ -135,6 +138,7 @@ def load_points(input_dir: Path, min_difficulty: int) -> list[TrendPoint]:
                     compute_pct=_float_value(stage_pct, "compute_ms", 0.0),
                     kernel_pct=_float_value(nested_stage_pct, "kernel_ms", 0.0),
                     run_ok=_bool_value(summary, "ok", report_ok) and median_hashrate > 0.0,
+                    warm_evidence=warmup >= 1 and repeat >= 2,
                     report_ok=report_ok,
                     quality_ok=quality_ok,
                     stable=_bool_value(summary, "stable", False),
@@ -237,7 +241,7 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
     <label>Difficulty <select id="difficulty"></select></label>
     <label>Metric <select id="metric"><option value="median_hashrate" selected>Median H/s</option><option value="median_ms_per_attempt">Median ms/attempt</option><option value="compute_pct">Compute %</option><option value="kernel_pct">Kernel %</option><option value="spread_pct">Spread %</option></select></label>
     <label>GPU First Blocks <select id="gfb"><option value="all">All</option><option value="true">true</option><option value="false">false</option></select></label>
-    <label>Quality <select id="quality"><option value="stable" selected>Stable + Quality OK</option><option value="good">Quality OK</option><option value="all">Diagnostics</option></select></label>
+    <label>Quality <select id="quality"><option value="stable" selected>Warm Stable + Quality OK</option><option value="good">Warm Quality OK</option><option value="all">Diagnostics</option></select></label>
     <label>Search <input id="search" placeholder="scenario or source"></label>
   </section>
   <section class="panel stats">
@@ -314,8 +318,8 @@ function filtered() {{
   return points.filter(p => {{
     if (difficulty !== 'all' && p.difficulty_label !== difficulty) return false;
     if (gfb !== 'all' && String(p.gpu_first_blocks) !== gfb) return false;
-    if (quality === 'good' && (!p.run_ok || !p.quality_ok)) return false;
-    if (quality === 'stable' && (!p.run_ok || !p.quality_ok || !p.stable)) return false;
+    if (quality === 'good' && (!p.run_ok || !p.warm_evidence || !p.quality_ok)) return false;
+    if (quality === 'stable' && (!p.run_ok || !p.warm_evidence || !p.quality_ok || !p.stable)) return false;
     if (search && !(p.name.toLowerCase().includes(search) || p.source.toLowerCase().includes(search))) return false;
     return true;
   }});
@@ -340,6 +344,7 @@ function trustedGainFor(data, referencePoint) {{
   const trusted = data.filter(p =>
     p.quality_ok &&
     p.run_ok &&
+    p.warm_evidence &&
     p.stable &&
     p.median_hashrate > 0 &&
     p.difficulty_label === referencePoint.difficulty_label
@@ -358,7 +363,7 @@ function trustedGainFor(data, referencePoint) {{
 
 function difficultySummaries(data) {{
   return groupedByDifficulty(data).map(group => {{
-    const trusted = group.values.filter(p => p.run_ok && p.quality_ok && p.stable && p.median_hashrate > 0);
+    const trusted = group.values.filter(p => p.run_ok && p.warm_evidence && p.quality_ok && p.stable && p.median_hashrate > 0);
     const first = trusted[0];
     const latest = trusted[trusted.length - 1];
     const best = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
@@ -424,7 +429,7 @@ function drawChart(data) {{
     group.values.forEach(p => {{
       const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * p.trend_index / (data.length - 1));
       const y = pad.top + plotH * (1 - metricValue(p, info) / maxValue);
-      ctx.fillStyle = p.run_ok && p.quality_ok && p.stable ? group.color : (p.run_ok && p.quality_ok ? '#b45309' : '#b91c1c');
+      ctx.fillStyle = p.run_ok && p.warm_evidence && p.quality_ok && p.stable ? group.color : (p.run_ok && p.quality_ok ? '#b45309' : '#b91c1c');
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -471,7 +476,7 @@ function render() {{
       <td>${{fmt(p.kernel_pct, 2)}}%</td>
       <td>${{p.batch_label}}</td>
       <td>${{p.gpu_first_blocks}}</td>
-      <td>${{p.run_ok ? (p.quality_ok ? (p.stable ? 'stable' : 'ok') : 'low') : 'invalid'}}</td>
+      <td>${{p.run_ok ? (p.warm_evidence ? (p.quality_ok ? (p.stable ? 'stable' : 'ok') : 'low') : 'cold') : 'invalid'}}</td>
       <td class="name" title="${{p.name}}">${{p.name}}</td>
       <td class="name" title="${{p.source}}">${{p.source}}</td>
     </tr>`).join('');

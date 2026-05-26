@@ -29,6 +29,8 @@ def _report(name: str, difficulty: int, median_hashrate: float, *, source_path: 
                     "median_hashrate": median_hashrate,
                     "hashrate_spread_pct": 2.5,
                     "stable": True,
+                    "warmup": 1,
+                    "repeat": 2,
                     "timing_analysis": {
                         "stage_pct": {"compute_ms": 95.0},
                         "nested_stage_pct": {"kernel_ms": 97.0},
@@ -96,11 +98,13 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "Latest Trusted Gain" in html
     assert "Best Trusted Gain" in html
     assert "Trusted Points" in html
-    assert '<option value="stable" selected>Stable + Quality OK</option>' in html
+    assert '<option value="stable" selected>Warm Stable + Quality OK</option>' in html
+    assert '<option value="good">Warm Quality OK</option>' in html
     assert '<option value="all">Diagnostics</option>' in html
     assert "run_ok" in html
-    assert "p.run_ok && p.quality_ok && p.stable" in html
-    assert "p.run_ok ? (p.quality_ok ? (p.stable ? 'stable' : 'ok') : 'low') : 'invalid'" in html
+    assert "warm_evidence" in html
+    assert "p.run_ok && p.warm_evidence && p.quality_ok && p.stable" in html
+    assert "p.run_ok ? (p.warm_evidence ? (p.quality_ok ? (p.stable ? 'stable' : 'ok') : 'low') : 'cold') : 'invalid'" in html
     assert "function groupedByDifficulty(data)" in html
     assert "function trustedGainFor(data, referencePoint)" in html
     assert "function difficultySummaries(data)" in html
@@ -125,6 +129,7 @@ def test_invalid_runs_are_not_trusted_points(tmp_path):
 
     assert len(points) == 1
     assert points[0].run_ok is False
+    assert points[0].warm_evidence is True
     assert points[0].quality_ok is False
     assert points[0].median_ms_per_attempt == 0.0
 
@@ -132,6 +137,30 @@ def test_invalid_runs_are_not_trusted_points(tmp_path):
 
     html = output.read_text(encoding="utf-8")
     assert '"run_ok": false' in html
+
+
+def test_cold_single_repeat_runs_are_diagnostics_only(tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    input_dir.mkdir()
+    report = _report("cold", 4096, 100.0, source_path="<private-binary>")
+    report["runs"][0]["summary"]["warmup"] = 0
+    report["runs"][0]["summary"]["repeat"] = 1
+    (input_dir / "cold.json").write_text(json.dumps(report), encoding="utf-8")
+
+    points = load_points(input_dir, min_difficulty=4096)
+
+    assert len(points) == 1
+    assert points[0].run_ok is True
+    assert points[0].quality_ok is True
+    assert points[0].stable is True
+    assert points[0].warm_evidence is False
+
+    assert main(["--input-dir", str(input_dir), "--output", str(output), "--min-difficulty", "4096"]) == 0
+
+    html = output.read_text(encoding="utf-8")
+    assert '"warm_evidence": false' in html
+    assert "'cold'" in html
 
 
 def test_trend_points_include_latency_metric(tmp_path):
