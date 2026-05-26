@@ -1044,6 +1044,18 @@ Measurement cautions:
   matched previously rejected shapes. Do not retry low-half-only reference
   shuffles unless profiler or architecture-specific code generation evidence
   shows the register cost no longer applies.
+- Rejected GPU-first contiguous key upload experiment: adding a byte-buffer
+  overload for `prepareInputBlocksOnDevice` and filling generated 64-byte keys
+  into contiguous host storage preserved focused Hash API tests, rebuilt
+  successfully, preserved CUDA golden hashes with and without GPU first blocks,
+  and left the public-safe sm75 resource summary unchanged. It did not produce
+  acceptable high-difficulty evidence: the strict d4096 GPU-first auto-batch
+  benchmark returned `report_quality_ok=false` with invalid subprocess exits,
+  and the only valid sample was about `8.04k H/s`, below the trusted d4096
+  baseline region around `10.77k H/s`. The source experiment was reverted. Do
+  not retry this extra contiguous-key staging path unless first-block input
+  timing becomes dominant again or the key ownership model changes enough to
+  avoid the additional lifetime/instability risk.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
