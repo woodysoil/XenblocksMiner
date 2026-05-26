@@ -472,7 +472,8 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 8. Use detailed timing to confirm whether CUDA compute/kernel efficiency,
    memory behavior, realistic high-difficulty batch selection, variable-`m`
    setup/lifecycle, finalization, or input/first-block work dominates now.
-9. Pick one bottleneck and one implementation shape.
+9. Prefer high-difficulty main-kernel candidates first when d4096/d8192/d16384
+   still show compute/kernel time above 90% of wall time.
 10. Validate, benchmark, document, privacy-check, commit, and continue.
 
 The next agent should make measurable progress, not restate this plan.

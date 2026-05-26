@@ -835,6 +835,15 @@ Measurement cautions:
   but wrapper stability failed the acceptance gate. The source experiment was
   reverted; do not retry host-owned parallel finalization snapshots without a
   materially different ownership and subprocess-teardown design.
+- Rejected main-kernel register scratch experiment: replacing the main
+  `argon2_kernel_oneshot` shared-memory scratch block with an extra register
+  `block_th` scratch targeted high-difficulty compute time, but the CUDA
+  Release build did not complete within the autonomous build timeout and left
+  the compiler subprocess stalled. Focused Hash API tests had passed before the
+  build, but no binary or benchmark evidence was produced. The source
+  experiment was reverted. Do not retry this all-register core scratch shape
+  unless the implementation is split into a smaller compile unit or otherwise
+  proves acceptable compile time and resource usage before benchmarking.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
