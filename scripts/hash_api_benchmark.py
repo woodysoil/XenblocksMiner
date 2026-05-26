@@ -1094,6 +1094,22 @@ def build_empty_recommendations() -> dict[str, Any]:
     }
 
 
+def preflight_environment_quality(wait_seconds: float, wait_interval: float) -> tuple[dict[str, Any], dict[str, Any]]:
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    samples: list[dict[str, Any]] = []
+    while True:
+        sample = collect_environment_metadata()
+        samples.append(sample)
+        sample_recommendations = add_recommendation_quality(build_empty_recommendations(), sample)
+        if bool(sample_recommendations.get("report_quality_ok", False)):
+            return sample, sample_recommendations
+        if time.monotonic() >= deadline:
+            environment = combine_environment_metadata(*samples)
+            recommendations = add_recommendation_quality(build_empty_recommendations(), environment)
+            return environment, recommendations
+        time.sleep(max(0.1, wait_interval))
+
+
 def sanitize_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
     safe_keys = (
         "name",
@@ -1423,6 +1439,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check report quality before running scenarios and skip benchmarks when the environment is already low-trust.",
     )
     parser.add_argument(
+        "--preflight-wait-seconds",
+        type=float,
+        default=0.0,
+        help="When preflight quality is enabled, wait up to this many seconds for a normal-trust environment before skipping.",
+    )
+    parser.add_argument(
+        "--preflight-wait-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between preflight quality samples while waiting.",
+    )
+    parser.add_argument(
         "--scan-difficulty",
         action="append",
         type=int,
@@ -1617,8 +1645,10 @@ def main(argv: list[str]) -> int:
         return 2
 
     if args.preflight_report_quality:
-        environment = collect_environment_metadata()
-        recommendations = add_recommendation_quality(build_empty_recommendations(), environment)
+        environment, recommendations = preflight_environment_quality(
+            args.preflight_wait_seconds,
+            args.preflight_wait_interval,
+        )
         if not bool(recommendations.get("report_quality_ok", False)):
             report = build_report(args, [], environment, recommendations)
             emit_report(args, report)
