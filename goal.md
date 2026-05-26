@@ -115,6 +115,9 @@ short state below is only the resume snapshot.
   unchanged and normal high-difficulty GPU-first smoke results reached only
   about `10.61k H/s` at d4096 and about `5.51k H/s` at d8192, below the
   accepted uniform word selection confirmation region.
+- The low-32 reference shuffle experiment was rejected before high-difficulty
+  benchmarking because correctness passed but sm75 main-kernel register use
+  increased from `53` to `57`.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty

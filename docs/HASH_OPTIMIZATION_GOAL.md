@@ -938,6 +938,15 @@ Measurement cautions:
   was reverted. Do not retry blanket helper force-inlining unless a targeted
   helper or architecture-specific compiler change creates a different resource
   or instruction-count hypothesis.
+- Rejected low-32 reference shuffle experiment: replacing full 64-bit
+  reference-index shuffles with low-32-bit shuffles preserved focused tests,
+  rebuilt successfully, and preserved CUDA golden hashes with and without GPU
+  first blocks, but increased sm75 main-kernel register use from `53` to `57`
+  while leaving sm80/sm86/sm89 unchanged. The source experiment was reverted
+  before high-difficulty benchmarking because the register-pressure regression
+  matched previously rejected shapes. Do not retry low-half-only reference
+  shuffles unless profiler or architecture-specific code generation evidence
+  shows the register cost no longer applies.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
@@ -963,12 +972,14 @@ Start the next cycle from the latest clean commit and this decision tree:
     evidence that the control-flow savings are real.
 13. Do not retry blanket `__forceinline__` on the main Argon2 helper chain
     without a narrower target and evidence that code generation changes.
-14. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
-15. If Nsight Compute reports GPU performance counter permission errors, do not
+14. Do not retry low-32-bit-only reference shuffles unless resource summaries no
+    longer show the sm75 register-pressure regression.
+15. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
+16. If Nsight Compute reports GPU performance counter permission errors, do not
     keep retrying it in autonomous runs. Capture `scripts/cuda_resource_summary.py`
     output under ignored benchmark storage and use benchmark timing plus resource
     deltas for the current cycle.
-16. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+17. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
@@ -1279,6 +1290,16 @@ Realistic variable-difficulty smoke:
 ```bash
 python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --difficulty-sequence 4096,8192,16384 --sequence-auto-batch-size --sequence-first-block-dynamic-chunk-auto --gpu-first-blocks --seconds 2 --warmup 1 --repeat 2 --no-xuni --output .benchmarks/difficulty-sequence-high-gfb-smoke.json
 ```
+
+Local high-difficulty trend page:
+
+```bash
+python scripts/hash_benchmark_trends.py --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --min-difficulty 4096
+```
+
+The generated trend page is an ignored local artifact. It embeds only
+public-safe benchmark summary fields and excludes raw command lines, local
+binary paths, host metadata, salts, and hardware names.
 
 Batch scan candidate search:
 
