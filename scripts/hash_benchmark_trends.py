@@ -303,6 +303,26 @@ function groupedByDifficulty(data) {{
   }}));
 }}
 
+function trustedGainFor(data, referencePoint) {{
+  if (!referencePoint) return {{ latest: null, best: null }};
+  const trusted = data.filter(p =>
+    p.quality_ok &&
+    p.stable &&
+    p.median_hashrate > 0 &&
+    p.difficulty_label === referencePoint.difficulty_label
+  );
+  const firstTrusted = trusted[0];
+  const latestTrusted = trusted[trusted.length - 1];
+  const bestTrusted = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
+  const gainPct = (point) => firstTrusted && point && firstTrusted.median_hashrate > 0
+    ? ((point.median_hashrate - firstTrusted.median_hashrate) / firstTrusted.median_hashrate * 100)
+    : null;
+  return {{
+    latest: gainPct(latestTrusted),
+    best: gainPct(bestTrusted),
+  }};
+}}
+
 function drawChart(data) {{
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
@@ -371,21 +391,13 @@ function render() {{
   const data = filtered();
   const best = data.reduce((acc, p) => Math.max(acc, p.median_hashrate), 0);
   const latest = data[data.length - 1];
-  const trusted = data.filter(p => p.quality_ok && p.stable && p.median_hashrate > 0);
-  const firstTrusted = trusted[0];
-  const latestTrusted = trusted[trusted.length - 1];
-  const bestTrusted = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
-  const gainPct = (point) => firstTrusted && point && firstTrusted.median_hashrate > 0
-    ? ((point.median_hashrate - firstTrusted.median_hashrate) / firstTrusted.median_hashrate * 100)
-    : null;
-  const latestGain = gainPct(latestTrusted);
-  const bestGain = gainPct(bestTrusted);
+  const gains = trustedGainFor(data, latest);
   document.getElementById('visibleCount').textContent = String(data.length);
   document.getElementById('bestRate').textContent = fmt(best, 2);
   document.getElementById('latestRate').textContent = latest ? fmt(latest.median_hashrate, 2) : '0';
   document.getElementById('latestSpread').textContent = latest ? `${{fmt(latest.spread_pct, 2)}}%` : '0%';
-  document.getElementById('latestTrustedGain').textContent = latestGain === null ? 'n/a' : `${{fmt(latestGain, 2)}}%`;
-  document.getElementById('bestTrustedGain').textContent = bestGain === null ? 'n/a' : `${{fmt(bestGain, 2)}}%`;
+  document.getElementById('latestTrustedGain').textContent = gains.latest === null ? 'n/a' : `${{fmt(gains.latest, 2)}}%`;
+  document.getElementById('bestTrustedGain').textContent = gains.best === null ? 'n/a' : `${{fmt(gains.best, 2)}}%`;
   drawChart(data);
   document.getElementById('rows').innerHTML = data.map((p, i) => `
     <tr>

@@ -1337,6 +1337,8 @@ history update as new ignored benchmark reports are written.
 The trend chart defaults to stable quality-approved points and draws separate
 series per difficulty or difficulty sequence, so low-trust diagnostics and
 different `m=diff` workloads do not get merged into one misleading curve.
+The trusted gain counters use the latest visible point's own difficulty or
+sequence as the comparison group, rather than comparing unrelated `m` values.
 
 The generated trend page is an ignored local artifact. It embeds only
 public-safe benchmark summary fields and excludes raw command lines, local
