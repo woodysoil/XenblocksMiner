@@ -432,6 +432,49 @@ def write_trend_page(input_dir: Path, output: Path, min_difficulty: int, page_re
     return len(points)
 
 
+def input_signature(input_dir: Path) -> tuple[int, int, int]:
+    count = 0
+    latest_mtime_ns = 0
+    total_size = 0
+    for path in input_dir.glob("*.json"):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        count += 1
+        latest_mtime_ns = max(latest_mtime_ns, stat.st_mtime_ns)
+        total_size += stat.st_size
+    return count, latest_mtime_ns, total_size
+
+
+@dataclass
+class TrendPageCache:
+    input_dir: Path
+    output: Path
+    min_difficulty: int
+    page_refresh_seconds: float
+    refresh_seconds: float
+    last_refresh: float = 0.0
+    points: int = 0
+    cached_signature: tuple[int, int, int] | None = None
+
+    def refresh(self, force: bool = False, now: float | None = None) -> int:
+        current_time = time.monotonic() if now is None else now
+        should_check_inputs = force or current_time - self.last_refresh >= self.refresh_seconds
+        if should_check_inputs:
+            signature = input_signature(self.input_dir)
+            if force or signature != self.cached_signature or not self.output.exists():
+                self.points = write_trend_page(
+                    self.input_dir,
+                    self.output,
+                    self.min_difficulty,
+                    self.page_refresh_seconds,
+                )
+                self.cached_signature = signature
+            self.last_refresh = current_time
+        return self.points
+
+
 def serve_trends(
     input_dir: Path,
     output: Path,
@@ -444,15 +487,11 @@ def serve_trends(
     root = output.parent.resolve()
     output_name = output.name
     lock = threading.Lock()
-    state = {"last_refresh": 0.0, "points": 0}
+    cache = TrendPageCache(input_dir, output, min_difficulty, page_refresh_seconds, refresh_seconds)
 
     def refresh(force: bool = False) -> int:
-        now = time.monotonic()
         with lock:
-            if force or now - state["last_refresh"] >= refresh_seconds:
-                state["points"] = write_trend_page(input_dir, output, min_difficulty, page_refresh_seconds)
-                state["last_refresh"] = now
-            return int(state["points"])
+            return cache.refresh(force)
 
     class TrendRequestHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args: Any, **kwargs: Any) -> None:

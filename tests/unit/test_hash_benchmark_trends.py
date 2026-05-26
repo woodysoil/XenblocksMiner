@@ -144,3 +144,53 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
         "refresh_seconds": 5.0,
         "page_refresh_seconds": 10.0,
     }
+
+
+def test_trend_page_cache_skips_unchanged_input_refresh(monkeypatch, tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    input_dir.mkdir()
+    output.parent.mkdir()
+    calls = {"write": 0}
+
+    def fake_write(input_path, output_path, min_difficulty, page_refresh_seconds):
+        calls["write"] += 1
+        output_path.write_text("trend", encoding="utf-8")
+        return 7
+
+    monkeypatch.setattr(trends, "write_trend_page", fake_write)
+    monkeypatch.setattr(trends, "input_signature", lambda path: (1, 2, 3))
+    cache = trends.TrendPageCache(input_dir, output, 4096, 10.0, 5.0)
+
+    assert cache.refresh(force=True, now=0.0) == 7
+    assert cache.refresh(now=6.0) == 7
+
+    assert calls == {"write": 1}
+
+
+def test_trend_page_cache_refreshes_changed_input(monkeypatch, tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    input_dir.mkdir()
+    output.parent.mkdir()
+    calls = {"write": 0}
+    signatures = [(1, 2, 3), (1, 2, 4)]
+
+    def fake_write(input_path, output_path, min_difficulty, page_refresh_seconds):
+        calls["write"] += 1
+        output_path.write_text("trend", encoding="utf-8")
+        return calls["write"]
+
+    def fake_signature(input_path):
+        if signatures:
+            return signatures.pop(0)
+        return (1, 2, 4)
+
+    monkeypatch.setattr(trends, "write_trend_page", fake_write)
+    monkeypatch.setattr(trends, "input_signature", fake_signature)
+    cache = trends.TrendPageCache(input_dir, output, 4096, 10.0, 5.0)
+
+    assert cache.refresh(force=True, now=0.0) == 1
+    assert cache.refresh(now=6.0) == 2
+
+    assert calls == {"write": 2}

@@ -1339,6 +1339,9 @@ series per difficulty or difficulty sequence, so low-trust diagnostics and
 different `m=diff` workloads do not get merged into one misleading curve.
 The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
+The local trend server caches the benchmark directory signature and avoids
+reparsing unchanged JSON reports on every page refresh, keeping the monitoring
+view lightweight during long runs.
 
 The generated trend page is an ignored local artifact. It embeds only
 public-safe benchmark summary fields and excludes raw command lines, local
