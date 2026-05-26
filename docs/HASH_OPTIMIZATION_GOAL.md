@@ -148,6 +148,12 @@ Latest public-safe performance checkpoint:
   is effectively flat and compute/kernel time remains above `93%`, so the next
   cycle should continue with high-difficulty main-kernel or memory-behavior
   candidates rather than CPU-side input work.
+- Measurement-only d32768 checkpoint after the loop split: a short
+  high-difficulty generated-key CUDA auto-batch scan with GPU first blocks,
+  warm-up `1`, repeat `2`, no XUNI, and normal report quality selected batch
+  size `99` and reached about `1.36k H/s` median with `4.76%` spread. Compute
+  time was about `96.37%` of wall time. Treat this as current tens-of-thousands
+  difficulty coverage, not as a separate accepted tuning change.
 
 Current rejected experiment checkpoint:
 
