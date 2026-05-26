@@ -661,12 +661,15 @@ Serious comparison:
 - same binary type, backend, device index, difficulty, batch size, salt/key mode, and seconds before and after
 - compare median warm throughput first
 - inspect min/max spread before trusting a result
+- run serious benchmark reports with `--fail-on-report-quality` so high CPU load
+  or low benchmark trust returns a non-zero exit code while still writing the
+  report for diagnosis
 - rerun if the claimed improvement is smaller than the run-to-run noise
 
 For batch-size recommendations, prefer custom scan matrices over a single preset when tuning for a specific difficulty range:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-batch-size 3072 --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/cuda-scan.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 10 --warmup 1 --repeat 3 --scan-difficulty 1 --scan-difficulty 8 --scan-difficulty 64 --scan-batch-size 256 --scan-batch-size 512 --scan-batch-size 1024 --scan-batch-size 2048 --scan-batch-size 3072 --scan-first-block-dynamic-chunk-auto --recommendations-only --fail-on-report-quality --output .benchmarks/cuda-scan.json
 ```
 
 Treat recommendations from 1-second scans as candidates only. Confirm them with longer repeated runs before changing defaults.
@@ -1326,7 +1329,7 @@ python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --de
 Serious batch scan:
 
 ```bash
-python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 8 --warmup 1 --repeat 3 --scan-difficulty 1024 --scan-difficulty 4096 --scan-difficulty 8192 --scan-difficulty 16384 --scan-batch-size 0 --scan-gpu-first-blocks --scan-first-block-dynamic-chunk-auto --recommendations-only --output .benchmarks/high-diff-batch-scan-stable.json
+python scripts/hash_api_benchmark.py --binary <miner-binary> --backend cuda --device 0 --seconds 8 --warmup 1 --repeat 3 --scan-difficulty 1024 --scan-difficulty 4096 --scan-difficulty 8192 --scan-difficulty 16384 --scan-batch-size 0 --scan-gpu-first-blocks --scan-first-block-dynamic-chunk-auto --recommendations-only --fail-on-report-quality --output .benchmarks/high-diff-batch-scan-stable.json
 ```
 
 Before/after comparison:

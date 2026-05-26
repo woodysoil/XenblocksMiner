@@ -1359,6 +1359,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--recommendations-only", action="store_true", help="Print only report recommendations as JSON.")
     parser.add_argument(
+        "--fail-on-report-quality",
+        action="store_true",
+        help="Return a non-zero exit code when report quality is low, for example under high CPU load.",
+    )
+    parser.add_argument(
         "--scan-difficulty",
         action="append",
         type=int,
@@ -1586,6 +1591,9 @@ def main(argv: list[str]) -> int:
         print(json.dumps(report["recommendations"], indent=2, sort_keys=True))
     else:
         print(output)
+    if args.fail_on_report_quality and not bool(recommendations.get("report_quality_ok", False)):
+        print("benchmark report quality check failed", file=sys.stderr)
+        return 2
     return 0 if all(run["exit_code"] == 0 and run["result"].get("ok") for run in report["runs"]) else 2
 
 
