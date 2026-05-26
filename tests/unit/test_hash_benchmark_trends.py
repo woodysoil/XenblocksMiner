@@ -56,6 +56,25 @@ def test_load_points_filters_by_min_difficulty(tmp_path):
     assert points[0].median_hashrate == 200.0
 
 
+def test_load_points_ignores_empty_preflight_reports(tmp_path):
+    (tmp_path / "preflight-only.json").write_text(
+        json.dumps(
+            {
+                "created_at_unix": 1000.0,
+                "recommendations": {
+                    "report_ok": True,
+                    "report_quality_ok": False,
+                    "run_count": 0,
+                },
+                "runs": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_points(tmp_path, min_difficulty=4096) == []
+
+
 def test_main_writes_public_safe_html(tmp_path):
     input_dir = tmp_path / "reports"
     output = tmp_path / "trend" / "index.html"
