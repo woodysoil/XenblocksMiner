@@ -372,6 +372,18 @@ Comparison command:
 python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --match-by config --fail-on-regression --fail-on-report-quality --min-change-pct 1
 ```
 
+CUDA resource gate:
+
+```bash
+python scripts/cuda_resource_summary.py --binary <miner-binary> --output .benchmarks/resource-after.json
+python scripts/cuda_resource_summary.py --compare-before .benchmarks/resource-before.json --compare-after .benchmarks/resource-after.json --fail-on-regression --output .benchmarks/resource-compare.json
+```
+
+Use this gate for CUDA kernel experiments before expensive high-difficulty
+benchmarking. Treat increased registers, stack, or local memory as a rejected
+resource-pressure regression unless a normal-trust same-scenario benchmark proves
+the throughput gain is stable and worth the tradeoff.
+
 ## Experiment Acceptance
 
 Accept a performance change only when all are true:

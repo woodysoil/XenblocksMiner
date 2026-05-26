@@ -84,15 +84,95 @@ def run_cuobjdump(binary: Path, cuobjdump: str) -> str:
     return completed.stdout
 
 
+def load_summary(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _resource_key(row: dict[str, Any]) -> tuple[str, str]:
+    return str(row.get("arch", "")), str(row.get("kernel", ""))
+
+
+def _resource_map(summary: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    rows = summary.get("kernels") or []
+    return {
+        _resource_key(row): row
+        for row in rows
+        if isinstance(row, dict) and all(_resource_key(row))
+    }
+
+
+def compare_resource_summaries(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    before_map = _resource_map(before)
+    after_map = _resource_map(after)
+    resource_fields = ["registers", "stack", "shared", "local", "constant0", "texture", "surface", "sampler"]
+    comparisons: list[dict[str, Any]] = []
+    regressions: list[str] = []
+
+    for key in sorted(set(before_map) | set(after_map)):
+        before_row = before_map.get(key)
+        after_row = after_map.get(key)
+        arch, kernel = key
+        if before_row is None:
+            comparisons.append({"arch": arch, "kernel": kernel, "status": "added"})
+            regressions.append(f"{arch}:{kernel}:added")
+            continue
+        if after_row is None:
+            comparisons.append({"arch": arch, "kernel": kernel, "status": "removed"})
+            regressions.append(f"{arch}:{kernel}:removed")
+            continue
+
+        deltas: dict[str, dict[str, int]] = {}
+        for field in resource_fields:
+            before_value = int(before_row.get(field, 0) or 0)
+            after_value = int(after_row.get(field, 0) or 0)
+            deltas[field] = {
+                "before": before_value,
+                "after": after_value,
+                "delta": after_value - before_value,
+            }
+
+        if deltas["registers"]["delta"] > 0:
+            regressions.append(f"{arch}:{kernel}:registers+{deltas['registers']['delta']}")
+        for field in ("stack", "local"):
+            if deltas[field]["delta"] > 0:
+                regressions.append(f"{arch}:{kernel}:{field}+{deltas[field]['delta']}")
+
+        comparisons.append(
+            {
+                "arch": arch,
+                "kernel": kernel,
+                "status": "changed" if any(item["delta"] != 0 for item in deltas.values()) else "unchanged",
+                "resources": deltas,
+            }
+        )
+
+    return {
+        "schema": "xenblocks.cuda.resource_compare.v1",
+        "ok": not regressions,
+        "regressions": regressions,
+        "comparisons": comparisons,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize CUDA kernel resource usage as public-safe JSON.")
-    parser.add_argument("--binary", required=True, type=Path, help="CUDA binary to inspect.")
+    parser.add_argument("--binary", type=Path, help="CUDA binary to inspect.")
     parser.add_argument("--cuobjdump", default="cuobjdump", help="cuobjdump executable.")
     parser.add_argument("--output", type=Path, help="Optional JSON output path.")
+    parser.add_argument("--compare-before", type=Path, help="Optional previous resource summary JSON to compare.")
+    parser.add_argument("--compare-after", type=Path, help="Optional next resource summary JSON to compare.")
+    parser.add_argument("--fail-on-regression", action="store_true", help="Exit nonzero if resource comparison finds regressions.")
     args = parser.parse_args(argv)
 
     try:
-        summary = parse_resource_usage(run_cuobjdump(args.binary, args.cuobjdump))
+        if args.compare_before or args.compare_after:
+            if not args.compare_before or not args.compare_after:
+                raise ValueError("--compare-before and --compare-after must be used together")
+            summary = compare_resource_summaries(load_summary(args.compare_before), load_summary(args.compare_after))
+        else:
+            if args.binary is None:
+                raise ValueError("--binary is required unless --compare-before and --compare-after are used")
+            summary = parse_resource_usage(run_cuobjdump(args.binary, args.cuobjdump))
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -102,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded + "\n", encoding="utf-8")
     print(encoded)
+    if args.fail_on_regression and not bool(summary.get("ok", True)):
+        return 2
     return 0
 
 

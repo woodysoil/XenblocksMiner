@@ -339,9 +339,11 @@ Known current capabilities:
 - `scripts/hash_api_benchmark.py` supports scenario definitions, warm-up runs, repeated measured runs, aggregate JSON summaries, and optional report output.
 - `scripts/cuda_resource_summary.py` summarizes `cuobjdump --dump-resource-usage`
   output into public-safe JSON containing only architecture, kernel aliases, and
-  resource counts. Use it before and after CUDA kernel experiments to track
-  register, stack, shared, and local memory changes without committing local
-  paths, GPU names, or raw tool output.
+  resource counts. It can also compare two public-safe summaries and fail on
+  register, stack, or local-memory regressions. Use it before and after CUDA
+  kernel experiments to catch resource-pressure regressions before spending time
+  on expensive high-difficulty benchmarks, without committing local paths, GPU
+  names, or raw tool output.
 - Unit tests cover the Hash API contract, service behavior, and benchmark runner behavior.
 
 Current progress:
@@ -1433,6 +1435,25 @@ Before/after comparison:
 ```bash
 python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --fail-on-regression --fail-on-report-quality --min-change-pct 1
 ```
+
+CUDA resource summary:
+
+```bash
+python scripts/cuda_resource_summary.py --binary <miner-binary> --output .benchmarks/resource-after.json
+```
+
+CUDA resource comparison:
+
+```bash
+python scripts/cuda_resource_summary.py --compare-before .benchmarks/resource-before.json --compare-after .benchmarks/resource-after.json --fail-on-regression --output .benchmarks/resource-compare.json
+```
+
+Use resource comparison as a fast gate for CUDA kernel experiments. If a change
+raises registers, stack, or local memory, reject or redesign it unless a
+normal-trust high-difficulty benchmark proves a stable same-scenario throughput
+gain that justifies the extra resource pressure. The generated summaries and
+comparisons are ignored local artifacts; keep only public-safe conclusions in
+tracked docs.
 
 High-difficulty-only comparison:
 
