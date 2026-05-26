@@ -1056,6 +1056,17 @@ Measurement cautions:
   not retry this extra contiguous-key staging path unless first-block input
   timing becomes dominant again or the key ownership model changes enough to
   avoid the additional lifetime/instability risk.
+- Rejected main-kernel multi-warp block experiment: launching four independent
+  32-thread Argon2 jobs per CUDA block targeted higher warp occupancy and
+  memory-latency hiding on high-difficulty workloads. It preserved focused Hash
+  API tests, rebuilt successfully, and preserved CUDA golden hashes with and
+  without GPU first blocks, but the sm75 main-kernel register count increased
+  from `53` to `57`. Normal-trust high-difficulty GPU-first evidence did not
+  justify that resource cost: d4096 reached about `10.73k H/s` and d8192 about
+  `5.44k H/s`, both below the accepted best regions around `10.77k H/s` and
+  `5.62k H/s`. The source experiment was reverted. Do not retry the same
+  four-warp-per-block launch shape unless a different architecture or occupancy
+  analysis shows that the extra register pressure no longer applies.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
