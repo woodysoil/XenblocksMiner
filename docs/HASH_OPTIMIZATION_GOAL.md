@@ -987,6 +987,17 @@ Measurement cautions:
   `5.32k H/s`. The source experiment was reverted. Do not retry this
   address-word span helper or reference-pointer loop shape unless profiling
   shows a materially different control-flow or register-pressure hypothesis.
+- Rejected ref-area accumulator experiment: moving `slice * segment_blocks +
+  offset - 1` out of `compute_ref_pos` into the caller preserved focused tests,
+  the CUDA golden hashes, and the public-safe resource summary shape on the
+  restored sm75 Release binary, but the trusted d4096 GPU-first benchmark did
+  not improve enough to keep the change. The first normal-trust d4096 run fell
+  to about `10.34k H/s` with `14.57%` spread and the longer confirmation fell
+  to about `7.59k H/s` with `34.99%` spread, both below the accepted
+  high-difficulty region and not stable enough for `report_quality_ok`. The
+  source experiment was reverted. Do not retry this exact ref-area accumulator
+  shape unless a materially different control-flow or compiler hypothesis can
+  be defended with a new resource change.
 - Rejected force-inline helper experiment: adding `__forceinline__` to the main
   Argon2 CUDA helper chain preserved focused tests, rebuilt successfully,
   preserved CUDA golden hashes with and without GPU first blocks, and left the
