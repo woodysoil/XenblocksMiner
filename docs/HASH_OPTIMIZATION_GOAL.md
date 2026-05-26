@@ -936,6 +936,15 @@ Measurement cautions:
   produced. The source experiment was reverted. Do not retry this shared
   scratch storage shape unless compile time is isolated first in a smaller CUDA
   build and the resource summary can be produced before benchmarking.
+- Measurement update after stable-evidence gates: the current local environment
+  intermittently reached low benchmark trust during d4096 refresh attempts, so
+  new high-difficulty runs were treated as diagnostics or skipped by preflight
+  and were not accepted as speed evidence. Existing trusted warm, stable,
+  normal-trust trend points still show best high-difficulty continuity around
+  d4096 `10.77k H/s`, d8192 `5.62k H/s`, d16384 `2.85k H/s`, d32768
+  `1.40k H/s`, and the `4096,8192,16384` variable-`m` sequence `4.74k H/s`.
+  Continue from these trusted points until a fresh normal-trust refresh
+  supersedes them.
 - Rejected indexed-address bit-ops micro-optimization: replacing the
   `offset % ARGON2_QWORDS_IN_BLOCK`, `addr_index % THREADS_PER_LANE`, and
   `addr_index / THREADS_PER_LANE` expressions with equivalent power-of-two bit
