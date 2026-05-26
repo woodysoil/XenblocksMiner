@@ -14,6 +14,7 @@ from typing import Any
 Report = dict[str, Any]
 RunKey = str | tuple[Any, ...]
 RunMap = dict[RunKey, dict[str, Any]]
+DEFAULT_STABLE_SPREAD_PCT = 10.0
 
 
 def _numeric_analysis_metrics(analysis: dict[str, Any]) -> dict[str, float]:
@@ -95,6 +96,34 @@ def _derive_warm_evidence(report: Report) -> tuple[int, list[str]]:
     return warm_count, cold_scenarios
 
 
+def _run_has_stable_evidence(run: dict[str, Any], max_spread_pct: float = DEFAULT_STABLE_SPREAD_PCT) -> bool:
+    summary = _summary_for(run)
+    run_ok = _bool_value(summary, "ok", False) and _float_value(
+        summary,
+        "median_hashrate",
+        _float_value(summary, "hashrate", 0.0),
+    ) > 0.0
+    spread_pct = _float_value(summary, "hashrate_spread_pct", 0.0)
+    stable = _bool_value(summary, "stable", spread_pct <= max_spread_pct)
+    return run_ok and stable and spread_pct <= max_spread_pct
+
+
+def _derive_stable_evidence(report: Report, max_spread_pct: float = DEFAULT_STABLE_SPREAD_PCT) -> tuple[int, list[str]]:
+    runs = report.get("runs") or []
+    if not isinstance(runs, list):
+        return 0, []
+    stable_count = 0
+    unstable_scenarios: list[str] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        if _run_has_stable_evidence(run, max_spread_pct):
+            stable_count += 1
+        else:
+            unstable_scenarios.append(_run_name(run))
+    return stable_count, unstable_scenarios
+
+
 def report_quality(report: Report, label: str) -> dict[str, Any]:
     recommendations = report.get("recommendations") or {}
     environment = report.get("environment") or {}
@@ -108,11 +137,18 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
     invalid_run_count = _int_value(recommendations, "invalid_run_count", 0)
     derived_warm_count, derived_cold_scenarios = _derive_warm_evidence(report)
     warm_evidence_run_count = _int_value(recommendations, "warm_evidence_run_count", derived_warm_count)
+    derived_stable_count, derived_unstable_scenarios = _derive_stable_evidence(report)
+    stable_run_count = _int_value(recommendations, "stable_run_count", derived_stable_count)
     cold_scenarios = recommendations.get("cold_scenarios")
     if not isinstance(cold_scenarios, list):
         cold_scenarios = derived_cold_scenarios
     if not cold_scenarios and derived_cold_scenarios:
         cold_scenarios = derived_cold_scenarios
+    unstable_scenarios = recommendations.get("unstable_scenarios")
+    if not isinstance(unstable_scenarios, list):
+        unstable_scenarios = derived_unstable_scenarios
+    if not unstable_scenarios and derived_unstable_scenarios:
+        unstable_scenarios = derived_unstable_scenarios
     benchmark_trust = str(environment.get("benchmark_trust") or "unknown")
     high_cpu_load = _bool_value(environment, "high_cpu_load", False)
     environment_available = _bool_value(environment, "available", False)
@@ -126,6 +162,8 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
         reasons.append("invalid_run_count>0")
     if run_count > 0 and warm_evidence_run_count < run_count:
         reasons.append("warm_evidence_incomplete")
+    if run_count > 0 and stable_run_count < run_count:
+        reasons.append("stable_evidence_incomplete")
     if benchmark_trust == "low" or high_cpu_load:
         reasons.append("benchmark_trust=low")
 
@@ -138,8 +176,10 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
         "report_quality_ok_available": report_quality_ok_available,
         "run_count": run_count,
         "warm_evidence_run_count": warm_evidence_run_count,
+        "stable_run_count": stable_run_count,
         "invalid_run_count": invalid_run_count,
         "cold_scenarios": cold_scenarios,
+        "unstable_scenarios": unstable_scenarios,
         "benchmark_trust": benchmark_trust,
         "environment_available": environment_available,
         "high_cpu_load": high_cpu_load,

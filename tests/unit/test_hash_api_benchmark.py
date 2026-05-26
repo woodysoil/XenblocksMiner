@@ -1415,7 +1415,31 @@ def test_add_recommendation_quality_rejects_cold_report():
         "run_count": 1,
         "valid_run_count": 1,
         "warm_evidence_run_count": 0,
+        "stable_run_count": 1,
         "cold_scenarios": ["cold-control"],
+        "unstable_scenarios": [],
+    }
+    environment = {
+        "available": True,
+        "benchmark_trust": "normal",
+        "high_cpu_load": False,
+        "sample_count": 3,
+    }
+
+    annotated = benchmark.add_recommendation_quality(recommendations, environment)
+
+    assert annotated["report_quality_ok"] is False
+
+
+def test_add_recommendation_quality_rejects_unstable_report():
+    recommendations = {
+        "report_ok": True,
+        "run_count": 1,
+        "valid_run_count": 1,
+        "warm_evidence_run_count": 1,
+        "stable_run_count": 0,
+        "cold_scenarios": [],
+        "unstable_scenarios": ["unstable-control"],
     }
     environment = {
         "available": True,
@@ -1446,8 +1470,32 @@ def test_build_recommendations_records_cold_scenarios():
     assert recommendations["report_ok"] is True
     assert recommendations["valid_run_count"] == 1
     assert recommendations["warm_evidence_run_count"] == 0
+    assert recommendations["stable_run_count"] == 1
     assert recommendations["cold_scenarios"] == ["cold-control"]
+    assert recommendations["unstable_scenarios"] == []
     assert recommendations["batch_size_by_difficulty"][0]["warm_evidence"] is False
+
+
+def test_build_recommendations_records_unstable_scenarios():
+    runs = [
+        {
+            "summary": {
+                **_summary(100.0, hashrate_spread_pct=29.0, stable=False),
+                "name": "unstable-control",
+                "difficulty": 4096,
+                "batch_size": 797,
+            }
+        }
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["report_ok"] is True
+    assert recommendations["valid_run_count"] == 1
+    assert recommendations["warm_evidence_run_count"] == 1
+    assert recommendations["stable_run_count"] == 0
+    assert recommendations["cold_scenarios"] == []
+    assert recommendations["unstable_scenarios"] == ["unstable-control"]
 
 
 def test_build_sanitized_report_drops_private_fields():
@@ -2217,7 +2265,9 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
         "report_ok",
         "report_quality_ok",
         "run_count",
+        "stable_run_count",
         "stable_spread_pct",
+        "unstable_scenarios",
         "valid_run_count",
         "warm_evidence_run_count",
     ]

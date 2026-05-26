@@ -956,8 +956,10 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
 def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
     invalid_scenarios: list[str] = []
     cold_scenarios: list[str] = []
+    unstable_scenarios: list[str] = []
     valid_run_count = 0
     warm_evidence_run_count = 0
+    stable_run_count = 0
     candidates_by_key: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
     for run in runs:
         summary = run.get("summary") or {}
@@ -972,6 +974,11 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 warm_evidence_run_count += 1
             else:
                 cold_scenarios.append(scenario_name)
+            spread_pct = float(summary.get("hashrate_spread_pct", 0.0) or 0.0)
+            if bool(summary.get("stable", spread_pct <= DEFAULT_STABLE_SPREAD_PCT)) and spread_pct <= DEFAULT_STABLE_SPREAD_PCT:
+                stable_run_count += 1
+            else:
+                unstable_scenarios.append(scenario_name)
         else:
             invalid_scenarios.append(scenario_name)
         if not summary.get("ok"):
@@ -1065,9 +1072,11 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "run_count": len(runs),
         "valid_run_count": valid_run_count,
         "warm_evidence_run_count": warm_evidence_run_count,
+        "stable_run_count": stable_run_count,
         "invalid_run_count": len(invalid_scenarios),
         "invalid_scenarios": invalid_scenarios,
         "cold_scenarios": cold_scenarios,
+        "unstable_scenarios": unstable_scenarios,
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": batch_size_by_difficulty,
         "candidates_by_difficulty": candidates_by_difficulty,
@@ -1090,12 +1099,15 @@ def add_recommendation_quality(recommendations: dict[str, Any], environment: dic
     annotated["high_cpu_load"] = high_cpu_load
     run_count = int(annotated.get("run_count", 0) or 0)
     warm_evidence_run_count = int(annotated.get("warm_evidence_run_count", run_count) or 0)
+    stable_run_count = int(annotated.get("stable_run_count", run_count) or 0)
     warm_evidence_ok = run_count == 0 or warm_evidence_run_count == run_count
+    stable_runs_ok = run_count == 0 or stable_run_count == run_count
     annotated["report_quality_ok"] = (
         bool(annotated.get("report_ok", True))
         and benchmark_trust != "low"
         and not high_cpu_load
         and warm_evidence_ok
+        and stable_runs_ok
     )
     return annotated
 
@@ -1106,9 +1118,11 @@ def build_empty_recommendations() -> dict[str, Any]:
         "run_count": 0,
         "valid_run_count": 0,
         "warm_evidence_run_count": 0,
+        "stable_run_count": 0,
         "invalid_run_count": 0,
         "invalid_scenarios": [],
         "cold_scenarios": [],
+        "unstable_scenarios": [],
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": [],
         "candidates_by_difficulty": [],

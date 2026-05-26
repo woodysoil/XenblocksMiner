@@ -122,14 +122,25 @@ def _report(
     invalid_run_count: int = 0,
     warm_evidence_run_count: int | None = None,
     cold_scenarios: list[str] | None = None,
+    stable_run_count: int | None = None,
+    unstable_scenarios: list[str] | None = None,
     benchmark_trust: str = "normal",
     high_cpu_load: bool = False,
 ) -> dict:
     run_count = len(runs)
     if report_quality_ok is None:
-        report_quality_ok = report_ok and invalid_run_count == 0 and not cold_scenarios and benchmark_trust != "low" and not high_cpu_load
+        report_quality_ok = (
+            report_ok
+            and invalid_run_count == 0
+            and not cold_scenarios
+            and not unstable_scenarios
+            and benchmark_trust != "low"
+            and not high_cpu_load
+        )
     if warm_evidence_run_count is None:
         warm_evidence_run_count = 0 if cold_scenarios else run_count
+    if stable_run_count is None:
+        stable_run_count = 0 if unstable_scenarios else run_count
     return {
         "schema": "xenblocks.hashapi.benchmark.v1",
         "environment": {
@@ -143,8 +154,10 @@ def _report(
             "report_quality_ok": report_quality_ok,
             "run_count": run_count,
             "warm_evidence_run_count": warm_evidence_run_count,
+            "stable_run_count": stable_run_count,
             "invalid_run_count": invalid_run_count,
             "cold_scenarios": cold_scenarios or [],
+            "unstable_scenarios": unstable_scenarios or [],
         },
         "runs": list(runs),
     }
@@ -372,6 +385,24 @@ def test_compare_reports_marks_cold_report_quality():
     assert result["quality"]["after"]["reasons"] == ["report_quality_ok=false", "warm_evidence_incomplete"]
 
 
+def test_compare_reports_marks_unstable_report_quality():
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0)),
+        _report(
+            _run("cuda-a", 105.0, spread_pct=29.0),
+            report_quality_ok=False,
+            stable_run_count=0,
+            unstable_scenarios=["cuda-a"],
+        ),
+    )
+
+    assert result["quality"]["ok"] is False
+    assert result["quality"]["after"]["acceptable"] is False
+    assert result["quality"]["after"]["stable_run_count"] == 0
+    assert result["quality"]["after"]["unstable_scenarios"] == ["cuda-a"]
+    assert result["quality"]["after"]["reasons"] == ["report_quality_ok=false", "stable_evidence_incomplete"]
+
+
 def test_compare_reports_derives_cold_quality_for_legacy_reports():
     cold_report = _report(_run("cuda-a", 105.0), report_quality_ok=True)
     cold_report["runs"][0]["summary"]["warmup"] = 0
@@ -391,6 +422,24 @@ def test_compare_reports_derives_cold_quality_for_legacy_reports():
     assert result["quality"]["after"]["warm_evidence_run_count"] == 0
     assert result["quality"]["after"]["cold_scenarios"] == ["cuda-a"]
     assert result["quality"]["after"]["reasons"] == ["warm_evidence_incomplete"]
+
+
+def test_compare_reports_derives_unstable_quality_for_legacy_reports():
+    unstable_report = _report(_run("cuda-a", 105.0, spread_pct=29.0), report_quality_ok=True)
+    unstable_report["runs"][0]["summary"]["stable"] = False
+    unstable_report["recommendations"].pop("stable_run_count")
+    unstable_report["recommendations"].pop("unstable_scenarios")
+
+    result = compare.compare_reports(
+        _report(_run("cuda-a", 100.0)),
+        unstable_report,
+    )
+
+    assert result["quality"]["ok"] is False
+    assert result["quality"]["after"]["acceptable"] is False
+    assert result["quality"]["after"]["stable_run_count"] == 0
+    assert result["quality"]["after"]["unstable_scenarios"] == ["cuda-a"]
+    assert result["quality"]["after"]["reasons"] == ["stable_evidence_incomplete"]
 
 
 def test_compare_reports_reports_missing_scenarios():
