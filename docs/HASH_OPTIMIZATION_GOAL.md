@@ -878,6 +878,16 @@ Measurement cautions:
   The source experiment was reverted. Do not retry this exact index bit-op
   rewrite unless a compiler/resource change creates a materially different
   code-generation hypothesis.
+- Rejected slice-template main-kernel experiment: templating the indexed and
+  dependent step helpers by fixed slice id and manually expanding the dependent
+  slice loop preserved focused tests, rebuilt successfully, and preserved CUDA
+  golden hashes with and without GPU first blocks, but it increased sm75 main
+  kernel register use from `56` to `57` and short high-difficulty GPU-first
+  smoke results were below the accepted loop-split region. d4096 reached about
+  `10.53k H/s` and d8192 about `5.41k H/s`, both with normal report quality.
+  The source experiment was reverted. Do not retry this slice-templating shape
+  unless profiler/resource evidence shows the extra specialization reduces
+  instruction cost without increasing register pressure on the target GPU class.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
