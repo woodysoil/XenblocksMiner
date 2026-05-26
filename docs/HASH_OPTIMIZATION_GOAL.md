@@ -861,6 +861,17 @@ Measurement cautions:
   experiment was reverted. Do not retry this all-register core scratch shape
   unless the implementation is split into a smaller compile unit or otherwise
   proves acceptable compile time and resource usage before benchmarking.
+- Rejected indexed-address bit-ops micro-optimization: replacing the
+  `offset % ARGON2_QWORDS_IN_BLOCK`, `addr_index % THREADS_PER_LANE`, and
+  `addr_index / THREADS_PER_LANE` expressions with equivalent power-of-two bit
+  operations preserved focused tests, rebuilt successfully, preserved CUDA
+  golden hashes with and without GPU first blocks, and left the public-safe
+  resource shape unchanged. A short high-difficulty GPU-first smoke did not
+  support keeping it: d4096 reached about `10.59k H/s` and d8192 about
+  `5.48k H/s`, both below the latest accepted loop-split confirmation region.
+  The source experiment was reverted. Do not retry this exact index bit-op
+  rewrite unless a compiler/resource change creates a materially different
+  code-generation hypothesis.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
