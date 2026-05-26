@@ -111,6 +111,10 @@ short state below is only the resume snapshot.
   GPU-first smoke results to about `10.22k H/s` at d4096 and about `5.32k H/s`
   at d8192. Do not retry that address-word span helper shape without a
   materially different register/control-flow hypothesis.
+- The blanket force-inline helper experiment was rejected after resources stayed
+  unchanged and normal high-difficulty GPU-first smoke results reached only
+  about `10.61k H/s` at d4096 and about `5.51k H/s` at d8192, below the
+  accepted uniform word selection confirmation region.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty
