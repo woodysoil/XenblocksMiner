@@ -187,6 +187,17 @@ Latest public-safe performance checkpoint:
   d8192 GPU-first confirmation region around `5.62k H/s`, while b398 was
   unstable. Do not change d8192 tuning from this artifact; rerun under normal
   benchmark trust before accepting any high-difficulty batch default.
+- Measurement-only sm75 high-difficulty batch-window refresh: a d4096
+  b384/b512/b640/b797 diagnostic run was rejected as a report because the
+  environment reached low benchmark trust and the larger rows were unstable.
+  A later normal-trust focused confirmation accepted b384 and b512 as stable
+  diagnostic rows, with b512 around `10.26k H/s` and `6.98%` spread, but this
+  stayed below the accepted d4096 best around `10.77k H/s`. A d8192
+  b192/b256/b398 diagnostic again lost final report quality to high CPU load;
+  b256 was the best stable diagnostic row at about `5.21k H/s`, still below
+  the accepted d8192 best around `5.62k H/s`, while b398 was unstable. Do not
+  change high-difficulty batch defaults from these artifacts; treat smaller
+  fixed batches as stability diagnostics, not throughput wins.
 
 Current rejected experiment checkpoint:
 
