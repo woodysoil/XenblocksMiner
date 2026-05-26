@@ -230,7 +230,7 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
   <section class="toolbar">
     <label>Difficulty <select id="difficulty"></select></label>
     <label>GPU First Blocks <select id="gfb"><option value="all">All</option><option value="true">true</option><option value="false">false</option></select></label>
-    <label>Quality <select id="quality"><option value="all">All</option><option value="good">Quality OK</option><option value="stable">Stable + Quality OK</option></select></label>
+    <label>Quality <select id="quality"><option value="stable" selected>Stable + Quality OK</option><option value="good">Quality OK</option><option value="all">All</option></select></label>
     <label>Search <input id="search" placeholder="scenario or source"></label>
   </section>
   <section class="panel stats">
