@@ -928,6 +928,14 @@ Measurement cautions:
   experiment was reverted. Do not retry this all-register core scratch shape
   unless the implementation is split into a smaller compile unit or otherwise
   proves acceptable compile time and resource usage before benchmarking.
+- Rejected main-kernel 64-bit shared scratch experiment: replacing the split
+  `block_l` shared scratch arrays (`lo` / `hi`) with a single `uint64_t`
+  shared array preserved the focused Hash API contract tests, but the Release
+  CUDA build did not complete within the autonomous build timeout and left the
+  compiler subprocess stalled before a new binary or resource summary was
+  produced. The source experiment was reverted. Do not retry this shared
+  scratch storage shape unless compile time is isolated first in a smaller CUDA
+  build and the resource summary can be produced before benchmarking.
 - Rejected indexed-address bit-ops micro-optimization: replacing the
   `offset % ARGON2_QWORDS_IN_BLOCK`, `addr_index % THREADS_PER_LANE`, and
   `addr_index / THREADS_PER_LANE` expressions with equivalent power-of-two bit
