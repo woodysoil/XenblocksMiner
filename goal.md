@@ -97,6 +97,15 @@ short state below is only the resume snapshot.
   d16384 to about `2.83k H/s`, and improved the `4096,8192,16384` variable-`m`
   sequence to about `4.72k H/s`. Compute/kernel time still dominates, so keep
   searching high-difficulty main-kernel and memory-behavior candidates.
+- The latest accepted indexed-address word selection change uses a
+  warp-uniform switch for Argon2id indexed address words. It reduced sm75 main
+  kernel register use from `56` to `53` while preserving sm80 at `32`,
+  sm86/sm89 at `40`, `1024` bytes shared memory, and no local memory. Normal
+  high-difficulty GPU-first confirmations stayed non-regressive: d4096 about
+  `10.77k H/s`, d8192 about `5.62k H/s`, d16384 about `2.85k H/s`, d32768
+  about `1.40k H/s`, and the `4096,8192,16384` variable-`m` sequence about
+  `4.74k H/s`. Treat this as a small resource-pressure and high-difficulty
+  continuity improvement, not a major speedup.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty

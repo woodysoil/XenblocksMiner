@@ -154,6 +154,25 @@ Latest public-safe performance checkpoint:
   size `99` and reached about `1.36k H/s` median with `4.76%` spread. Compute
   time was about `96.37%` of wall time. Treat this as current tens-of-thousands
   difficulty coverage, not as a separate accepted tuning change.
+- Accepted indexed-address word selection change: the Argon2id indexed-address
+  step now reads the selected address word through a warp-uniform switch instead
+  of the constant-time mask-select helper used for thread-varying reads. This is
+  valid for the indexed-address path because the selected `block_th` word is
+  derived from `addr_index / THREADS_PER_LANE` and is uniform across the warp
+  for a given step, while the lane-specific source word is still selected by the
+  existing shuffle. Validation passed focused Hash API tests, a Release CUDA
+  rebuild, CUDA golden hashes with and without GPU first blocks, and public-safe
+  resource summarization. Main-kernel resource use improved on sm75 from `56`
+  to `53` registers while sm80 stayed at `32`, sm86/sm89 stayed at `40`, shared
+  memory stayed at `1024` bytes, and local memory stayed at zero. Normal-trust
+  high-difficulty GPU-first confirmations were non-regressive to slightly
+  positive against the loop-split baseline: d4096 reached about `10.77k H/s`
+  with `2.59%` spread, d8192 about `5.62k H/s` with `0.91%` spread, d16384
+  about `2.85k H/s` with `0.24%` spread, d32768 about `1.40k H/s` with `2.22%`
+  spread, and the `4096,8192,16384` variable-`m` sequence about `4.74k H/s`
+  with `0.89%` spread. Keep the change as a resource-pressure and portability
+  improvement, but continue searching because compute/kernel time still
+  dominates at roughly `93%` to `98%` on realistic high-memory difficulties.
 - Measurement-only batch-scan caution: a broad d8192/d16384 adjacent batch-size
   probe timed out before writing a report, and a smaller d8192 b320/b398/b480
   probe completed under low benchmark trust with high CPU load and unstable
@@ -912,12 +931,15 @@ Start the next cycle from the latest clean commit and this decision tree:
 8. Use detailed timing to decide whether CUDA compute/kernel efficiency, batch sizing, setup/lifecycle, transfers, or matching is the current bottleneck.
 9. If continuing directly from the latest checkpoint, do not revisit the rejected `threadsPerBlock=256` first-block launch-geometry shape unless a new high-difficulty hypothesis appears.
 10. Do not revisit the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape or the rejected source-lane-only address-block selection shape unless profiling supports a materially different occupancy/register-pressure hypothesis.
-11. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
-12. If Nsight Compute reports GPU performance counter permission errors, do not
+11. Do not retry indexed-address bit operations, slice templating, or mask-select
+    replacement shapes unless the new design differs materially from the
+    accepted uniform word selection and the rejected variants above.
+12. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
+13. If Nsight Compute reports GPU performance counter permission errors, do not
     keep retrying it in autonomous runs. Capture `scripts/cuda_resource_summary.py`
     output under ignored benchmark storage and use benchmark timing plus resource
     deltas for the current cycle.
-13. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+14. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 

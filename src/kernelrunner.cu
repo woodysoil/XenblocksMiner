@@ -126,6 +126,20 @@ __device__ uint64_t block_th_get(const struct block_th *b, uint32_t idx)
     return res;
 }
 
+__device__ __forceinline__ uint64_t block_th_get_uniform(const struct block_th *b, uint32_t idx)
+{
+    switch (idx) {
+    case 0:
+        return b->a;
+    case 1:
+        return b->b;
+    case 2:
+        return b->c;
+    default:
+        return b->d;
+    }
+}
+
 __device__ void block_th_set(struct block_th *b, uint32_t idx, uint64_t v)
 {
     b->a ^= cmpeq_mask(idx, 0) & (v ^ b->a);
@@ -771,7 +785,7 @@ __device__ void argon2_step_indexed(
     uint32_t thr = addr_index % THREADS_PER_LANE;
     uint32_t idx = addr_index / THREADS_PER_LANE;
 
-    uint64_t v = block_th_get(addr, idx);
+    uint64_t v = block_th_get_uniform(addr, idx);
     v = u64_shuffle(v, thr);
     uint32_t ref_index = u64_lo(v);
 
