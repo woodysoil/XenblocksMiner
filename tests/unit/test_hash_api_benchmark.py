@@ -35,6 +35,8 @@ def _summary(hashrate: float, attempts: int = 1, ok: bool = True, timings: dict 
         "matches": 0,
         "ok": ok,
         "error": "" if ok else "failed",
+        "warmup": 1,
+        "repeat": 2,
     }
     summary.update(extra)
     if "batch_size_min" not in extra:
@@ -1212,6 +1214,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "hashrate_spread_pct": 5.0,
             "ms_per_attempt": 0.0,
             "stable": True,
+            "warm_evidence": True,
             "selection_reason": "best_stable_median",
             "dominant_stage": "input_ms",
             "dominant_stage_pct": 75.0,
@@ -1240,6 +1243,7 @@ def test_build_recommendations_selects_best_batch_per_difficulty():
             "hashrate_spread_pct": 15.0,
             "ms_per_attempt": 0.0,
             "stable": False,
+            "warm_evidence": True,
             "selection_reason": "no_stable_candidate",
             "dominant_stage": "compute_ms",
             "dominant_stage_pct": 55.0,
@@ -1403,6 +1407,47 @@ def test_add_recommendation_quality_marks_low_trust_environment():
     assert annotated["environment_available"] is True
     assert annotated["environment_sample_count"] == 8
     assert annotated["report_quality_ok"] is False
+
+
+def test_add_recommendation_quality_rejects_cold_report():
+    recommendations = {
+        "report_ok": True,
+        "run_count": 1,
+        "valid_run_count": 1,
+        "warm_evidence_run_count": 0,
+        "cold_scenarios": ["cold-control"],
+    }
+    environment = {
+        "available": True,
+        "benchmark_trust": "normal",
+        "high_cpu_load": False,
+        "sample_count": 3,
+    }
+
+    annotated = benchmark.add_recommendation_quality(recommendations, environment)
+
+    assert annotated["report_quality_ok"] is False
+
+
+def test_build_recommendations_records_cold_scenarios():
+    runs = [
+        {
+            "summary": {
+                **_summary(100.0, warmup=0, repeat=1),
+                "name": "cold-control",
+                "difficulty": 4096,
+                "batch_size": 797,
+            }
+        }
+    ]
+
+    recommendations = benchmark.build_recommendations(runs)
+
+    assert recommendations["report_ok"] is True
+    assert recommendations["valid_run_count"] == 1
+    assert recommendations["warm_evidence_run_count"] == 0
+    assert recommendations["cold_scenarios"] == ["cold-control"]
+    assert recommendations["batch_size_by_difficulty"][0]["warm_evidence"] is False
 
 
 def test_build_sanitized_report_drops_private_fields():
@@ -2163,6 +2208,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
         "batch_size_by_difficulty",
         "benchmark_trust",
         "candidates_by_difficulty",
+        "cold_scenarios",
         "environment_available",
         "environment_sample_count",
         "high_cpu_load",
@@ -2173,6 +2219,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
         "run_count",
         "stable_spread_pct",
         "valid_run_count",
+        "warm_evidence_run_count",
     ]
     assert stdout["report_ok"] is True
     assert stdout["report_quality_ok"] is True

@@ -955,7 +955,9 @@ def summarize_iterations(scenario: BenchmarkScenario, summaries: list[dict[str, 
 
 def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
     invalid_scenarios: list[str] = []
+    cold_scenarios: list[str] = []
     valid_run_count = 0
+    warm_evidence_run_count = 0
     candidates_by_key: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
     for run in runs:
         summary = run.get("summary") or {}
@@ -964,6 +966,12 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         run_ok = int(run.get("exit_code", 0) or 0) == 0 and bool(summary.get("ok"))
         if run_ok:
             valid_run_count += 1
+            warmup = int(summary.get("warmup", scenario.get("warmup", 0)) or 0)
+            repeat = int(summary.get("repeat", scenario.get("repeat", 1)) or 1)
+            if warmup >= 1 and repeat >= 2:
+                warm_evidence_run_count += 1
+            else:
+                cold_scenarios.append(scenario_name)
         else:
             invalid_scenarios.append(scenario_name)
         if not summary.get("ok"):
@@ -1026,6 +1034,7 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "hashrate_spread_pct": float(summary.get("hashrate_spread_pct", 0.0) or 0.0),
             "ms_per_attempt": float(summary.get("ms_per_attempt", 0.0) or 0.0),
             "stable": float(summary.get("hashrate_spread_pct", 0.0) or 0.0) <= DEFAULT_STABLE_SPREAD_PCT,
+            "warm_evidence": int(summary.get("warmup", 0) or 0) >= 1 and int(summary.get("repeat", 1) or 1) >= 2,
             "selection_reason": selection_reason,
             "dominant_stage": str((summary.get("timing_analysis") or {}).get("dominant_stage", "")),
             "dominant_stage_pct": float((summary.get("timing_analysis") or {}).get("dominant_stage_pct", 0.0) or 0.0),
@@ -1055,8 +1064,10 @@ def build_recommendations(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "report_ok": len(invalid_scenarios) == 0,
         "run_count": len(runs),
         "valid_run_count": valid_run_count,
+        "warm_evidence_run_count": warm_evidence_run_count,
         "invalid_run_count": len(invalid_scenarios),
         "invalid_scenarios": invalid_scenarios,
+        "cold_scenarios": cold_scenarios,
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": batch_size_by_difficulty,
         "candidates_by_difficulty": candidates_by_difficulty,
@@ -1077,7 +1088,15 @@ def add_recommendation_quality(recommendations: dict[str, Any], environment: dic
     annotated["environment_available"] = environment_available
     annotated["environment_sample_count"] = sample_count
     annotated["high_cpu_load"] = high_cpu_load
-    annotated["report_quality_ok"] = bool(annotated.get("report_ok", True)) and benchmark_trust != "low" and not high_cpu_load
+    run_count = int(annotated.get("run_count", 0) or 0)
+    warm_evidence_run_count = int(annotated.get("warm_evidence_run_count", run_count) or 0)
+    warm_evidence_ok = run_count == 0 or warm_evidence_run_count == run_count
+    annotated["report_quality_ok"] = (
+        bool(annotated.get("report_ok", True))
+        and benchmark_trust != "low"
+        and not high_cpu_load
+        and warm_evidence_ok
+    )
     return annotated
 
 
@@ -1086,8 +1105,10 @@ def build_empty_recommendations() -> dict[str, Any]:
         "report_ok": True,
         "run_count": 0,
         "valid_run_count": 0,
+        "warm_evidence_run_count": 0,
         "invalid_run_count": 0,
         "invalid_scenarios": [],
+        "cold_scenarios": [],
         "stable_spread_pct": DEFAULT_STABLE_SPREAD_PCT,
         "batch_size_by_difficulty": [],
         "candidates_by_difficulty": [],
