@@ -106,6 +106,11 @@ short state below is only the resume snapshot.
   about `1.40k H/s`, and the `4096,8192,16384` variable-`m` sequence about
   `4.74k H/s`. Treat this as a small resource-pressure and high-difficulty
   continuity improvement, not a major speedup.
+- The indexed-range chunking experiment was rejected after it increased sm75
+  main-kernel register use to `54` and regressed normal high-difficulty
+  GPU-first smoke results to about `10.22k H/s` at d4096 and about `5.32k H/s`
+  at d8192. Do not retry that address-word span helper shape without a
+  materially different register/control-flow hypothesis.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty

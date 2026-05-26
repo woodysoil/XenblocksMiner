@@ -914,6 +914,15 @@ Measurement cautions:
   The source experiment was reverted. Do not retry this slice-templating shape
   unless profiler/resource evidence shows the extra specialization reduces
   instruction cost without increasing register pressure on the target GPU class.
+- Rejected indexed-range chunking experiment: grouping Argon2id indexed slices
+  into address-word spans preserved focused tests, rebuilt successfully,
+  preserved CUDA golden hashes with and without GPU first blocks, but increased
+  sm75 main-kernel register use from `53` to `54`. A normal-trust
+  high-difficulty GPU-first smoke regressed against the accepted uniform word
+  selection baseline: d4096 reached about `10.22k H/s` and d8192 about
+  `5.32k H/s`. The source experiment was reverted. Do not retry this
+  address-word span helper or reference-pointer loop shape unless profiling
+  shows a materially different control-flow or register-pressure hypothesis.
 
 Do not retry rejected experiments unless the implementation shape has changed enough to remove the original failure mode and the new attempt includes correctness cross-checks.
 
@@ -934,12 +943,15 @@ Start the next cycle from the latest clean commit and this decision tree:
 11. Do not retry indexed-address bit operations, slice templating, or mask-select
     replacement shapes unless the new design differs materially from the
     accepted uniform word selection and the rejected variants above.
-12. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
-13. If Nsight Compute reports GPU performance counter permission errors, do not
+12. Do not retry indexed-range chunking of the Argon2id address-word loop unless
+    the implementation avoids the extra sm75 register pressure and has profiler
+    evidence that the control-flow savings are real.
+13. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
+14. If Nsight Compute reports GPU performance counter permission errors, do not
     keep retrying it in autonomous runs. Capture `scripts/cuda_resource_summary.py`
     output under ignored benchmark storage and use benchmark timing plus resource
     deltas for the current cycle.
-14. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+15. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
