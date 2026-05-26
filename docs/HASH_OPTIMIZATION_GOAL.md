@@ -1337,6 +1337,16 @@ Open `http://localhost:8766/` during optimization to watch the performance
 curve, trusted gain counters, report quality, spread, batch size, and scenario
 history update as new ignored benchmark reports are written.
 
+To launch the same local server and open the trend page in the default browser:
+
+```bash
+python scripts/hash_benchmark_trends.py --serve --open-browser --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --min-difficulty 4096 --host localhost --port 8766
+```
+
+The default server mode does not open a browser window, which keeps autonomous
+long-running optimization sessions non-interactive. Use `--open-browser` only
+when a local operator wants to inspect the curve directly.
+
 The trend chart defaults to stable quality-approved points and draws separate
 series per difficulty or difficulty sequence, so low-trust diagnostics and
 different `m=diff` workloads do not get merged into one misleading curve.

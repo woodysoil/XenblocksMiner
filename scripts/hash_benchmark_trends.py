@@ -7,6 +7,7 @@ import html
 import json
 import threading
 import time
+import webbrowser
 from dataclasses import dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -516,6 +517,7 @@ def serve_trends(
     port: int,
     refresh_seconds: float,
     page_refresh_seconds: float,
+    open_browser: bool,
 ) -> int:
     root = output.parent.resolve()
     output_name = output.name
@@ -544,10 +546,13 @@ def serve_trends(
 
     initial_points = refresh(force=True)
     with ThreadingHTTPServer((host, port), TrendRequestHandler) as server:
+        url = f"http://{host}:{server.server_port}/"
         print(
             f"serving {output_name} with {initial_points} public-safe points at "
-            f"http://{host}:{server.server_port}/"
+            f"{url}"
         )
+        if open_browser:
+            webbrowser.open(url)
         try:
             server.serve_forever()
         except KeyboardInterrupt:
@@ -580,6 +585,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Browser auto-refresh interval. Defaults to 10 while serving and disabled for one-shot output.",
     )
+    parser.add_argument(
+        "--open-browser",
+        action="store_true",
+        help="Open the local trend page in the default browser after the server starts.",
+    )
     return parser
 
 
@@ -597,6 +607,7 @@ def main(argv: list[str] | None = None) -> int:
             args.port,
             max(0.0, args.refresh_seconds),
             max(0.0, page_refresh_seconds),
+            args.open_browser,
         )
     points = write_trend_page(args.input_dir, args.output, args.min_difficulty, max(0.0, page_refresh_seconds))
     print(f"wrote {args.output} with {points} public-safe points")

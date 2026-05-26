@@ -138,7 +138,7 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
     output = tmp_path / "trend" / "index.html"
     captured = {}
 
-    def fake_serve(input_path, output_path, min_difficulty, host, port, refresh_seconds, page_refresh_seconds):
+    def fake_serve(input_path, output_path, min_difficulty, host, port, refresh_seconds, page_refresh_seconds, open_browser):
         captured.update(
             {
                 "input_path": input_path,
@@ -148,6 +148,7 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
                 "port": port,
                 "refresh_seconds": refresh_seconds,
                 "page_refresh_seconds": page_refresh_seconds,
+                "open_browser": open_browser,
             }
         )
         return 0
@@ -164,7 +165,57 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
         "port": 8766,
         "refresh_seconds": 5.0,
         "page_refresh_seconds": 10.0,
+        "open_browser": False,
     }
+
+
+def test_serve_mode_can_request_browser_open(monkeypatch, tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    captured = {}
+
+    def fake_serve(input_path, output_path, min_difficulty, host, port, refresh_seconds, page_refresh_seconds, open_browser):
+        captured.update({"open_browser": open_browser})
+        return 0
+
+    monkeypatch.setattr(trends, "serve_trends", fake_serve)
+
+    assert main(["--serve", "--open-browser", "--input-dir", str(input_dir), "--output", str(output)]) == 0
+
+    assert captured == {"open_browser": True}
+
+
+def test_serve_trends_opens_browser_when_requested(monkeypatch, tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    opened_urls = []
+
+    class StopServer(Exception):
+        pass
+
+    class FakeServer:
+        server_port = 12345
+
+        def __init__(self, address, handler):
+            self.address = address
+            self.handler = handler
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return exc_type is StopServer
+
+        def serve_forever(self):
+            raise StopServer()
+
+    monkeypatch.setattr(trends, "ThreadingHTTPServer", FakeServer)
+    monkeypatch.setattr(trends, "write_trend_page", lambda *_args: 3)
+    monkeypatch.setattr(trends.webbrowser, "open", lambda url: opened_urls.append(url))
+
+    assert trends.serve_trends(input_dir, output, 4096, "localhost", 0, 5.0, 10.0, True) == 0
+
+    assert opened_urls == ["http://localhost:12345/"]
 
 
 def test_trend_page_cache_skips_unchanged_input_refresh(monkeypatch, tmp_path):
