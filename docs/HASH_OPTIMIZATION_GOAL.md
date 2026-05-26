@@ -668,6 +668,10 @@ Serious comparison:
   report and before each warm-up or measured subprocess; if the wait expires,
   that subprocess is skipped instead of starting a known low-trust high-difficulty
   run
+- a positive preflight wait now requires two consecutive normal-trust samples by
+  default before launching, and each subprocess is checked one more time
+  immediately before launch; override with `--preflight-stable-samples` only for
+  short diagnostics, not serious high-difficulty claims
 - rerun if the claimed improvement is smaller than the run-to-run noise
 
 For batch-size recommendations, prefer custom scan matrices over a single preset when tuning for a specific difficulty range:

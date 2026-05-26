@@ -1094,18 +1094,44 @@ def build_empty_recommendations() -> dict[str, Any]:
     }
 
 
-def preflight_environment_quality(wait_seconds: float, wait_interval: float) -> tuple[dict[str, Any], dict[str, Any]]:
+def effective_preflight_stable_samples(wait_seconds: float, stable_samples: int) -> int:
+    if stable_samples > 0:
+        return stable_samples
+    return 2 if wait_seconds > 0.0 else 1
+
+
+def preflight_environment_quality(
+    wait_seconds: float,
+    wait_interval: float,
+    stable_samples: int = 1,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     deadline = time.monotonic() + max(0.0, wait_seconds)
     samples: list[dict[str, Any]] = []
+    stable_streak: list[dict[str, Any]] = []
+    required_stable_samples = max(1, stable_samples)
     while True:
         sample = collect_environment_metadata()
         samples.append(sample)
         sample_recommendations = add_recommendation_quality(build_empty_recommendations(), sample)
         if bool(sample_recommendations.get("report_quality_ok", False)):
-            return sample, sample_recommendations
+            stable_streak.append(sample)
+            if len(stable_streak) >= required_stable_samples:
+                environment = combine_environment_metadata(*stable_streak[-required_stable_samples:])
+                recommendations = add_recommendation_quality(build_empty_recommendations(), environment)
+                recommendations["preflight_sample_count"] = len(samples)
+                recommendations["preflight_stable_samples_required"] = required_stable_samples
+                recommendations["preflight_stable_samples_observed"] = len(stable_streak)
+                return environment, recommendations
+        else:
+            stable_streak = []
         if time.monotonic() >= deadline:
             environment = combine_environment_metadata(*samples)
             recommendations = add_recommendation_quality(build_empty_recommendations(), environment)
+            recommendations["preflight_sample_count"] = len(samples)
+            recommendations["preflight_stable_samples_required"] = required_stable_samples
+            recommendations["preflight_stable_samples_observed"] = len(stable_streak)
+            if len(stable_streak) < required_stable_samples:
+                recommendations["report_quality_ok"] = False
             return environment, recommendations
         time.sleep(max(0.1, wait_interval))
 
@@ -1263,9 +1289,14 @@ def run_hash_command(
     environment_samples: list[dict[str, Any]] | None = None,
     preflight_wait_seconds: float = 0.0,
     preflight_wait_interval: float = 5.0,
+    preflight_stable_samples: int = 1,
 ) -> dict[str, Any]:
     if preflight_wait_seconds > 0.0 and environment_samples is not None:
-        environment, recommendations = preflight_environment_quality(preflight_wait_seconds, preflight_wait_interval)
+        environment, recommendations = preflight_environment_quality(
+            preflight_wait_seconds,
+            preflight_wait_interval,
+            preflight_stable_samples,
+        )
         environment_samples.append(environment)
         if not bool(recommendations.get("report_quality_ok", False)):
             return {
@@ -1274,7 +1305,15 @@ def run_hash_command(
                 "result": skipped_quality_result(environment),
             }
     if environment_samples is not None:
-        sample_environment(environment_samples)
+        start_environment = sample_environment(environment_samples)
+        if preflight_wait_seconds > 0.0:
+            start_recommendations = add_recommendation_quality(build_empty_recommendations(), start_environment)
+            if not bool(start_recommendations.get("report_quality_ok", False)):
+                return {
+                    "exit_code": 2,
+                    "wall_elapsed_ms": 0.0,
+                    "result": skipped_quality_result(start_environment),
+                }
     started_at = time.time()
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     elapsed_ms = (time.time() - started_at) * 1000.0
@@ -1323,15 +1362,28 @@ def run_scenario(
     scenario: BenchmarkScenario,
     preflight_wait_seconds: float = 0.0,
     preflight_wait_interval: float = 5.0,
+    preflight_stable_samples: int = 1,
 ) -> dict[str, Any]:
     command = build_hash_command(binary, salt, scenario)
     environment_samples: list[dict[str, Any]] = []
     warmup_runs = [
-        run_hash_command(command, environment_samples, preflight_wait_seconds, preflight_wait_interval)
+        run_hash_command(
+            command,
+            environment_samples,
+            preflight_wait_seconds,
+            preflight_wait_interval,
+            preflight_stable_samples,
+        )
         for _ in range(scenario.warmup)
     ]
     iterations = [
-        run_hash_command(command, environment_samples, preflight_wait_seconds, preflight_wait_interval)
+        run_hash_command(
+            command,
+            environment_samples,
+            preflight_wait_seconds,
+            preflight_wait_interval,
+            preflight_stable_samples,
+        )
         for _ in range(scenario.repeat)
     ]
     iteration_summaries = [summarize_result(scenario, item["result"]) for item in iterations]
@@ -1484,6 +1536,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         help="Seconds between preflight quality samples while waiting.",
+    )
+    parser.add_argument(
+        "--preflight-stable-samples",
+        type=int,
+        default=0,
+        help=(
+            "Consecutive normal-trust samples required before preflight allows a benchmark. "
+            "Defaults to 2 when --preflight-wait-seconds is positive, otherwise 1."
+        ),
     )
     parser.add_argument(
         "--scan-difficulty",
@@ -1679,10 +1740,15 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    preflight_stable_samples = effective_preflight_stable_samples(
+        args.preflight_wait_seconds,
+        args.preflight_stable_samples,
+    )
     if args.preflight_report_quality:
         environment, recommendations = preflight_environment_quality(
             args.preflight_wait_seconds,
             args.preflight_wait_interval,
+            preflight_stable_samples,
         )
         if not bool(recommendations.get("report_quality_ok", False)):
             report = build_report(args, [], environment, recommendations)
@@ -1698,6 +1764,7 @@ def main(argv: list[str]) -> int:
                 scenario,
                 args.preflight_wait_seconds,
                 args.preflight_wait_interval,
+                preflight_stable_samples,
             )
             for scenario in scenarios
         ]

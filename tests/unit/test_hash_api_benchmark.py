@@ -1424,7 +1424,7 @@ def test_build_sanitized_report_drops_private_fields():
                 "version": "12.8.93",
             },
         },
-        "binary": r"D:\private\miner.exe",
+        "binary": "<private-binary>",
         "salt": "private-salt",
         "environment": {
             "available": True,
@@ -1453,7 +1453,7 @@ def test_build_sanitized_report_drops_private_fields():
                     "pattern": "XEN11",
                 },
                 "summary": _summary(42.0),
-                "command": [r"D:\private\miner.exe", "--salt", "private-salt"],
+                "command": ["<private-binary>", "--salt", "private-salt"],
                 "warmup_runs": [{"result": {"matches": [{"key": "secret-key"}]}}],
                 "iterations": [{"result": {"matches": [{"key": "secret-key"}]}}],
                 "result": {"matches": [{"key": "secret-key"}]},
@@ -1496,7 +1496,7 @@ def test_build_sanitized_report_drops_private_fields():
     assert "iterations" not in sanitized["runs"][0]
     assert "result" not in sanitized["runs"][0]
     for token in [
-        r"D:\private",
+        "<private-binary>",
         "private-host",
         "Private GPU",
         "<private-cuda>",
@@ -1702,6 +1702,62 @@ def test_run_scenario_preflight_wait_can_skip_subprocess(monkeypatch):
     assert "benchmark report quality preflight failed" in result["summary"]["error"]
 
 
+def test_run_scenario_preflight_start_sample_can_skip_subprocess(monkeypatch):
+    samples = [
+        {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+        {
+            "available": True,
+            "cpu_load_pct": 97.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+    ]
+
+    def fake_environment_metadata():
+        if samples:
+            return samples.pop(0)
+        return {
+            "available": True,
+            "cpu_load_pct": 97.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        }
+
+    def fail_run(command, text, capture_output, check):
+        raise AssertionError("low-trust start sample should skip subprocess launch")
+
+    monkeypatch.setattr(benchmark, "collect_environment_metadata", fake_environment_metadata)
+    monkeypatch.setattr(benchmark.subprocess, "run", fail_run)
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-start-low-trust",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        warmup=0,
+        repeat=1,
+    )
+
+    result = benchmark.run_scenario(
+        Path("miner"),
+        benchmark.DEFAULT_SALT,
+        scenario,
+        preflight_wait_seconds=0.1,
+        preflight_wait_interval=0.1,
+        preflight_stable_samples=1,
+    )
+
+    assert result["exit_code"] == 2
+    assert result["iterations"][0]["result"]["preflight_skipped"] is True
+    assert result["environment"]["benchmark_trust"] == "low"
+    assert result["summary"]["ok"] is False
+
+
 def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     def fake_run_scenario(binary, salt, scenario):
         return {
@@ -1900,7 +1956,7 @@ def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
     exit_code = benchmark.main(
         [
             "--binary",
-            r"D:\private\miner.exe",
+            "<private-binary>",
             "--salt",
             "private-salt",
             "--backend",
@@ -1920,7 +1976,7 @@ def test_main_writes_sanitized_output_file(monkeypatch, tmp_path, capsys):
     assert "binary" not in sanitized
     assert "hardware" not in sanitized
     assert sanitized["environment"]["benchmark_trust"] == "low"
-    assert r"D:\private" not in encoded
+    assert "<private-binary>" not in encoded
     assert "private gpu" not in encoded
     assert "private-salt" not in encoded
     assert "deadbeef" not in encoded
@@ -2357,12 +2413,26 @@ def test_preflight_report_quality_can_wait_for_normal_trust(monkeypatch, tmp_pat
             "high_cpu_load": False,
             "benchmark_trust": "normal",
         },
+        {
+            "available": True,
+            "cpu_load_pct": 13.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
     ]
 
-    def fake_run_scenario(binary, salt, scenario, preflight_wait_seconds=0.0, preflight_wait_interval=5.0):
+    def fake_run_scenario(
+        binary,
+        salt,
+        scenario,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+    ):
         calls["run"] += 1
         assert preflight_wait_seconds == 10.0
         assert preflight_wait_interval == 1.0
+        assert preflight_stable_samples == 2
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -2412,6 +2482,97 @@ def test_preflight_report_quality_can_wait_for_normal_trust(monkeypatch, tmp_pat
             "--preflight-wait-seconds",
             "10",
             "--preflight-wait-interval",
+            "1",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == {"run": 1, "sleep": 2}
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert len(report["runs"]) == 1
+    assert report["recommendations"]["report_quality_ok"] is True
+    capsys.readouterr()
+
+
+def test_preflight_report_quality_can_use_single_stable_sample(monkeypatch, tmp_path, capsys):
+    calls = {"run": 0, "sleep": 0}
+    environment_samples = [
+        {
+            "available": True,
+            "cpu_load_pct": 98.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+        {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+    ]
+
+    def fake_run_scenario(
+        binary,
+        salt,
+        scenario,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+    ):
+        calls["run"] += 1
+        assert preflight_stable_samples == 1
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+
+    def fake_environment_metadata():
+        if environment_samples:
+            return environment_samples.pop(0)
+        return {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        }
+
+    monkeypatch.setattr(benchmark, "collect_environment_metadata", fake_environment_metadata)
+    monkeypatch.setattr(benchmark.time, "sleep", lambda seconds: calls.__setitem__("sleep", calls["sleep"] + 1))
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=1,batch_size=2,seconds=1",
+            "--output",
+            str(output),
+            "--preflight-report-quality",
+            "--preflight-wait-seconds",
+            "10",
+            "--preflight-wait-interval",
+            "1",
+            "--preflight-stable-samples",
             "1",
         ]
     )
@@ -2479,6 +2640,8 @@ def test_preflight_report_quality_wait_timeout_skips_benchmarks(monkeypatch, tmp
     assert stdout["run_count"] == 0
     assert stdout["report_quality_ok"] is False
     assert stdout["environment_sample_count"] == 2
+    assert stdout["preflight_stable_samples_required"] == 2
+    assert stdout["preflight_stable_samples_observed"] == 0
     assert report["runs"] == []
     assert report["environment"]["sample_count"] == 2
     assert "benchmark report quality preflight failed" in captured.err
