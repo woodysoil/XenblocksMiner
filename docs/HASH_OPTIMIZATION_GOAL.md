@@ -998,6 +998,17 @@ Measurement cautions:
   source experiment was reverted. Do not retry this exact ref-area accumulator
   shape unless a materially different control-flow or compiler hypothesis can
   be defended with a new resource change.
+- Rejected main-kernel restrict alias hint experiment: adding targeted
+  `__restrict__` qualifiers to main-kernel load/store, scratch, and step-helper
+  pointer parameters preserved focused tests, rebuilt successfully, preserved
+  CUDA golden hashes with and without GPU first blocks, and left the sm75
+  resource summary unchanged at `53` registers, `1024` bytes shared memory, and
+  no stack/local memory. It did not produce a credible high-difficulty win:
+  d4096 GPU-first reached about `7.78k H/s` under low benchmark trust, then a
+  normal-trust confirmation reached only about `5.95k H/s` with `61.00%`
+  spread. The source experiment was reverted. Do not retry generic pointer
+  alias hints on the main kernel unless the generated resource or instruction
+  shape changes.
 - Rejected force-inline helper experiment: adding `__forceinline__` to the main
   Argon2 CUDA helper chain preserved focused tests, rebuilt successfully,
   preserved CUDA golden hashes with and without GPU first blocks, and left the
