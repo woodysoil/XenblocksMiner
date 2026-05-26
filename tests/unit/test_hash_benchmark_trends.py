@@ -92,6 +92,10 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "Best Trusted Gain" in html
     assert "Trusted Points" in html
     assert '<option value="stable" selected>Stable + Quality OK</option>' in html
+    assert '<option value="all">Diagnostics</option>' in html
+    assert "run_ok" in html
+    assert "p.run_ok && p.quality_ok && p.stable" in html
+    assert "p.run_ok ? (p.quality_ok ? (p.stable ? 'stable' : 'ok') : 'low') : 'invalid'" in html
     assert "function groupedByDifficulty(data)" in html
     assert "function trustedGainFor(data, referencePoint)" in html
     assert "function difficultySummaries(data)" in html
@@ -101,6 +105,27 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "private-host" not in html
     assert "private-salt" not in html
     assert "<private-binary>" not in html
+
+
+def test_invalid_runs_are_not_trusted_points(tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    input_dir.mkdir()
+    report = _report("invalid", 4096, 0.0, source_path="<private-binary>")
+    report["recommendations"] = {"report_ok": False, "report_quality_ok": False}
+    report["runs"][0]["summary"]["ok"] = False
+    (input_dir / "invalid.json").write_text(json.dumps(report), encoding="utf-8")
+
+    points = load_points(input_dir, min_difficulty=4096)
+
+    assert len(points) == 1
+    assert points[0].run_ok is False
+    assert points[0].quality_ok is False
+
+    assert main(["--input-dir", str(input_dir), "--output", str(output), "--min-difficulty", "4096"]) == 0
+
+    html = output.read_text(encoding="utf-8")
+    assert '"run_ok": false' in html
 
 
 def test_main_can_write_auto_refresh_html(tmp_path):

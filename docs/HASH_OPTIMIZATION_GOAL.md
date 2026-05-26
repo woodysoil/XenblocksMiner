@@ -1350,6 +1350,9 @@ when a local operator wants to inspect the curve directly.
 The trend chart defaults to stable quality-approved points and draws separate
 series per difficulty or difficulty sequence, so low-trust diagnostics and
 different `m=diff` workloads do not get merged into one misleading curve.
+The `Diagnostics` quality mode can show invalid, low-trust, or unstable report
+points for troubleshooting only; do not use those points as performance
+evidence.
 The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
 The page also includes a per-difficulty trusted summary table for latest rate,
