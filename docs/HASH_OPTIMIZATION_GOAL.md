@@ -154,6 +154,13 @@ Latest public-safe performance checkpoint:
   size `99` and reached about `1.36k H/s` median with `4.76%` spread. Compute
   time was about `96.37%` of wall time. Treat this as current tens-of-thousands
   difficulty coverage, not as a separate accepted tuning change.
+- Measurement-only batch-scan caution: a broad d8192/d16384 adjacent batch-size
+  probe timed out before writing a report, and a smaller d8192 b320/b398/b480
+  probe completed under low benchmark trust with high CPU load and unstable
+  spreads. Do not use those local batch-scan artifacts for tuning decisions.
+  Future high-difficulty batch tuning should run smaller targeted matrices under
+  normal benchmark trust and compare against the accepted auto-batch rows before
+  changing `HashApiTuning`.
 
 Current rejected experiment checkpoint:
 
