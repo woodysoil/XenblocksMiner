@@ -2682,6 +2682,81 @@ def test_preflight_report_quality_can_use_single_stable_sample(monkeypatch, tmp_
     capsys.readouterr()
 
 
+def test_preflight_report_quality_can_limit_subprocess_wait(monkeypatch, tmp_path, capsys):
+    calls = {"run": 0}
+
+    def fake_run_scenario(
+        binary,
+        salt,
+        scenario,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+    ):
+        calls["run"] += 1
+        assert preflight_wait_seconds == 2.0
+        assert preflight_wait_interval == 1.0
+        assert preflight_stable_samples == 2
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+    )
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=1,batch_size=2,seconds=1",
+            "--output",
+            str(output),
+            "--preflight-report-quality",
+            "--preflight-wait-seconds",
+            "60",
+            "--subprocess-preflight-wait-seconds",
+            "2",
+            "--preflight-wait-interval",
+            "1",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == {"run": 1}
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["recommendations"]["report_quality_ok"] is True
+    capsys.readouterr()
+
+
 def test_preflight_report_quality_wait_timeout_skips_benchmarks(monkeypatch, tmp_path, capsys):
     calls = {"run": 0, "sleep": 0}
     monotonic_values = iter([0.0, 0.0, 1.0, 1.0])

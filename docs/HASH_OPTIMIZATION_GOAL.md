@@ -672,6 +672,11 @@ Serious comparison:
   report and before each warm-up or measured subprocess; if the wait expires,
   that subprocess is skipped instead of starting a known low-trust high-difficulty
   run
+- if the environment is noisy but long-run automation should keep searching for
+  a stable launch window, use a longer report-level `--preflight-wait-seconds`
+  together with a shorter `--subprocess-preflight-wait-seconds` so each
+  warm-up/repeat still has a quality gate without letting one report spend most
+  of its timeout budget waiting before every subprocess
 - a positive preflight wait now requires two consecutive normal-trust samples by
   default before launching, and each subprocess is checked one more time
   immediately before launch; override with `--preflight-stable-samples` only for

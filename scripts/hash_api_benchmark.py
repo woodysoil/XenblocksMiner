@@ -1579,6 +1579,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds between preflight quality samples while waiting.",
     )
     parser.add_argument(
+        "--subprocess-preflight-wait-seconds",
+        type=float,
+        default=None,
+        help=(
+            "When preflight quality is enabled, wait up to this many seconds before each benchmark subprocess. "
+            "Defaults to --preflight-wait-seconds."
+        ),
+    )
+    parser.add_argument(
         "--preflight-stable-samples",
         type=int,
         default=0,
@@ -1785,6 +1794,11 @@ def main(argv: list[str]) -> int:
         args.preflight_wait_seconds,
         args.preflight_stable_samples,
     )
+    subprocess_preflight_wait_seconds = (
+        args.preflight_wait_seconds
+        if args.subprocess_preflight_wait_seconds is None
+        else max(0.0, args.subprocess_preflight_wait_seconds)
+    )
     if args.preflight_only:
         environment, recommendations = preflight_environment_quality(
             args.preflight_wait_seconds,
@@ -1816,7 +1830,7 @@ def main(argv: list[str]) -> int:
                 args.binary,
                 args.salt,
                 scenario,
-                args.preflight_wait_seconds,
+                subprocess_preflight_wait_seconds,
                 args.preflight_wait_interval,
                 preflight_stable_samples,
             )
