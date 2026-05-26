@@ -119,6 +119,18 @@ Latest public-safe performance checkpoint:
   `10.74k H/s`, and the sm75 main-kernel register count increased from `52` to
   `56`. The source experiment was reverted and the Release CUDA binary was
   rebuilt back to the baseline resource shape.
+- Nsight Compute profiling is not currently usable without enabling NVIDIA GPU
+  performance counter permissions on the local system. A permission-limited
+  d4096 GPU-first profiler attempt still executed the hash command correctly but
+  did not collect counter data. Do not loop on `ncu` in autonomous runs when it
+  reports `ERR_NVGPUCTRPERM`; use offline resource summaries and benchmark
+  timings until permissions are available.
+- Current offline CUDA resource evidence for the restored Release binary shows
+  the main `argon2_kernel_oneshot` kernel has no stack or local memory usage,
+  `1024` bytes of shared memory, and `52` registers for sm75 while sm80/sm86/sm89
+  use `40` registers. The device first-block kernel remains register-heavy at
+  `255` registers with stack use, but high-difficulty benchmark timing shows it
+  is not the dominant bottleneck after GPU first blocks are enabled.
 
 Current rejected experiment checkpoint:
 
@@ -260,6 +272,11 @@ Known current capabilities:
 - The miner binary exposes JSON-friendly hash commands such as `hash-one`, `hash-batch`, and `hash-benchmark`.
 - A smoke CLI target exists for Hash API contract testing where a full CUDA build is not needed.
 - `scripts/hash_api_benchmark.py` supports scenario definitions, warm-up runs, repeated measured runs, aggregate JSON summaries, and optional report output.
+- `scripts/cuda_resource_summary.py` summarizes `cuobjdump --dump-resource-usage`
+  output into public-safe JSON containing only architecture, kernel aliases, and
+  resource counts. Use it before and after CUDA kernel experiments to track
+  register, stack, shared, and local memory changes without committing local
+  paths, GPU names, or raw tool output.
 - Unit tests cover the Hash API contract, service behavior, and benchmark runner behavior.
 
 Current progress:
@@ -836,7 +853,11 @@ Start the next cycle from the latest clean commit and this decision tree:
 9. If continuing directly from the latest checkpoint, do not revisit the rejected `threadsPerBlock=256` first-block launch-geometry shape unless a new high-difficulty hypothesis appears.
 10. Do not revisit the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape or the rejected source-lane-only address-block selection shape unless profiling supports a materially different occupancy/register-pressure hypothesis.
 11. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
-12. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+12. If Nsight Compute reports GPU performance counter permission errors, do not
+    keep retrying it in autonomous runs. Capture `scripts/cuda_resource_summary.py`
+    output under ignored benchmark storage and use benchmark timing plus resource
+    deltas for the current cycle.
+13. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
@@ -844,6 +865,10 @@ Good next experiment shapes:
 - Profile or instrument the main Argon2 CUDA kernel only with public-safe output,
   then test one kernel-side hypothesis at a time against d4096 and the
   d4096,d8192,d16384 sequence.
+- When profiler counters are unavailable, compare public-safe CUDA resource
+  summaries before and after each kernel experiment, then reject changes that
+  raise registers, stack, or local memory without stable high-difficulty
+  throughput gains.
 - Inspect finalization ownership and materialization before attempting any new parallel or device-side final hash path.
 - Reduce setup/lifecycle overhead for variable `m=diff` sequences if detailed timings show repeated difficulty changes are costing wall time.
 - Reduce generated input preparation overhead only if newer timing shows host input work has become dominant again.
@@ -1205,6 +1230,8 @@ Work through this backlog before attempting high-risk kernel rewrites:
 10. Extend batch-size and launch-shape tuning toward runtime autotuning after stable cross-difficulty data exists.
 11. Add optional autotuning once enough benchmark data justifies it.
 12. Add profiler-backed CUDA kernel work when benchmark timing shows compute or launch overhead is a dominant bottleneck.
+13. Keep public-safe CUDA resource summaries for accepted or rejected kernel
+    experiments so future agents can avoid repeating register-pressure regressions.
 
 Every backlog item must still follow the correctness and reporting rules above.
 
