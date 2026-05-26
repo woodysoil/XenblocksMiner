@@ -5,8 +5,12 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import threading
+import time
 from dataclasses import dataclass
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 
@@ -138,14 +142,18 @@ def _json_for_html(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True).replace("</", "<\\/")
 
 
-def _render_html(points: list[TrendPoint], min_difficulty: int) -> str:
+def _render_html(points: list[TrendPoint], min_difficulty: int, page_refresh_seconds: float = 0.0) -> str:
     rows = [point.__dict__ for point in points]
     title = f"Hash Benchmark Trends d{min_difficulty}+"
+    refresh_meta = ""
+    if page_refresh_seconds > 0.0:
+        refresh_meta = f'<meta http-equiv="refresh" content="{max(1, int(page_refresh_seconds))}">\n'
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{refresh_meta}<meta name="robots" content="noindex">
 <title>{html.escape(title)}</title>
 <style>
 :root {{
@@ -378,6 +386,64 @@ render();
 """
 
 
+def write_trend_page(input_dir: Path, output: Path, min_difficulty: int, page_refresh_seconds: float = 0.0) -> int:
+    points = load_points(input_dir, min_difficulty)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(_render_html(points, min_difficulty, page_refresh_seconds), encoding="utf-8")
+    return len(points)
+
+
+def serve_trends(
+    input_dir: Path,
+    output: Path,
+    min_difficulty: int,
+    host: str,
+    port: int,
+    refresh_seconds: float,
+    page_refresh_seconds: float,
+) -> int:
+    root = output.parent.resolve()
+    output_name = output.name
+    lock = threading.Lock()
+    state = {"last_refresh": 0.0, "points": 0}
+
+    def refresh(force: bool = False) -> int:
+        now = time.monotonic()
+        with lock:
+            if force or now - state["last_refresh"] >= refresh_seconds:
+                state["points"] = write_trend_page(input_dir, output, min_difficulty, page_refresh_seconds)
+                state["last_refresh"] = now
+            return int(state["points"])
+
+    class TrendRequestHandler(SimpleHTTPRequestHandler):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, directory=str(root), **kwargs)
+
+        def do_GET(self) -> None:
+            request_path = urlsplit(self.path).path
+            if request_path in {"/", f"/{output_name}"}:
+                refresh()
+            if request_path == "/":
+                self.path = f"/{output_name}"
+            super().do_GET()
+
+        def end_headers(self) -> None:
+            self.send_header("Cache-Control", "no-store")
+            super().end_headers()
+
+    initial_points = refresh(force=True)
+    with ThreadingHTTPServer((host, port), TrendRequestHandler) as server:
+        print(
+            f"serving {output_name} with {initial_points} public-safe points at "
+            f"http://{host}:{server.server_port}/"
+        )
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("stopped trend server")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, default=Path(".benchmarks"), help="Directory containing benchmark JSON reports.")
@@ -388,15 +454,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generated HTML path. Keep this under ignored benchmark storage.",
     )
     parser.add_argument("--min-difficulty", type=int, default=4096, help="Minimum difficulty to include.")
+    parser.add_argument("--serve", action="store_true", help="Serve the generated trend page with automatic refresh.")
+    parser.add_argument("--host", default="localhost", help="Host used by --serve.")
+    parser.add_argument("--port", type=int, default=8766, help="Port used by --serve. Use 0 to choose a free port.")
+    parser.add_argument(
+        "--refresh-seconds",
+        type=float,
+        default=5.0,
+        help="Minimum seconds between benchmark directory rescans while serving.",
+    )
+    parser.add_argument(
+        "--page-refresh-seconds",
+        type=float,
+        default=None,
+        help="Browser auto-refresh interval. Defaults to 10 while serving and disabled for one-shot output.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    points = load_points(args.input_dir, args.min_difficulty)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(_render_html(points, args.min_difficulty), encoding="utf-8")
-    print(f"wrote {args.output} with {len(points)} public-safe points")
+    page_refresh_seconds = args.page_refresh_seconds
+    if page_refresh_seconds is None:
+        page_refresh_seconds = 10.0 if args.serve else 0.0
+    if args.serve:
+        return serve_trends(
+            args.input_dir,
+            args.output,
+            args.min_difficulty,
+            args.host,
+            args.port,
+            max(0.0, args.refresh_seconds),
+            max(0.0, page_refresh_seconds),
+        )
+    points = write_trend_page(args.input_dir, args.output, args.min_difficulty, max(0.0, page_refresh_seconds))
+    print(f"wrote {args.output} with {points} public-safe points")
     return 0
 
 

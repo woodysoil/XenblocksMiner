@@ -1320,6 +1320,16 @@ Local high-difficulty trend page:
 python scripts/hash_benchmark_trends.py --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --min-difficulty 4096
 ```
 
+Long-running local trend server:
+
+```bash
+python scripts/hash_benchmark_trends.py --serve --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --min-difficulty 4096 --host localhost --port 8766
+```
+
+Open `http://localhost:8766/` during optimization to watch the performance
+curve, trusted gain counters, report quality, spread, batch size, and scenario
+history update as new ignored benchmark reports are written.
+
 The generated trend page is an ignored local artifact. It embeds only
 public-safe benchmark summary fields and excludes raw command lines, local
 binary paths, host metadata, salts, and hardware names.
