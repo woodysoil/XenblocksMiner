@@ -65,13 +65,54 @@ def _bool_value(data: dict[str, Any], key: str, default: bool = False) -> bool:
     return bool(value)
 
 
+def _run_name(run: dict[str, Any]) -> str:
+    summary = _summary_for(run)
+    scenario = _scenario_for(run)
+    return str(summary.get("name") or scenario.get("name") or "")
+
+
+def _run_has_warm_evidence(run: dict[str, Any]) -> bool:
+    summary = _summary_for(run)
+    scenario = _scenario_for(run)
+    warmup = _int_value(summary, "warmup", _int_value(scenario, "warmup", 0))
+    repeat = _int_value(summary, "repeat", _int_value(scenario, "repeat", 1))
+    return warmup >= 1 and repeat >= 2
+
+
+def _derive_warm_evidence(report: Report) -> tuple[int, list[str]]:
+    runs = report.get("runs") or []
+    if not isinstance(runs, list):
+        return 0, []
+    warm_count = 0
+    cold_scenarios: list[str] = []
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        if _run_has_warm_evidence(run):
+            warm_count += 1
+        else:
+            cold_scenarios.append(_run_name(run))
+    return warm_count, cold_scenarios
+
+
 def report_quality(report: Report, label: str) -> dict[str, Any]:
     recommendations = report.get("recommendations") or {}
     environment = report.get("environment") or {}
     report_ok_value = recommendations.get("report_ok")
+    report_quality_ok_value = recommendations.get("report_quality_ok")
     report_ok_available = isinstance(report_ok_value, bool)
+    report_quality_ok_available = isinstance(report_quality_ok_value, bool)
     report_ok = bool(report_ok_value) if report_ok_available else True
+    report_quality_ok = bool(report_quality_ok_value) if report_quality_ok_available else True
+    run_count = _int_value(recommendations, "run_count", len(report.get("runs") or []))
     invalid_run_count = _int_value(recommendations, "invalid_run_count", 0)
+    derived_warm_count, derived_cold_scenarios = _derive_warm_evidence(report)
+    warm_evidence_run_count = _int_value(recommendations, "warm_evidence_run_count", derived_warm_count)
+    cold_scenarios = recommendations.get("cold_scenarios")
+    if not isinstance(cold_scenarios, list):
+        cold_scenarios = derived_cold_scenarios
+    if not cold_scenarios and derived_cold_scenarios:
+        cold_scenarios = derived_cold_scenarios
     benchmark_trust = str(environment.get("benchmark_trust") or "unknown")
     high_cpu_load = _bool_value(environment, "high_cpu_load", False)
     environment_available = _bool_value(environment, "available", False)
@@ -79,8 +120,12 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
     reasons: list[str] = []
     if report_ok_available and not report_ok:
         reasons.append("report_ok=false")
+    if report_quality_ok_available and not report_quality_ok:
+        reasons.append("report_quality_ok=false")
     if invalid_run_count > 0:
         reasons.append("invalid_run_count>0")
+    if run_count > 0 and warm_evidence_run_count < run_count:
+        reasons.append("warm_evidence_incomplete")
     if benchmark_trust == "low" or high_cpu_load:
         reasons.append("benchmark_trust=low")
 
@@ -89,7 +134,12 @@ def report_quality(report: Report, label: str) -> dict[str, Any]:
         "acceptable": not reasons,
         "report_ok": report_ok,
         "report_ok_available": report_ok_available,
+        "report_quality_ok": report_quality_ok,
+        "report_quality_ok_available": report_quality_ok_available,
+        "run_count": run_count,
+        "warm_evidence_run_count": warm_evidence_run_count,
         "invalid_run_count": invalid_run_count,
+        "cold_scenarios": cold_scenarios,
         "benchmark_trust": benchmark_trust,
         "environment_available": environment_available,
         "high_cpu_load": high_cpu_load,

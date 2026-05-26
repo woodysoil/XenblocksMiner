@@ -1358,6 +1358,10 @@ The benchmark report quality gate follows the same rule: reports with measured
 runs must contain warm evidence (`warmup >= 1` and `repeat >= 2`) before
 `report_quality_ok` can be true. Preflight-only empty reports remain allowed
 because they do not claim throughput.
+The comparison gate also checks `report_quality_ok`, `warm_evidence_run_count`,
+and `cold_scenarios`, so `hash_api_compare.py --fail-on-report-quality` rejects
+cold or single-repeat reports before they can be treated as before/after
+performance evidence.
 Use the chart's metric selector to switch between median H/s, median
 milliseconds per attempt, compute percentage, kernel percentage, and spread.
 Median H/s remains the primary repeatable throughput metric, while
