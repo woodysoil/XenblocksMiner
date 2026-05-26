@@ -245,6 +245,15 @@ Current rejected experiment checkpoint:
   increased sm75 main-kernel registers from `52` to `56`. The source experiment
   was reverted; do not retry this shape unless a profiler shows the branch and
   register tradeoff changes on a different architecture.
+- The main-kernel reference-area accumulator experiment is rejected. It moved
+  `slice * segment_blocks + offset - 1` out of `compute_ref_pos` and passed the
+  pre-change focused Hash API tests and CUDA golden hashes on the clean baseline,
+  but the Release CUDA rebuild did not complete within the autonomous build
+  timeout and left the CUDA compiler subprocess stalled before producing a new
+  binary. The source experiment was reverted with no benchmark claim. Do not
+  retry this ref-area accumulator shape unless compile-time behavior is first
+  isolated in a smaller CUDA build or paired with evidence that the generated
+  resource shape is worth the compile risk.
 
 Next cycle:
 
