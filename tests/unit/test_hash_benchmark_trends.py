@@ -90,9 +90,11 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "high" in html
     assert "Latest Trusted Gain" in html
     assert "Best Trusted Gain" in html
+    assert "Trusted Points" in html
     assert '<option value="stable" selected>Stable + Quality OK</option>' in html
     assert "function groupedByDifficulty(data)" in html
     assert "function trustedGainFor(data, referencePoint)" in html
+    assert "function difficultySummaries(data)" in html
     assert "p.difficulty_label === referencePoint.difficulty_label" in html
     assert "difficulty_label" in html
     assert "private gpu model" not in html

@@ -244,6 +244,12 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
   <section class="panel"><canvas id="chart" width="1100" height="360"></canvas></section>
   <section class="panel table-wrap">
     <table>
+      <thead><tr><th>Difficulty</th><th>Trusted Points</th><th>Latest H/s</th><th>Best H/s</th><th>Best Gain</th></tr></thead>
+      <tbody id="difficultyRows"></tbody>
+    </table>
+  </section>
+  <section class="panel table-wrap">
+    <table>
       <thead><tr><th>#</th><th>Difficulty</th><th>Median H/s</th><th>Spread</th><th>Compute</th><th>Kernel</th><th>Batch</th><th>GFB</th><th>Quality</th><th>Scenario</th><th>Source</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -323,6 +329,25 @@ function trustedGainFor(data, referencePoint) {{
   }};
 }}
 
+function difficultySummaries(data) {{
+  return groupedByDifficulty(data).map(group => {{
+    const trusted = group.values.filter(p => p.quality_ok && p.stable && p.median_hashrate > 0);
+    const first = trusted[0];
+    const latest = trusted[trusted.length - 1];
+    const best = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
+    const bestGain = first && best && first.median_hashrate > 0
+      ? ((best.median_hashrate - first.median_hashrate) / first.median_hashrate * 100)
+      : null;
+    return {{
+      label: group.label,
+      trustedCount: trusted.length,
+      latestRate: latest ? latest.median_hashrate : 0,
+      bestRate: best.median_hashrate || 0,
+      bestGain,
+    }};
+  }}).filter(row => row.trustedCount > 0);
+}}
+
 function drawChart(data) {{
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
@@ -399,6 +424,14 @@ function render() {{
   document.getElementById('latestTrustedGain').textContent = gains.latest === null ? 'n/a' : `${{fmt(gains.latest, 2)}}%`;
   document.getElementById('bestTrustedGain').textContent = gains.best === null ? 'n/a' : `${{fmt(gains.best, 2)}}%`;
   drawChart(data);
+  document.getElementById('difficultyRows').innerHTML = difficultySummaries(data).map(row => `
+    <tr>
+      <td>d${{row.label}}</td>
+      <td>${{row.trustedCount}}</td>
+      <td>${{fmt(row.latestRate, 3)}}</td>
+      <td>${{fmt(row.bestRate, 3)}}</td>
+      <td>${{row.bestGain === null ? 'n/a' : `${{fmt(row.bestGain, 2)}}%`}}</td>
+    </tr>`).join('');
   document.getElementById('rows').innerHTML = data.map((p, i) => `
     <tr>
       <td>${{i + 1}}</td>

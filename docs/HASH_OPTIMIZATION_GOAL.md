@@ -1342,6 +1342,8 @@ series per difficulty or difficulty sequence, so low-trust diagnostics and
 different `m=diff` workloads do not get merged into one misleading curve.
 The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
+The page also includes a per-difficulty trusted summary table for latest rate,
+best rate, and best gain so All-view scans remain comparable across `m` groups.
 The local trend server caches the benchmark directory signature and avoids
 reparsing unchanged JSON reports on every page refresh, keeping the monitoring
 view lightweight during long runs.
