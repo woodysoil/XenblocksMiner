@@ -1851,6 +1851,125 @@ def test_run_scenario_preflight_start_sample_can_skip_subprocess(monkeypatch):
     assert result["summary"]["ok"] is False
 
 
+def test_run_hash_command_can_retry_preflight_skips(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run_hash_command(
+        command,
+        environment_samples=None,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+    ):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            if environment_samples is not None:
+                environment_samples.append(
+                    {
+                        "available": True,
+                        "cpu_load_pct": 99.0,
+                        "high_cpu_load": True,
+                        "benchmark_trust": "low",
+                    }
+                )
+            return {
+                "exit_code": 2,
+                "wall_elapsed_ms": 0.0,
+                "result": {
+                    "ok": False,
+                    "error": "benchmark report quality preflight failed",
+                    "preflight_skipped": True,
+                },
+            }
+        if environment_samples is not None:
+            environment_samples.append(
+                {
+                    "available": True,
+                    "cpu_load_pct": 12.0,
+                    "high_cpu_load": False,
+                    "benchmark_trust": "normal",
+                }
+            )
+        return {
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(benchmark, "run_hash_command", fake_run_hash_command)
+    environment_samples = []
+
+    result = benchmark.run_hash_command_with_preflight_retries(
+        ["miner", "hash-benchmark"],
+        environment_samples,
+        preflight_wait_seconds=10.0,
+        preflight_wait_interval=1.0,
+        preflight_stable_samples=2,
+        preflight_skip_retries=1,
+    )
+
+    assert calls == {"count": 2}
+    assert result["exit_code"] == 0
+    assert result["preflight_skip_retries"] == 1
+    assert result["result"]["preflight_skip_retries"] == 1
+    assert environment_samples == [
+        {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        }
+    ]
+
+
+def test_run_hash_command_retry_does_not_hide_real_failures(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run_hash_command(
+        command,
+        environment_samples=None,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+    ):
+        calls["count"] += 1
+        if environment_samples is not None:
+            environment_samples.append(
+                {
+                    "available": True,
+                    "cpu_load_pct": 12.0,
+                    "high_cpu_load": False,
+                    "benchmark_trust": "normal",
+                }
+            )
+        return {
+            "exit_code": 1,
+            "wall_elapsed_ms": 1.0,
+            "result": {"ok": False, "error": "hash-benchmark failed"},
+        }
+
+    monkeypatch.setattr(benchmark, "run_hash_command", fake_run_hash_command)
+    environment_samples = []
+
+    result = benchmark.run_hash_command_with_preflight_retries(
+        ["miner", "hash-benchmark"],
+        environment_samples,
+        preflight_skip_retries=3,
+    )
+
+    assert calls == {"count": 1}
+    assert result["exit_code"] == 1
+    assert result["result"]["error"] == "hash-benchmark failed"
+    assert environment_samples == [
+        {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        }
+    ]
+
+
 def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     def fake_run_scenario(binary, salt, scenario):
         return {
@@ -2525,11 +2644,13 @@ def test_preflight_report_quality_can_wait_for_normal_trust(monkeypatch, tmp_pat
         preflight_wait_seconds=0.0,
         preflight_wait_interval=5.0,
         preflight_stable_samples=1,
+        preflight_skip_retries=0,
     ):
         calls["run"] += 1
         assert preflight_wait_seconds == 10.0
         assert preflight_wait_interval == 1.0
         assert preflight_stable_samples == 2
+        assert preflight_skip_retries == 0
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -2615,9 +2736,11 @@ def test_preflight_report_quality_can_use_single_stable_sample(monkeypatch, tmp_
         preflight_wait_seconds=0.0,
         preflight_wait_interval=5.0,
         preflight_stable_samples=1,
+        preflight_skip_retries=0,
     ):
         calls["run"] += 1
         assert preflight_stable_samples == 1
+        assert preflight_skip_retries == 0
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -2692,11 +2815,13 @@ def test_preflight_report_quality_can_limit_subprocess_wait(monkeypatch, tmp_pat
         preflight_wait_seconds=0.0,
         preflight_wait_interval=5.0,
         preflight_stable_samples=1,
+        preflight_skip_retries=0,
     ):
         calls["run"] += 1
         assert preflight_wait_seconds == 2.0
         assert preflight_wait_interval == 1.0
         assert preflight_stable_samples == 2
+        assert preflight_skip_retries == 0
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),
@@ -2747,6 +2872,85 @@ def test_preflight_report_quality_can_limit_subprocess_wait(monkeypatch, tmp_pat
             "2",
             "--preflight-wait-interval",
             "1",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == {"run": 1}
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["recommendations"]["report_quality_ok"] is True
+    capsys.readouterr()
+
+
+def test_preflight_report_quality_can_retry_subprocess_preflight_skips(monkeypatch, tmp_path, capsys):
+    calls = {"run": 0}
+
+    def fake_run_scenario(
+        binary,
+        salt,
+        scenario,
+        preflight_wait_seconds=0.0,
+        preflight_wait_interval=5.0,
+        preflight_stable_samples=1,
+        preflight_skip_retries=0,
+    ):
+        calls["run"] += 1
+        assert preflight_wait_seconds == 2.0
+        assert preflight_wait_interval == 1.0
+        assert preflight_stable_samples == 2
+        assert preflight_skip_retries == 3
+        return {
+            "scenario": benchmark.asdict(scenario),
+            "summary": _summary(42.0),
+            "aggregate": _summary(42.0),
+            "command": [str(binary)],
+            "exit_code": 0,
+            "wall_elapsed_ms": 1.0,
+            "warmup_runs": [],
+            "iterations": [{"exit_code": 0, "result": {"ok": True}}],
+            "iteration_summaries": [_summary(42.0)],
+            "result": {"ok": True, "hashrate": 42.0},
+        }
+
+    monkeypatch.setattr(
+        benchmark,
+        "collect_hardware_metadata",
+        lambda: {"nvidia_smi": {"available": False}, "nvcc": {"available": False}},
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 12.0,
+            "high_cpu_load": False,
+            "benchmark_trust": "normal",
+        },
+    )
+    monkeypatch.setattr(benchmark, "run_scenario", fake_run_scenario)
+    output = tmp_path / "report.json"
+
+    exit_code = benchmark.main(
+        [
+            "--binary",
+            "miner",
+            "--backend",
+            "cuda",
+            "--seconds",
+            "1",
+            "--scenario",
+            "name=manual,backend=cuda,difficulty=1,batch_size=2,seconds=1",
+            "--output",
+            str(output),
+            "--preflight-report-quality",
+            "--preflight-wait-seconds",
+            "60",
+            "--subprocess-preflight-wait-seconds",
+            "2",
+            "--preflight-wait-interval",
+            "1",
+            "--preflight-skip-retries",
+            "3",
         ]
     )
 

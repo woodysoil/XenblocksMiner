@@ -1379,6 +1379,42 @@ def run_hash_command(
     }
 
 
+def run_hash_command_with_preflight_retries(
+    command: list[str],
+    environment_samples: list[dict[str, Any]] | None = None,
+    preflight_wait_seconds: float = 0.0,
+    preflight_wait_interval: float = 5.0,
+    preflight_stable_samples: int = 1,
+    preflight_skip_retries: int = 0,
+) -> dict[str, Any]:
+    skipped_retries = 0
+    max_retries = max(0, preflight_skip_retries)
+    while True:
+        attempt_environment_samples: list[dict[str, Any]] | None = [] if environment_samples is not None else None
+        run = run_hash_command(
+            command,
+            attempt_environment_samples,
+            preflight_wait_seconds,
+            preflight_wait_interval,
+            preflight_stable_samples,
+        )
+        result = run.get("result") or {}
+        preflight_skipped = bool(result.get("preflight_skipped", False))
+        if preflight_skipped and skipped_retries < max_retries:
+            skipped_retries += 1
+            continue
+
+        if environment_samples is not None and attempt_environment_samples is not None:
+            environment_samples.extend(attempt_environment_samples)
+        if skipped_retries > 0:
+            run["preflight_skip_retries"] = skipped_retries
+            run["result"] = {
+                **result,
+                "preflight_skip_retries": skipped_retries,
+            }
+        return run
+
+
 def run_failure_errors(runs: list[dict[str, Any]]) -> list[str]:
     errors: list[str] = []
     for run in runs:
@@ -1398,26 +1434,29 @@ def run_scenario(
     preflight_wait_seconds: float = 0.0,
     preflight_wait_interval: float = 5.0,
     preflight_stable_samples: int = 1,
+    preflight_skip_retries: int = 0,
 ) -> dict[str, Any]:
     command = build_hash_command(binary, salt, scenario)
     environment_samples: list[dict[str, Any]] = []
     warmup_runs = [
-        run_hash_command(
+        run_hash_command_with_preflight_retries(
             command,
             environment_samples,
             preflight_wait_seconds,
             preflight_wait_interval,
             preflight_stable_samples,
+            preflight_skip_retries,
         )
         for _ in range(scenario.warmup)
     ]
     iterations = [
-        run_hash_command(
+        run_hash_command_with_preflight_retries(
             command,
             environment_samples,
             preflight_wait_seconds,
             preflight_wait_interval,
             preflight_stable_samples,
+            preflight_skip_retries,
         )
         for _ in range(scenario.repeat)
     ]
@@ -1585,6 +1624,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "When preflight quality is enabled, wait up to this many seconds before each benchmark subprocess. "
             "Defaults to --preflight-wait-seconds."
+        ),
+    )
+    parser.add_argument(
+        "--preflight-skip-retries",
+        type=int,
+        default=0,
+        help=(
+            "Retry each benchmark subprocess this many times when it is skipped by the report-quality "
+            "preflight gate before launch. Retries still require a normal-trust preflight sample before "
+            "any benchmark subprocess can run."
         ),
     )
     parser.add_argument(
@@ -1833,6 +1882,7 @@ def main(argv: list[str]) -> int:
                 subprocess_preflight_wait_seconds,
                 args.preflight_wait_interval,
                 preflight_stable_samples,
+                max(0, args.preflight_skip_retries),
             )
             for scenario in scenarios
         ]

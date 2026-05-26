@@ -364,6 +364,9 @@ Stable comparison rules:
 - run serious benchmark reports with `--preflight-report-quality` and
   `--fail-on-report-quality` so low-trust environment noise fails automation
   before any tuning or performance claim
+- for long unattended matrices, add `--preflight-skip-retries <N>` only to retry
+  subprocess launches skipped by the preflight gate; it must not be used to
+  accept reports whose final `report_quality_ok` is false
 - treat smoke-only data as operational validation unless the doc says otherwise
 
 Comparison command:
