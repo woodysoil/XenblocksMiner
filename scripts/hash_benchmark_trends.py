@@ -45,8 +45,14 @@ class TrustedTrendSummary:
     first_median_hashrate: float
     latest_median_hashrate: float
     best_median_hashrate: float
+    target_multiplier: float
+    target_median_hashrate: float
     latest_gain_pct: float
     best_gain_pct: float
+    latest_target_progress_pct: float
+    best_target_progress_pct: float
+    latest_remaining_multiplier: float
+    best_remaining_multiplier: float
     latest_spread_pct: float
     best_spread_pct: float
     best_batch_label: str
@@ -176,7 +182,7 @@ def trusted_points(points: list[TrendPoint]) -> list[TrendPoint]:
     ]
 
 
-def trusted_trend_summaries(points: list[TrendPoint]) -> list[TrustedTrendSummary]:
+def trusted_trend_summaries(points: list[TrendPoint], target_multiplier: float = 11.0) -> list[TrustedTrendSummary]:
     grouped: dict[str, list[TrendPoint]] = {}
     for point in trusted_points(points):
         grouped.setdefault(point.difficulty_label, []).append(point)
@@ -188,6 +194,7 @@ def trusted_trend_summaries(points: list[TrendPoint]) -> list[TrustedTrendSummar
         latest = values[-1]
         best = max(values, key=lambda point: point.median_hashrate)
         first_rate = first.median_hashrate
+        target_rate = first_rate * target_multiplier
         latest_gain_pct = (
             (latest.median_hashrate - first_rate) / first_rate * 100.0
             if first_rate > 0.0
@@ -198,6 +205,10 @@ def trusted_trend_summaries(points: list[TrendPoint]) -> list[TrustedTrendSummar
             if first_rate > 0.0
             else 0.0
         )
+        latest_target_progress_pct = latest.median_hashrate / target_rate * 100.0 if target_rate > 0.0 else 0.0
+        best_target_progress_pct = best.median_hashrate / target_rate * 100.0 if target_rate > 0.0 else 0.0
+        latest_remaining_multiplier = target_rate / latest.median_hashrate if latest.median_hashrate > 0.0 else 0.0
+        best_remaining_multiplier = target_rate / best.median_hashrate if best.median_hashrate > 0.0 else 0.0
         summaries.append(
             TrustedTrendSummary(
                 difficulty_label=difficulty_label,
@@ -205,8 +216,14 @@ def trusted_trend_summaries(points: list[TrendPoint]) -> list[TrustedTrendSummar
                 first_median_hashrate=first.median_hashrate,
                 latest_median_hashrate=latest.median_hashrate,
                 best_median_hashrate=best.median_hashrate,
+                target_multiplier=target_multiplier,
+                target_median_hashrate=target_rate,
                 latest_gain_pct=latest_gain_pct,
                 best_gain_pct=best_gain_pct,
+                latest_target_progress_pct=latest_target_progress_pct,
+                best_target_progress_pct=best_target_progress_pct,
+                latest_remaining_multiplier=latest_remaining_multiplier,
+                best_remaining_multiplier=best_remaining_multiplier,
                 latest_spread_pct=latest.spread_pct,
                 best_spread_pct=best.spread_pct,
                 best_batch_label=best.batch_label,

@@ -1402,6 +1402,9 @@ The page also includes a per-difficulty trusted summary table for latest rate,
 best rate, and best gain so All-view scans remain comparable across `m` groups.
 Use `--summary-output` when an agent needs the same trusted first/latest/best
 gain data as machine-readable JSON without scraping the HTML page.
+The summary JSON also reports the `11x` target implied by a `1000%`
+throughput-improvement goal, including target H/s, latest/best target progress
+percentage, and remaining multiplier for each difficulty group.
 The local trend server caches the benchmark directory signature and avoids
 reparsing unchanged JSON reports on every page refresh, keeping the monitoring
 view lightweight during long runs.

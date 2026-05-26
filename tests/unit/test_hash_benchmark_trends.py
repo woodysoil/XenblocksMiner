@@ -78,8 +78,14 @@ def test_trusted_trend_summaries_report_best_and_gain(tmp_path):
     assert summary.first_median_hashrate == 100.0
     assert summary.latest_median_hashrate == 120.0
     assert summary.best_median_hashrate == 120.0
+    assert summary.target_multiplier == 11.0
+    assert summary.target_median_hashrate == 1100.0
     assert summary.latest_gain_pct == 20.0
     assert summary.best_gain_pct == 20.0
+    assert summary.latest_target_progress_pct == 120.0 / 1100.0 * 100.0
+    assert summary.best_target_progress_pct == 120.0 / 1100.0 * 100.0
+    assert summary.latest_remaining_multiplier == 1100.0 / 120.0
+    assert summary.best_remaining_multiplier == 1100.0 / 120.0
     assert summary.best_spread_pct == 3.0
     assert summary.best_batch_label == "256"
     assert summary.best_source == "second.json"
@@ -175,6 +181,9 @@ def test_main_can_write_public_safe_summary_json(tmp_path):
     assert summary["schema"] == "xenblocks.hashapi.trusted_trend_summary.v1"
     assert summary["summaries"][0]["difficulty_label"] == "4096"
     assert summary["summaries"][0]["best_median_hashrate"] == 200.0
+    assert summary["summaries"][0]["target_multiplier"] == 11.0
+    assert summary["summaries"][0]["target_median_hashrate"] == 2200.0
+    assert summary["summaries"][0]["best_target_progress_pct"] == 100.0 / 11.0
     assert "private gpu model" not in summary_text
     assert "private-host" not in summary_text
     assert "private-salt" not in summary_text
