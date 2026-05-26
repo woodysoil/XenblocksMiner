@@ -421,6 +421,7 @@ def compare_reports(
     max_spread_pct: float = 10.0,
     match_by: str = "name",
     ignore_detailed_timings: bool = False,
+    min_difficulty: int = 0,
 ) -> Report:
     before_quality = report_quality(before_report, "before")
     after_quality = report_quality(after_report, "after")
@@ -439,6 +440,13 @@ def compare_reports(
     for key in sorted(set(before_runs) | set(after_runs), key=format_run_key):
         before = before_runs.get(key)
         after = after_runs.get(key)
+        run_shape = after or before or {}
+        if min_difficulty > 0:
+            difficulty_values = list(run_shape.get("difficulty_sequence") or [])
+            if not difficulty_values:
+                difficulty_values = [_int_value(run_shape, "difficulty", 0)]
+            if min(difficulty_values or [0]) < min_difficulty:
+                continue
         before_rate = before["median_hashrate"] if before else 0.0
         after_rate = after["median_hashrate"] if after else 0.0
         change_pct = _percent_change(before_rate, after_rate) if before and after else None
@@ -518,6 +526,7 @@ def compare_reports(
         "max_spread_pct": max_spread_pct,
         "match_by": match_by,
         "ignore_detailed_timings": ignore_detailed_timings,
+        "min_difficulty": min_difficulty,
         "quality": {
             "ok": bool(before_quality["acceptable"] and after_quality["acceptable"]),
             "before": before_quality,
@@ -702,6 +711,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="When matching by config, treat detailed and default timing reports as the same scenario.",
     )
     parser.add_argument(
+        "--min-difficulty",
+        type=int,
+        default=0,
+        help=(
+            "Only compare fixed-difficulty runs at or above this difficulty, and "
+            "difficulty-sequence runs whose minimum difficulty is at or above this value."
+        ),
+    )
+    parser.add_argument(
         "--fail-on-report-quality",
         action="store_true",
         help="Exit with code 2 if either report is partial, invalid, or marked with low benchmark trust.",
@@ -720,6 +738,7 @@ def main(argv: list[str]) -> int:
             max_spread_pct=args.max_spread_pct,
             match_by=args.match_by,
             ignore_detailed_timings=args.ignore_detailed_timings,
+            min_difficulty=args.min_difficulty,
         )
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)

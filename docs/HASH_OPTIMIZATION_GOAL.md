@@ -347,6 +347,10 @@ Current progress:
 - Hash API benchmark summaries include per-attempt timing fields for comparing cost per valid hash attempt.
 - Hash API comparison tooling reports total timing deltas, per-attempt timing deltas, top-level and nested stage-percentage deltas, noisy improved/regressed/unchanged status, and variable-difficulty metadata for before/after runs.
 - Hash API comparison tooling can match by config while ignoring only detailed-timing mode with `--ignore-detailed-timings`, which helps compare default and diagnostic reports for the same scenario without changing other matching fields.
+- Hash API comparison tooling can filter reports with `--min-difficulty` so
+  high-memory optimization cycles can ignore low-difficulty smoke rows. For
+  fixed-difficulty rows, the row difficulty must be at least the threshold; for
+  variable-`m` rows, every difficulty in the sequence must meet the threshold.
 - Hash API benchmark scenarios can measure variable `m = difficulty` sequences, including same-difficulty versus alternating-difficulty loops under one reusable backend lifecycle.
 - Hash API benchmark scenarios can pair variable `m = difficulty` values with variable batch sizes in one reusable backend lifecycle, for example pairing `difficulty_sequence=1,8,64` with `batch_size_sequence=2048,3072,3072`.
 - Mixed difficulty/batch-size sequence runs report public-safe metadata such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`, and are excluded from fixed-shape batch-size recommendations.
@@ -1292,6 +1296,12 @@ Before/after comparison:
 
 ```bash
 python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --fail-on-regression --fail-on-report-quality --min-change-pct 1
+```
+
+High-difficulty-only comparison:
+
+```bash
+python scripts/hash_api_compare.py .benchmarks/before.json .benchmarks/after.json --match-by config --min-difficulty 4096 --fail-on-report-quality --min-change-pct 1
 ```
 
 If two reports used different scenario names for the same backend, device, difficulty, batch size, seconds, warm-up, repeat, key mode, XUNI mode, and detailed-timing mode, compare by configuration instead of by name:

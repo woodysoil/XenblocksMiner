@@ -24,6 +24,7 @@ def _run(
     batch_size_sequence: list[int] | None = None,
     batch_size_min: int | None = None,
     batch_size_max: int | None = None,
+    difficulty: int = 1,
     key_mode: str = "generated",
     first_block_workers: int = 0,
     first_block_dynamic_chunk_size: int = 0,
@@ -49,7 +50,7 @@ def _run(
         "scenario": {
             "name": name,
             "backend": "cuda",
-            "difficulty": 1,
+            "difficulty": difficulty,
             "difficulty_sequence": sequence,
             "key_mode": key_mode,
             "batch_size": batch_size,
@@ -68,7 +69,7 @@ def _run(
             "name": name,
             "backend": "cuda",
             "device_id": 0,
-            "difficulty": 1,
+            "difficulty": difficulty,
             "batch_size": batch_size,
             "batch_size_sequence": batch_sequence,
             "batch_size_mode": "sequence" if batch_sequence else "fixed",
@@ -501,6 +502,34 @@ def test_compare_reports_config_match_uses_requested_dynamic_chunk_for_auto_runs
     assert item["first_block_dynamic_chunk_size_max"] == 16
 
 
+def test_compare_reports_can_filter_by_min_difficulty():
+    result = compare.compare_reports(
+        _report(_run("low-diff", 100.0, difficulty=8), _run("high-diff", 200.0, difficulty=4096)),
+        _report(_run("low-diff", 110.0, difficulty=8), _run("high-diff", 220.0, difficulty=4096)),
+        min_difficulty=4096,
+    )
+
+    assert result["min_difficulty"] == 4096
+    assert [item["name"] for item in result["comparisons"]] == ["high-diff"]
+
+
+def test_compare_reports_min_difficulty_uses_sequence_minimum():
+    result = compare.compare_reports(
+        _report(
+            _run("mixed-seq", 100.0, difficulty_sequence=[8, 4096]),
+            _run("high-seq", 200.0, difficulty_sequence=[4096, 8192]),
+        ),
+        _report(
+            _run("mixed-seq", 110.0, difficulty_sequence=[8, 4096]),
+            _run("high-seq", 220.0, difficulty_sequence=[4096, 8192]),
+        ),
+        min_difficulty=4096,
+    )
+
+    assert [item["name"] for item in result["comparisons"]] == ["high-seq"]
+    assert result["comparisons"][0]["difficulty_sequence"] == [4096, 8192]
+
+
 def test_compare_reports_config_match_separates_detailed_timing_mode_by_default():
     result = compare.compare_reports(
         _report(_run("default-timing", 100.0, detailed_timings=False)),
@@ -594,6 +623,26 @@ def test_main_can_match_by_config(tmp_path, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["match_by"] == "config"
     assert output["comparisons"][0]["status"] == "improved"
+
+
+def test_main_can_filter_by_min_difficulty(tmp_path, capsys):
+    before = tmp_path / "before.json"
+    after = tmp_path / "after.json"
+    before.write_text(
+        json.dumps(_report(_run("low-diff", 100.0, difficulty=8), _run("high-diff", 200.0, difficulty=4096))),
+        encoding="utf-8",
+    )
+    after.write_text(
+        json.dumps(_report(_run("low-diff", 110.0, difficulty=8), _run("high-diff", 220.0, difficulty=4096))),
+        encoding="utf-8",
+    )
+
+    exit_code = compare.main([str(before), str(after), "--min-difficulty", "4096", "--format", "json"])
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["min_difficulty"] == 4096
+    assert [item["name"] for item in output["comparisons"]] == ["high-diff"]
 
 
 def test_format_text_outputs_automation_friendly_rows():
