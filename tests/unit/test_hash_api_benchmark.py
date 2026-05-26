@@ -1663,6 +1663,45 @@ def test_run_scenario_treats_warmup_nonzero_exit_as_summary_failure(monkeypatch)
     assert "process exited with code 3221225477" in result["summary"]["error"]
 
 
+def test_run_scenario_preflight_wait_can_skip_subprocess(monkeypatch):
+    def fail_run(command, text, capture_output, check):
+        raise AssertionError("low-trust preflight should skip subprocess launch")
+
+    monkeypatch.setattr(benchmark.subprocess, "run", fail_run)
+    monkeypatch.setattr(
+        benchmark,
+        "collect_environment_metadata",
+        lambda: {
+            "available": True,
+            "cpu_load_pct": 99.0,
+            "high_cpu_load": True,
+            "benchmark_trust": "low",
+        },
+    )
+    scenario = benchmark.BenchmarkScenario(
+        name="cuda-low-trust",
+        backend="cuda",
+        difficulty=8,
+        batch_size=2048,
+        seconds=1,
+        warmup=0,
+        repeat=1,
+    )
+
+    result = benchmark.run_scenario(
+        Path("miner"),
+        benchmark.DEFAULT_SALT,
+        scenario,
+        preflight_wait_seconds=0.1,
+        preflight_wait_interval=0.1,
+    )
+
+    assert result["exit_code"] == 2
+    assert result["iterations"][0]["result"]["preflight_skipped"] is True
+    assert result["summary"]["ok"] is False
+    assert "benchmark report quality preflight failed" in result["summary"]["error"]
+
+
 def test_main_writes_output_file(monkeypatch, tmp_path, capsys):
     def fake_run_scenario(binary, salt, scenario):
         return {
@@ -2320,8 +2359,10 @@ def test_preflight_report_quality_can_wait_for_normal_trust(monkeypatch, tmp_pat
         },
     ]
 
-    def fake_run_scenario(binary, salt, scenario):
+    def fake_run_scenario(binary, salt, scenario, preflight_wait_seconds=0.0, preflight_wait_interval=5.0):
         calls["run"] += 1
+        assert preflight_wait_seconds == 10.0
+        assert preflight_wait_interval == 1.0
         return {
             "scenario": benchmark.asdict(scenario),
             "summary": _summary(42.0),

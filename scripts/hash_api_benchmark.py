@@ -1249,7 +1249,30 @@ def build_hash_command(binary: Path, salt: str, scenario: BenchmarkScenario) -> 
     return command
 
 
-def run_hash_command(command: list[str], environment_samples: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def skipped_quality_result(environment: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": "benchmark report quality preflight failed",
+        "preflight_skipped": True,
+        "environment": environment,
+    }
+
+
+def run_hash_command(
+    command: list[str],
+    environment_samples: list[dict[str, Any]] | None = None,
+    preflight_wait_seconds: float = 0.0,
+    preflight_wait_interval: float = 5.0,
+) -> dict[str, Any]:
+    if preflight_wait_seconds > 0.0 and environment_samples is not None:
+        environment, recommendations = preflight_environment_quality(preflight_wait_seconds, preflight_wait_interval)
+        environment_samples.append(environment)
+        if not bool(recommendations.get("report_quality_ok", False)):
+            return {
+                "exit_code": 2,
+                "wall_elapsed_ms": 0.0,
+                "result": skipped_quality_result(environment),
+            }
     if environment_samples is not None:
         sample_environment(environment_samples)
     started_at = time.time()
@@ -1294,11 +1317,23 @@ def run_failure_errors(runs: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-def run_scenario(binary: Path, salt: str, scenario: BenchmarkScenario) -> dict[str, Any]:
+def run_scenario(
+    binary: Path,
+    salt: str,
+    scenario: BenchmarkScenario,
+    preflight_wait_seconds: float = 0.0,
+    preflight_wait_interval: float = 5.0,
+) -> dict[str, Any]:
     command = build_hash_command(binary, salt, scenario)
     environment_samples: list[dict[str, Any]] = []
-    warmup_runs = [run_hash_command(command, environment_samples) for _ in range(scenario.warmup)]
-    iterations = [run_hash_command(command, environment_samples) for _ in range(scenario.repeat)]
+    warmup_runs = [
+        run_hash_command(command, environment_samples, preflight_wait_seconds, preflight_wait_interval)
+        for _ in range(scenario.warmup)
+    ]
+    iterations = [
+        run_hash_command(command, environment_samples, preflight_wait_seconds, preflight_wait_interval)
+        for _ in range(scenario.repeat)
+    ]
     iteration_summaries = [summarize_result(scenario, item["result"]) for item in iterations]
     aggregate = summarize_iterations(scenario, iteration_summaries)
     selected_index = 0
@@ -1655,7 +1690,19 @@ def main(argv: list[str]) -> int:
             print("benchmark report quality preflight failed", file=sys.stderr)
             return 2
 
-    runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
+    if args.preflight_report_quality and args.preflight_wait_seconds > 0.0:
+        runs = [
+            run_scenario(
+                args.binary,
+                args.salt,
+                scenario,
+                args.preflight_wait_seconds,
+                args.preflight_wait_interval,
+            )
+            for scenario in scenarios
+        ]
+    else:
+        runs = [run_scenario(args.binary, args.salt, scenario) for scenario in scenarios]
     environment = report_environment_metadata(runs)
     recommendations = add_recommendation_quality(build_recommendations(runs), environment)
     report = build_report(args, runs, environment, recommendations)

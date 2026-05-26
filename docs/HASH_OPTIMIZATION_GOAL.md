@@ -664,6 +664,10 @@ Serious comparison:
 - run serious benchmark reports with `--preflight-report-quality` and
   `--fail-on-report-quality` so high CPU load or low benchmark trust returns a
   non-zero exit code, while still writing a diagnostic report when possible
+- when `--preflight-wait-seconds` is set, the benchmark runner waits before the
+  report and before each warm-up or measured subprocess; if the wait expires,
+  that subprocess is skipped instead of starting a known low-trust high-difficulty
+  run
 - rerun if the claimed improvement is smaller than the run-to-run noise
 
 For batch-size recommendations, prefer custom scan matrices over a single preset when tuning for a specific difficulty range:
