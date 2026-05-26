@@ -1334,6 +1334,10 @@ Open `http://localhost:8766/` during optimization to watch the performance
 curve, trusted gain counters, report quality, spread, batch size, and scenario
 history update as new ignored benchmark reports are written.
 
+The trend chart defaults to stable quality-approved points and draws separate
+series per difficulty or difficulty sequence, so low-trust diagnostics and
+different `m=diff` workloads do not get merged into one misleading curve.
+
 The generated trend page is an ignored local artifact. It embeds only
 public-safe benchmark summary fields and excludes raw command lines, local
 binary paths, host metadata, salts, and hardware names.

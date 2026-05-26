@@ -257,6 +257,7 @@ const qualitySelect = document.getElementById('quality');
 const searchInput = document.getElementById('search');
 const canvas = document.getElementById('chart');
 const ctx = canvas.getContext('2d');
+const seriesColors = ['#0f766e', '#2563eb', '#9333ea', '#c2410c', '#475569', '#be123c'];
 
 function fmt(value, digits = 2) {{
   if (!Number.isFinite(value)) return '0';
@@ -288,6 +289,20 @@ function filtered() {{
   }});
 }}
 
+function groupedByDifficulty(data) {{
+  const groups = new Map();
+  data.forEach((point, index) => {{
+    const key = point.difficulty_label;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({{ ...point, trend_index: index }});
+  }});
+  return [...groups.entries()].map(([label, values], index) => ({{
+    label,
+    values,
+    color: seriesColors[index % seriesColors.length],
+  }}));
+}}
+
 function drawChart(data) {{
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
@@ -306,6 +321,7 @@ function drawChart(data) {{
   ctx.lineTo(width - pad.right, height - pad.bottom);
   ctx.stroke();
   if (!data.length) return;
+  const groups = groupedByDifficulty(data);
   const maxRate = Math.max(...data.map(p => p.median_hashrate), 1);
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -321,22 +337,33 @@ function drawChart(data) {{
     ctx.stroke();
     ctx.fillText(fmt(rate, 0), 8, y + 4);
   }}
-  ctx.strokeStyle = '#0f766e';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  data.forEach((p, i) => {{
-    const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * i / (data.length - 1));
-    const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }});
-  ctx.stroke();
-  data.forEach((p, i) => {{
-    const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * i / (data.length - 1));
-    const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
-    ctx.fillStyle = p.quality_ok && p.stable ? '#0f766e' : (p.quality_ok ? '#b45309' : '#b91c1c');
+  groups.forEach(group => {{
+    ctx.strokeStyle = group.color;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fill();
+    group.values.forEach((p, i) => {{
+      const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * p.trend_index / (data.length - 1));
+      const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }});
+    ctx.stroke();
+    group.values.forEach(p => {{
+      const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * p.trend_index / (data.length - 1));
+      const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
+      ctx.fillStyle = p.quality_ok && p.stable ? group.color : (p.quality_ok ? '#b45309' : '#b91c1c');
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }});
+  }});
+  ctx.font = '12px system-ui, sans-serif';
+  groups.slice(0, 6).forEach((group, index) => {{
+    const x = pad.left + 8 + (index % 3) * 150;
+    const y = pad.top + 14 + Math.floor(index / 3) * 18;
+    ctx.fillStyle = group.color;
+    ctx.fillRect(x, y - 8, 10, 10);
+    ctx.fillStyle = '#5f6b7a';
+    ctx.fillText(`d${{group.label}}`, x + 16, y + 1);
   }});
 }}
 

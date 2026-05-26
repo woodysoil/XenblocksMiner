@@ -72,6 +72,8 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "Latest Trusted Gain" in html
     assert "Best Trusted Gain" in html
     assert '<option value="stable" selected>Stable + Quality OK</option>' in html
+    assert "function groupedByDifficulty(data)" in html
+    assert "difficulty_label" in html
     assert "private gpu model" not in html
     assert "private-host" not in html
     assert "private-salt" not in html
