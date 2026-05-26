@@ -1350,6 +1350,12 @@ Local high-difficulty trend page:
 python scripts/hash_benchmark_trends.py --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --min-difficulty 4096
 ```
 
+Optional public-safe trusted summary JSON:
+
+```bash
+python scripts/hash_benchmark_trends.py --input-dir .benchmarks --output .benchmarks/hash-trends/index.html --summary-output .benchmarks/hash-trends/trusted-summary.json --min-difficulty 4096
+```
+
 Long-running local trend server:
 
 ```bash
@@ -1394,6 +1400,8 @@ The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
 The page also includes a per-difficulty trusted summary table for latest rate,
 best rate, and best gain so All-view scans remain comparable across `m` groups.
+Use `--summary-output` when an agent needs the same trusted first/latest/best
+gain data as machine-readable JSON without scraping the HTML page.
 The local trend server caches the benchmark directory signature and avoids
 reparsing unchanged JSON reports on every page refresh, keeping the monitoring
 view lightweight during long runs.

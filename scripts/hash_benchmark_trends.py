@@ -38,6 +38,22 @@ class TrendPoint:
     stable: bool
 
 
+@dataclass(frozen=True)
+class TrustedTrendSummary:
+    difficulty_label: str
+    trusted_points: int
+    first_median_hashrate: float
+    latest_median_hashrate: float
+    best_median_hashrate: float
+    latest_gain_pct: float
+    best_gain_pct: float
+    latest_spread_pct: float
+    best_spread_pct: float
+    best_batch_label: str
+    best_source: str
+    best_scenario: str
+
+
 def _float_value(data: dict[str, Any], key: str, default: float = 0.0) -> float:
     value = data.get(key, default)
     try:
@@ -146,6 +162,79 @@ def load_points(input_dir: Path, min_difficulty: int) -> list[TrendPoint]:
             )
     points.sort(key=lambda point: (point.created_at, point.source, point.name))
     return points
+
+
+def trusted_points(points: list[TrendPoint]) -> list[TrendPoint]:
+    return [
+        point
+        for point in points
+        if point.run_ok
+        and point.warm_evidence
+        and point.quality_ok
+        and point.stable
+        and point.median_hashrate > 0.0
+    ]
+
+
+def trusted_trend_summaries(points: list[TrendPoint]) -> list[TrustedTrendSummary]:
+    grouped: dict[str, list[TrendPoint]] = {}
+    for point in trusted_points(points):
+        grouped.setdefault(point.difficulty_label, []).append(point)
+
+    summaries: list[TrustedTrendSummary] = []
+    for difficulty_label, values in grouped.items():
+        values = sorted(values, key=lambda point: (point.created_at, point.source, point.name))
+        first = values[0]
+        latest = values[-1]
+        best = max(values, key=lambda point: point.median_hashrate)
+        first_rate = first.median_hashrate
+        latest_gain_pct = (
+            (latest.median_hashrate - first_rate) / first_rate * 100.0
+            if first_rate > 0.0
+            else 0.0
+        )
+        best_gain_pct = (
+            (best.median_hashrate - first_rate) / first_rate * 100.0
+            if first_rate > 0.0
+            else 0.0
+        )
+        summaries.append(
+            TrustedTrendSummary(
+                difficulty_label=difficulty_label,
+                trusted_points=len(values),
+                first_median_hashrate=first.median_hashrate,
+                latest_median_hashrate=latest.median_hashrate,
+                best_median_hashrate=best.median_hashrate,
+                latest_gain_pct=latest_gain_pct,
+                best_gain_pct=best_gain_pct,
+                latest_spread_pct=latest.spread_pct,
+                best_spread_pct=best.spread_pct,
+                best_batch_label=best.batch_label,
+                best_source=best.source,
+                best_scenario=best.name,
+            )
+        )
+
+    summaries.sort(key=lambda item: (min(int(part) for part in item.difficulty_label.split("x")), item.difficulty_label))
+    return summaries
+
+
+def write_summary(points: list[TrendPoint], output: Path) -> int:
+    summaries = trusted_trend_summaries(points)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "xenblocks.hashapi.trusted_trend_summary.v1",
+                "summaries": [summary.__dict__ for summary in summaries],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return len(summaries)
 
 
 def _json_for_html(value: Any) -> str:
@@ -492,10 +581,18 @@ render();
 """
 
 
-def write_trend_page(input_dir: Path, output: Path, min_difficulty: int, page_refresh_seconds: float = 0.0) -> int:
+def write_trend_page(
+    input_dir: Path,
+    output: Path,
+    min_difficulty: int,
+    page_refresh_seconds: float = 0.0,
+    summary_output: Path | None = None,
+) -> int:
     points = load_points(input_dir, min_difficulty)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(_render_html(points, min_difficulty, page_refresh_seconds), encoding="utf-8")
+    if summary_output is not None:
+        write_summary(points, summary_output)
     return len(points)
 
 
@@ -521,6 +618,7 @@ class TrendPageCache:
     min_difficulty: int
     page_refresh_seconds: float
     refresh_seconds: float
+    summary_output: Path | None = None
     last_refresh: float = 0.0
     points: int = 0
     cached_signature: tuple[int, int, int] | None = None
@@ -537,6 +635,8 @@ class TrendPageCache:
                     self.min_difficulty,
                     self.page_refresh_seconds,
                 )
+                if self.summary_output is not None:
+                    write_summary(load_points(self.input_dir, self.min_difficulty), self.summary_output)
                 self.cached_signature = signature
             self.last_refresh = current_time
         return self.points
@@ -551,11 +651,12 @@ def serve_trends(
     refresh_seconds: float,
     page_refresh_seconds: float,
     open_browser: bool,
+    summary_output: Path | None = None,
 ) -> int:
     root = output.parent.resolve()
     output_name = output.name
     lock = threading.Lock()
-    cache = TrendPageCache(input_dir, output, min_difficulty, page_refresh_seconds, refresh_seconds)
+    cache = TrendPageCache(input_dir, output, min_difficulty, page_refresh_seconds, refresh_seconds, summary_output)
 
     def refresh(force: bool = False) -> int:
         with lock:
@@ -602,6 +703,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(".benchmarks/hash-trends/index.html"),
         help="Generated HTML path. Keep this under ignored benchmark storage.",
     )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=None,
+        help="Optional public-safe trusted trend summary JSON path. Keep this under ignored benchmark storage.",
+    )
     parser.add_argument("--min-difficulty", type=int, default=4096, help="Minimum difficulty to include.")
     parser.add_argument("--serve", action="store_true", help="Serve the generated trend page with automatic refresh.")
     parser.add_argument("--host", default="localhost", help="Host used by --serve.")
@@ -641,8 +748,15 @@ def main(argv: list[str] | None = None) -> int:
             max(0.0, args.refresh_seconds),
             max(0.0, page_refresh_seconds),
             args.open_browser,
+            args.summary_output,
         )
-    points = write_trend_page(args.input_dir, args.output, args.min_difficulty, max(0.0, page_refresh_seconds))
+    points = write_trend_page(
+        args.input_dir,
+        args.output,
+        args.min_difficulty,
+        max(0.0, page_refresh_seconds),
+        args.summary_output,
+    )
     print(f"wrote {args.output} with {points} public-safe points")
     return 0
 

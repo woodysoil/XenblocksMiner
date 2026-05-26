@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import scripts.hash_benchmark_trends as trends
-from scripts.hash_benchmark_trends import load_points, main
+from scripts.hash_benchmark_trends import load_points, main, trusted_trend_summaries
 
 
 def _report(name: str, difficulty: int, median_hashrate: float, *, source_path: str) -> dict:
@@ -56,6 +56,34 @@ def test_load_points_filters_by_min_difficulty(tmp_path):
 
     assert [point.name for point in points] == ["high"]
     assert points[0].median_hashrate == 200.0
+
+
+def test_trusted_trend_summaries_report_best_and_gain(tmp_path):
+    (tmp_path / "first.json").write_text(
+        json.dumps(_report("first", 4096, 100.0, source_path="<private-binary>")),
+        encoding="utf-8",
+    )
+    second = _report("second", 4096, 120.0, source_path="<private-binary>")
+    second["created_at_unix"] = 2000.0
+    second["runs"][0]["summary"]["hashrate_spread_pct"] = 3.0
+    second["runs"][0]["summary"]["batch_size"] = 256
+    (tmp_path / "second.json").write_text(json.dumps(second), encoding="utf-8")
+
+    summaries = trusted_trend_summaries(load_points(tmp_path, min_difficulty=4096))
+
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert summary.difficulty_label == "4096"
+    assert summary.trusted_points == 2
+    assert summary.first_median_hashrate == 100.0
+    assert summary.latest_median_hashrate == 120.0
+    assert summary.best_median_hashrate == 120.0
+    assert summary.latest_gain_pct == 20.0
+    assert summary.best_gain_pct == 20.0
+    assert summary.best_spread_pct == 3.0
+    assert summary.best_batch_label == "256"
+    assert summary.best_source == "second.json"
+    assert summary.best_scenario == "second"
 
 
 def test_load_points_ignores_empty_preflight_reports(tmp_path):
@@ -114,6 +142,43 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "private-host" not in html
     assert "private-salt" not in html
     assert "<private-binary>" not in html
+
+
+def test_main_can_write_public_safe_summary_json(tmp_path):
+    input_dir = tmp_path / "reports"
+    output = tmp_path / "trend" / "index.html"
+    summary_output = tmp_path / "trend" / "summary.json"
+    input_dir.mkdir()
+    (input_dir / "high.json").write_text(
+        json.dumps(_report("high", 4096, 200.0, source_path="<private-binary>")),
+        encoding="utf-8",
+    )
+
+    assert (
+        main(
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output",
+                str(output),
+                "--summary-output",
+                str(summary_output),
+                "--min-difficulty",
+                "4096",
+            ]
+        )
+        == 0
+    )
+
+    summary = json.loads(summary_output.read_text(encoding="utf-8"))
+    summary_text = json.dumps(summary)
+    assert summary["schema"] == "xenblocks.hashapi.trusted_trend_summary.v1"
+    assert summary["summaries"][0]["difficulty_label"] == "4096"
+    assert summary["summaries"][0]["best_median_hashrate"] == 200.0
+    assert "private gpu model" not in summary_text
+    assert "private-host" not in summary_text
+    assert "private-salt" not in summary_text
+    assert "<private-binary>" not in summary_text
 
 
 def test_invalid_runs_are_not_trusted_points(tmp_path):
@@ -211,7 +276,17 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
     output = tmp_path / "trend" / "index.html"
     captured = {}
 
-    def fake_serve(input_path, output_path, min_difficulty, host, port, refresh_seconds, page_refresh_seconds, open_browser):
+    def fake_serve(
+        input_path,
+        output_path,
+        min_difficulty,
+        host,
+        port,
+        refresh_seconds,
+        page_refresh_seconds,
+        open_browser,
+        summary_output,
+    ):
         captured.update(
             {
                 "input_path": input_path,
@@ -222,6 +297,7 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
                 "refresh_seconds": refresh_seconds,
                 "page_refresh_seconds": page_refresh_seconds,
                 "open_browser": open_browser,
+                "summary_output": summary_output,
             }
         )
         return 0
@@ -239,6 +315,7 @@ def test_serve_mode_uses_local_refresh_defaults(monkeypatch, tmp_path):
         "refresh_seconds": 5.0,
         "page_refresh_seconds": 10.0,
         "open_browser": False,
+        "summary_output": None,
     }
 
 
@@ -247,7 +324,17 @@ def test_serve_mode_can_request_browser_open(monkeypatch, tmp_path):
     output = tmp_path / "trend" / "index.html"
     captured = {}
 
-    def fake_serve(input_path, output_path, min_difficulty, host, port, refresh_seconds, page_refresh_seconds, open_browser):
+    def fake_serve(
+        input_path,
+        output_path,
+        min_difficulty,
+        host,
+        port,
+        refresh_seconds,
+        page_refresh_seconds,
+        open_browser,
+        summary_output,
+    ):
         captured.update({"open_browser": open_browser})
         return 0
 
