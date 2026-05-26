@@ -61,10 +61,17 @@ Current confirmed architecture state:
 
 Latest public-safe performance checkpoint:
 
-- No stable high-difficulty baseline in the thousands-to-tens-of-thousands
-  range has been accepted yet. Establish that before claiming further goal
-  progress or accepting low-d launch/finalization changes as mining-workload
-  wins.
+- A stable high-difficulty baseline in the thousands-to-tens-of-thousands range
+  is now established on the current CUDA-capable local GPU. For generated-key
+  CUDA d4096 with GPU first blocks, auto batch selection, automatic first-block
+  dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal benchmark
+  trust, the current local candidate is batch size `797` at about `10.74k H/s`
+  median with `5.49%` spread and zero invalid subprocesses.
+- The corresponding high-difficulty variable-`m` sequence
+  `difficulty_sequence=4096,8192,16384` with the same GPU-first policy reached
+  about `4.42k H/s` median with `9.54%` spread and zero invalid subprocesses.
+  This is a valid high-memory workload baseline, but it is slower because the
+  sequence includes larger `m` values.
 - For generated-key CUDA d8 with GPU first blocks, auto batch selection, automatic
   first-block dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal
   benchmark trust, the best current local candidate is batch size `4096` at about
@@ -82,13 +89,15 @@ Latest public-safe performance checkpoint:
   low-difficulty result to realistic high-memory difficulty values or GPU
   classes without confirmation.
 - The current post-GPU-first bottleneck should be rechecked with detailed timing,
-  but recent evidence points toward CPU finalization and remaining host-side
-  overhead, especially `argon2_finalize_ms`, more than first-block preparation.
+  but recent evidence points toward CUDA compute/kernel work on realistic
+  high-difficulty runs. On the current d4096 baseline, `compute_ms` is about
+  `92%` of wall time, while `first_block_ms` is about `1.9%` and
+  `finalize_ms` is about `4.4%`.
 - Current GPU-first timing also exposes a measurable first-block launch component
-  around the first-block device path. One near-term safe experiment is CUDA
-  first-block launch geometry in `KernelRunner::runDeviceFirstBlockKernel()`,
-  changing one launch parameter at a time and accepting only stable same-scenario
-  wins.
+  around the first-block device path, but the realistic high-difficulty baseline
+  does not support launch-geometry as the dominant bottleneck. The recent
+  one-parameter `threadsPerBlock` test was a useful measurement slice, but it
+  did not improve the high-d baseline and was reverted.
 
 Current rejected experiment checkpoint:
 
@@ -132,6 +141,12 @@ Current rejected experiment checkpoint:
   snapshots unless thread lifetime, per-thread output ownership, subprocess
   teardown stability, and repeated wrapper zero-invalid checks are redesigned
   together.
+- The one-parameter first-block launch-geometry experiment (`threadsPerBlock`
+  changed from `128` to `256`) preserved the CUDA golden hashes and produced a
+  valid d4096 high-difficulty smoke, but the clean d4096 comparison did not
+  improve the baseline and the source experiment was reverted. Do not retry
+  this exact launch-geometry shape without a new hypothesis and a better
+  high-difficulty target signal.
 
 Next cycle:
 
@@ -772,16 +787,16 @@ Start the next cycle from the latest clean commit and this decision tree:
 3. Run the focused Hash API tests before editing performance code.
 4. Build or reuse the clean Release CUDA binary from the configured preset.
 5. Run CUDA golden hash checks with and without `--gpu-first-blocks` before trusting benchmark data.
-6. Refresh or load a realistic high-difficulty generated-key CUDA GPU-first baseline with auto batch sizing, no XUNI, warm-up `1`, repeat `3`, and zero invalid subprocesses. Start with d4096, then extend toward d8192, d16384, and d32768 as memory and run time permit.
+6. Refresh or load a realistic high-difficulty generated-key CUDA GPU-first baseline with auto batch sizing, no XUNI, warm-up `1`, repeat `3`, and zero invalid subprocesses. The current d4096 baseline is already available; extend toward d8192, d16384, and d32768 as memory and run time permit.
 7. Refresh or load the realistic variable-`m` GPU-first sequence baseline, for example `difficulty_sequence=4096,8192,16384`.
-8. Use detailed timing to decide whether finalization, first-block launch/compute, setup/lifecycle, transfers, or matching is the current bottleneck.
-9. If continuing directly from the latest checkpoint, evaluate the pending CUDA first-block launch-geometry change only against the high-difficulty baseline; revert it if high-d evidence is neutral, noisy, or regressive.
-10. If launch geometry does not help, prefer finalization isolation or variable-`m` setup/lifecycle cleanup over another rejected finalization parallelism snapshot.
+8. Use detailed timing to decide whether CUDA compute/kernel efficiency, batch sizing, setup/lifecycle, transfers, or matching is the current bottleneck.
+9. If continuing directly from the latest checkpoint, do not revisit the rejected `threadsPerBlock=256` first-block launch-geometry shape unless a new high-difficulty hypothesis appears.
+10. If compute dominates, prefer CUDA kernel-side or memory-layout work over another rejected finalization parallelism snapshot.
 11. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
-- Tune CUDA first-block launch geometry one parameter at a time, starting with thread block size only when correctness checks and same-scenario high-difficulty GPU-first baselines show launch overhead is material.
+- Tune CUDA first-block launch geometry one parameter at a time only when the current high-difficulty baseline shows launch overhead is material.
 - Inspect finalization ownership and materialization before attempting any new parallel or device-side final hash path.
 - Reduce setup/lifecycle overhead for variable `m=diff` sequences if detailed timings show repeated difficulty changes are costing wall time.
 - Reduce generated input preparation overhead only if newer timing shows host input work has become dominant again.
