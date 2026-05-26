@@ -27,6 +27,7 @@ class TrendPoint:
     batch_label: str
     gpu_first_blocks: bool
     median_hashrate: float
+    median_ms_per_attempt: float
     spread_pct: float
     compute_pct: float
     kernel_pct: float
@@ -129,6 +130,7 @@ def load_points(input_dir: Path, min_difficulty: int) -> list[TrendPoint]:
                     batch_label=_batch_label(summary, scenario),
                     gpu_first_blocks=_bool_value(summary, "gpu_first_blocks", _bool_value(scenario, "gpu_first_blocks", False)),
                     median_hashrate=median_hashrate,
+                    median_ms_per_attempt=1000.0 / median_hashrate if median_hashrate > 0.0 else 0.0,
                     spread_pct=_float_value(summary, "hashrate_spread_pct", 0.0),
                     compute_pct=_float_value(stage_pct, "compute_ms", 0.0),
                     kernel_pct=_float_value(nested_stage_pct, "kernel_ms", 0.0),
@@ -233,6 +235,7 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
   <div class="sub">Public-safe local view generated from ignored benchmark reports. Raw paths, hardware names, command lines, and salts are not embedded.</div>
   <section class="toolbar">
     <label>Difficulty <select id="difficulty"></select></label>
+    <label>Metric <select id="metric"><option value="median_hashrate" selected>Median H/s</option><option value="median_ms_per_attempt">Median ms/attempt</option><option value="compute_pct">Compute %</option><option value="kernel_pct">Kernel %</option><option value="spread_pct">Spread %</option></select></label>
     <label>GPU First Blocks <select id="gfb"><option value="all">All</option><option value="true">true</option><option value="false">false</option></select></label>
     <label>Quality <select id="quality"><option value="stable" selected>Stable + Quality OK</option><option value="good">Quality OK</option><option value="all">Diagnostics</option></select></label>
     <label>Search <input id="search" placeholder="scenario or source"></label>
@@ -262,6 +265,7 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
 <script>
 const points = {_json_for_html(rows)};
 const difficultySelect = document.getElementById('difficulty');
+const metricSelect = document.getElementById('metric');
 const gfbSelect = document.getElementById('gfb');
 const qualitySelect = document.getElementById('quality');
 const searchInput = document.getElementById('search');
@@ -282,6 +286,24 @@ function setupFilters() {{
     return na - nb || a.localeCompare(b);
   }});
   difficultySelect.innerHTML = '<option value="all">All d{min_difficulty}+</option>' + values.map(v => `<option value="${{v}}">${{v}}</option>`).join('');
+}}
+
+function metricInfo() {{
+  const metric = metricSelect.value;
+  if (metric === 'median_ms_per_attempt') return {{ key: metric, label: 'Median ms/attempt', digits: 4, suffix: '', lowerIsBetter: true }};
+  if (metric === 'compute_pct') return {{ key: metric, label: 'Compute %', digits: 2, suffix: '%', lowerIsBetter: false }};
+  if (metric === 'kernel_pct') return {{ key: metric, label: 'Kernel %', digits: 2, suffix: '%', lowerIsBetter: false }};
+  if (metric === 'spread_pct') return {{ key: metric, label: 'Spread %', digits: 2, suffix: '%', lowerIsBetter: true }};
+  return {{ key: 'median_hashrate', label: 'Median H/s', digits: 2, suffix: '', lowerIsBetter: false }};
+}}
+
+function metricValue(point, info = metricInfo()) {{
+  const value = Number(point[info.key]);
+  return Number.isFinite(value) ? value : 0;
+}}
+
+function fmtMetric(value, info = metricInfo()) {{
+  return `${{fmt(value, info.digits)}}${{info.suffix}}`;
 }}
 
 function filtered() {{
@@ -354,6 +376,7 @@ function difficultySummaries(data) {{
 }}
 
 function drawChart(data) {{
+  const info = metricInfo();
   const rect = canvas.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
   canvas.width = Math.max(640, Math.floor(rect.width * scale));
@@ -372,20 +395,21 @@ function drawChart(data) {{
   ctx.stroke();
   if (!data.length) return;
   const groups = groupedByDifficulty(data);
-  const maxRate = Math.max(...data.map(p => p.median_hashrate), 1);
+  const maxValue = Math.max(...data.map(p => metricValue(p, info)), 1);
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   ctx.fillStyle = '#5f6b7a';
   ctx.font = '12px system-ui, sans-serif';
+  ctx.fillText(info.label, pad.left, 12);
   for (let i = 0; i <= 4; i++) {{
     const y = pad.top + (plotH * i / 4);
-    const rate = maxRate * (1 - i / 4);
+    const value = maxValue * (1 - i / 4);
     ctx.strokeStyle = '#edf0f5';
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(width - pad.right, y);
     ctx.stroke();
-    ctx.fillText(fmt(rate, 0), 8, y + 4);
+    ctx.fillText(fmtMetric(value, info), 8, y + 4);
   }}
   groups.forEach(group => {{
     ctx.strokeStyle = group.color;
@@ -393,13 +417,13 @@ function drawChart(data) {{
     ctx.beginPath();
     group.values.forEach((p, i) => {{
       const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * p.trend_index / (data.length - 1));
-      const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
+      const y = pad.top + plotH * (1 - metricValue(p, info) / maxValue);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }});
     ctx.stroke();
     group.values.forEach(p => {{
       const x = pad.left + (data.length === 1 ? plotW / 2 : plotW * p.trend_index / (data.length - 1));
-      const y = pad.top + plotH * (1 - p.median_hashrate / maxRate);
+      const y = pad.top + plotH * (1 - metricValue(p, info) / maxValue);
       ctx.fillStyle = p.run_ok && p.quality_ok && p.stable ? group.color : (p.run_ok && p.quality_ok ? '#b45309' : '#b91c1c');
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -453,7 +477,7 @@ function render() {{
     </tr>`).join('');
 }}
 
-[difficultySelect, gfbSelect, qualitySelect, searchInput].forEach(el => el.addEventListener('input', render));
+[difficultySelect, metricSelect, gfbSelect, qualitySelect, searchInput].forEach(el => el.addEventListener('input', render));
 window.addEventListener('resize', render);
 setupFilters();
 render();

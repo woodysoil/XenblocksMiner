@@ -88,6 +88,11 @@ def test_main_writes_public_safe_html(tmp_path):
 
     html = output.read_text(encoding="utf-8")
     assert "high" in html
+    assert "median_ms_per_attempt" in html
+    assert '<label>Metric <select id="metric">' in html
+    assert '<option value="median_ms_per_attempt">Median ms/attempt</option>' in html
+    assert "function metricInfo()" in html
+    assert "function fmtMetric(value, info = metricInfo())" in html
     assert "Latest Trusted Gain" in html
     assert "Best Trusted Gain" in html
     assert "Trusted Points" in html
@@ -121,11 +126,25 @@ def test_invalid_runs_are_not_trusted_points(tmp_path):
     assert len(points) == 1
     assert points[0].run_ok is False
     assert points[0].quality_ok is False
+    assert points[0].median_ms_per_attempt == 0.0
 
     assert main(["--input-dir", str(input_dir), "--output", str(output), "--min-difficulty", "4096"]) == 0
 
     html = output.read_text(encoding="utf-8")
     assert '"run_ok": false' in html
+
+
+def test_trend_points_include_latency_metric(tmp_path):
+    (tmp_path / "high.json").write_text(
+        json.dumps(_report("high", 4096, 250.0, source_path="<private-binary>")),
+        encoding="utf-8",
+    )
+
+    points = load_points(tmp_path, min_difficulty=4096)
+
+    assert len(points) == 1
+    assert points[0].median_hashrate == 250.0
+    assert points[0].median_ms_per_attempt == 4.0
 
 
 def test_main_can_write_auto_refresh_html(tmp_path):

@@ -1353,6 +1353,11 @@ different `m=diff` workloads do not get merged into one misleading curve.
 The `Diagnostics` quality mode can show invalid, low-trust, or unstable report
 points for troubleshooting only; do not use those points as performance
 evidence.
+Use the chart's metric selector to switch between median H/s, median
+milliseconds per attempt, compute percentage, kernel percentage, and spread.
+Median H/s remains the primary repeatable throughput metric, while
+milliseconds per attempt is the latency-first view for checking whether each
+valid hash is actually getting shorter.
 The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
 The page also includes a per-difficulty trusted summary table for latest rate,
