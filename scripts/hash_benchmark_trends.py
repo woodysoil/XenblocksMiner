@@ -193,7 +193,7 @@ select, input {{
 }}
 .stats {{
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
 }}
@@ -230,6 +230,8 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
     <div class="stat"><div class="k">Best Median H/s</div><div class="v" id="bestRate">0</div></div>
     <div class="stat"><div class="k">Latest Median H/s</div><div class="v" id="latestRate">0</div></div>
     <div class="stat"><div class="k">Latest Spread</div><div class="v" id="latestSpread">0%</div></div>
+    <div class="stat"><div class="k">Latest Trusted Gain</div><div class="v" id="latestTrustedGain">n/a</div></div>
+    <div class="stat"><div class="k">Best Trusted Gain</div><div class="v" id="bestTrustedGain">n/a</div></div>
   </section>
   <section class="panel"><canvas id="chart" width="1100" height="360"></canvas></section>
   <section class="panel table-wrap">
@@ -334,10 +336,21 @@ function render() {{
   const data = filtered();
   const best = data.reduce((acc, p) => Math.max(acc, p.median_hashrate), 0);
   const latest = data[data.length - 1];
+  const trusted = data.filter(p => p.quality_ok && p.stable && p.median_hashrate > 0);
+  const firstTrusted = trusted[0];
+  const latestTrusted = trusted[trusted.length - 1];
+  const bestTrusted = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
+  const gainPct = (point) => firstTrusted && point && firstTrusted.median_hashrate > 0
+    ? ((point.median_hashrate - firstTrusted.median_hashrate) / firstTrusted.median_hashrate * 100)
+    : null;
+  const latestGain = gainPct(latestTrusted);
+  const bestGain = gainPct(bestTrusted);
   document.getElementById('visibleCount').textContent = String(data.length);
   document.getElementById('bestRate').textContent = fmt(best, 2);
   document.getElementById('latestRate').textContent = latest ? fmt(latest.median_hashrate, 2) : '0';
   document.getElementById('latestSpread').textContent = latest ? `${{fmt(latest.spread_pct, 2)}}%` : '0%';
+  document.getElementById('latestTrustedGain').textContent = latestGain === null ? 'n/a' : `${{fmt(latestGain, 2)}}%`;
+  document.getElementById('bestTrustedGain').textContent = bestGain === null ? 'n/a' : `${{fmt(bestGain, 2)}}%`;
   drawChart(data);
   document.getElementById('rows').innerHTML = data.map((p, i) => `
     <tr>

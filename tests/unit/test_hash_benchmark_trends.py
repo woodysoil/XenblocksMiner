@@ -68,6 +68,8 @@ def test_main_writes_public_safe_html(tmp_path):
 
     html = output.read_text(encoding="utf-8")
     assert "high" in html
+    assert "Latest Trusted Gain" in html
+    assert "Best Trusted Gain" in html
     assert "private gpu model" not in html
     assert "private-host" not in html
     assert "private-salt" not in html
