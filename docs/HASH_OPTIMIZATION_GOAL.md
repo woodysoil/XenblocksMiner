@@ -72,6 +72,13 @@ Latest public-safe performance checkpoint:
   about `4.42k H/s` median with `9.54%` spread and zero invalid subprocesses.
   This is a valid high-memory workload baseline, but it is slower because the
   sequence includes larger `m` values.
+- A short fixed-difficulty auto-batch scan now covers d8192 and d16384 with both
+  default first-block input and GPU first blocks. With GPU first blocks enabled,
+  d8192 selected batch size `398` and reached about `5.32k H/s` median with
+  `3.03%` spread; d16384 selected batch size `199` and reached about `2.76k H/s`
+  median with `1.18%` spread. Both runs had normal benchmark trust and zero
+  invalid subprocesses. Treat this as short high-difficulty direction evidence,
+  not as a final tuning plateau.
 - For generated-key CUDA d8 with GPU first blocks, auto batch selection, automatic
   first-block dynamic chunking, no XUNI, warm-up `1`, repeat `3`, and normal
   benchmark trust, the best current local candidate is batch size `4096` at about
@@ -262,6 +269,10 @@ Current progress:
 - Hash API benchmark scenarios can pair variable `m = difficulty` values with variable batch sizes in one reusable backend lifecycle, for example pairing `difficulty_sequence=1,8,64` with `batch_size_sequence=2048,3072,3072`.
 - Mixed difficulty/batch-size sequence runs report public-safe metadata such as `batch_size_sequence`, `batch_size_mode`, `batch_size_changes`, `batch_size_min`, and `batch_size_max`, and are excluded from fixed-shape batch-size recommendations.
 - Generated variable-difficulty sequence scenarios can enable detailed CUDA setup and first-block diagnostics with `--sequence-detailed-timings`.
+- Fixed-difficulty scan scenarios treat `--scan-batch-size 0` as auto-batch
+  selection and name those rows `bauto`. This lets high-difficulty scans use the
+  same automatic memory-bounded batch selection as ordinary generated-key runs
+  instead of producing invalid `batch_size=0` benchmark rows.
 - CUDA Hash API scenarios can cap first-block worker threads with `first_block_workers` / `--first-block-workers` for measured tuning while default `0` preserves automatic worker-count behavior. Benchmark scans can include this axis with `--scan-first-block-workers`, can enable backend-selected first-block dynamic chunks with `--scan-first-block-dynamic-chunk-auto`, and can enable detailed generated-scan diagnostics with `--scan-detailed-timings`.
 - CUDA Hash API scenarios can set `first_block_dynamic_chunk_size` / `--first-block-dynamic-chunk-size` to benchmark dynamic first-block chunk distribution. The default `0` keeps static chunking and current miner behavior; nonzero values are explicit experiments for worker start skew and load-balance diagnostics.
 - CUDA Hash API scenarios can opt into `first_block_dynamic_chunk_auto` / `--first-block-dynamic-chunk-auto` to benchmark backend-selected dynamic chunk sizing without changing explicit static `0` semantics. The conservative policy targets generated-key CUDA batches with at least 1024 attempts: d1 selects chunk `16`, d8 selects chunk `32` at b1024 and chunk `16` at b2048 or larger, d64 selects chunk `16` through b2048, and larger d64 batches remain static. Miner-generated CUDA batches now opt into this request-level policy for covered scenarios.

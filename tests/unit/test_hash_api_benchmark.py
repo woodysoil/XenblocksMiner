@@ -310,6 +310,35 @@ def test_scan_scenarios_builds_custom_matrix():
     assert all(scenario.repeat == 4 for scenario in scenarios)
 
 
+def test_scan_scenarios_treats_zero_batch_size_as_auto_batch():
+    scenarios = benchmark.scan_scenarios(
+        difficulties=[4096],
+        batch_sizes=[0],
+        first_block_workers=[],
+        first_block_dynamic_chunk_sizes=[],
+        detailed_timings=False,
+        seconds=3,
+        backend="cuda",
+        device=1,
+        warmup=1,
+        repeat=2,
+        first_block_dynamic_chunk_auto=True,
+        scan_gpu_first_blocks=True,
+    )
+
+    assert [scenario.name for scenario in scenarios] == [
+        "cuda-scan-d4096-bauto-fbda",
+        "cuda-scan-d4096-bauto-fbda-gfb",
+    ]
+    assert [scenario.batch_size for scenario in scenarios] == [0, 0]
+    assert [scenario.auto_batch_size for scenario in scenarios] == [True, True]
+    assert [scenario.gpu_first_blocks for scenario in scenarios] == [False, True]
+    command = benchmark.build_hash_command(Path("miner"), benchmark.DEFAULT_SALT, scenarios[1])
+    assert "--auto-batch-size" in command
+    assert "--batch-size" not in command
+    assert "--gpu-first-blocks" in command
+
+
 def test_scan_scenarios_can_scan_first_block_workers():
     scenarios = benchmark.scan_scenarios(
         difficulties=[8],

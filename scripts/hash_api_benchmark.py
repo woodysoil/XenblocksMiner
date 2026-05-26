@@ -236,7 +236,7 @@ def scan_scenarios(
     gpu_first_block_modes = [False, True] if scan_gpu_first_blocks else [False]
     return [
         BenchmarkScenario(
-            name=f"{backend}-scan-d{difficulty}-b{batch_size}"
+            name=f"{backend}-scan-d{difficulty}-b{'auto' if batch_size == 0 else batch_size}"
             + ("" if worker_cap == 0 else f"-fbw{worker_cap}")
             + ("" if dynamic_chunk_size == 0 else f"-fbd{dynamic_chunk_size}")
             + ("-fbda" if first_block_dynamic_chunk_auto else "")
@@ -252,6 +252,7 @@ def scan_scenarios(
             first_block_dynamic_chunk_size=dynamic_chunk_size,
             first_block_dynamic_chunk_auto=first_block_dynamic_chunk_auto,
             gpu_first_blocks=gpu_first_blocks,
+            auto_batch_size=batch_size == 0,
             detailed_timings=detailed_timings,
         )
         for difficulty in difficulties
