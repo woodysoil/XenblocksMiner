@@ -132,6 +132,9 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "Latest Trusted Gain" in html
     assert "Best Trusted Gain" in html
     assert "Trusted Points" in html
+    assert "11x Target H/s" in html
+    assert "Best Target" in html
+    assert "Remaining" in html
     assert '<option value="stable" selected>Warm Stable + Quality OK</option>' in html
     assert '<option value="good">Warm Quality OK</option>' in html
     assert '<option value="all">Diagnostics</option>' in html
@@ -142,6 +145,9 @@ def test_main_writes_public_safe_html(tmp_path):
     assert "function groupedByDifficulty(data)" in html
     assert "function trustedGainFor(data, referencePoint)" in html
     assert "function difficultySummaries(data)" in html
+    assert "first.median_hashrate * 11" in html
+    assert "bestTargetProgress" in html
+    assert "remainingMultiplier" in html
     assert "p.difficulty_label === referencePoint.difficulty_label" in html
     assert "difficulty_label" in html
     assert "private gpu model" not in html

@@ -361,7 +361,7 @@ td.name {{ max-width: 360px; overflow: hidden; text-overflow: ellipsis; }}
   <section class="panel"><canvas id="chart" width="1100" height="360"></canvas></section>
   <section class="panel table-wrap">
     <table>
-      <thead><tr><th>Difficulty</th><th>Trusted Points</th><th>Latest H/s</th><th>Best H/s</th><th>Best Gain</th></tr></thead>
+      <thead><tr><th>Difficulty</th><th>Trusted Points</th><th>Latest H/s</th><th>Best H/s</th><th>Best Gain</th><th>11x Target H/s</th><th>Best Target</th><th>Remaining</th></tr></thead>
       <tbody id="difficultyRows"></tbody>
     </table>
   </section>
@@ -473,8 +473,15 @@ function difficultySummaries(data) {{
     const first = trusted[0];
     const latest = trusted[trusted.length - 1];
     const best = trusted.reduce((acc, p) => p.median_hashrate > acc.median_hashrate ? p : acc, {{ median_hashrate: 0 }});
+    const targetRate = first ? first.median_hashrate * 11 : 0;
     const bestGain = first && best && first.median_hashrate > 0
       ? ((best.median_hashrate - first.median_hashrate) / first.median_hashrate * 100)
+      : null;
+    const bestTargetProgress = targetRate > 0 && best.median_hashrate > 0
+      ? (best.median_hashrate / targetRate * 100)
+      : null;
+    const remainingMultiplier = targetRate > 0 && best.median_hashrate > 0
+      ? (targetRate / best.median_hashrate)
       : null;
     return {{
       label: group.label,
@@ -482,6 +489,9 @@ function difficultySummaries(data) {{
       latestRate: latest ? latest.median_hashrate : 0,
       bestRate: best.median_hashrate || 0,
       bestGain,
+      targetRate,
+      bestTargetProgress,
+      remainingMultiplier,
     }};
   }}).filter(row => row.trustedCount > 0);
 }}
@@ -571,6 +581,9 @@ function render() {{
       <td>${{fmt(row.latestRate, 3)}}</td>
       <td>${{fmt(row.bestRate, 3)}}</td>
       <td>${{row.bestGain === null ? 'n/a' : `${{fmt(row.bestGain, 2)}}%`}}</td>
+      <td>${{fmt(row.targetRate, 3)}}</td>
+      <td>${{row.bestTargetProgress === null ? 'n/a' : `${{fmt(row.bestTargetProgress, 2)}}%`}}</td>
+      <td>${{row.remainingMultiplier === null ? 'n/a' : `${{fmt(row.remainingMultiplier, 2)}}x`}}</td>
     </tr>`).join('');
   document.getElementById('rows').innerHTML = data.map((p, i) => `
     <tr>

@@ -1400,6 +1400,9 @@ The trusted gain counters use the latest visible point's own difficulty or
 sequence as the comparison group, rather than comparing unrelated `m` values.
 The page also includes a per-difficulty trusted summary table for latest rate,
 best rate, and best gain so All-view scans remain comparable across `m` groups.
+The same table shows the `11x` target H/s, best target progress percentage, and
+remaining multiplier so long-running sessions can see at a glance how far each
+realistic high-difficulty group remains from the aspirational 1000% goal.
 Use `--summary-output` when an agent needs the same trusted first/latest/best
 gain data as machine-readable JSON without scraping the HTML page.
 The summary JSON also reports the `11x` target implied by a `1000%`
