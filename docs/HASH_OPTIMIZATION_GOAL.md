@@ -400,6 +400,10 @@ Current progress:
   preflight gate skips launch because the environment is temporarily low-trust;
   it does not retry real hash failures and does not relax final
   `report_quality_ok` requirements.
+- Hash API benchmark recommendations include `report_quality_failure_reasons`
+  so long-running agents can distinguish invalid subprocesses, low benchmark
+  trust, high CPU load, missing warm evidence, and unstable measured rows before
+  deciding whether to rerun, reduce the matrix, or reject an optimization.
 - Hash API benchmark reports can include public-safe build metadata via `--build-cache <build-dir>` so optimization agents can distinguish Release/Debug, CUDA architecture sets, generator, vcpkg triplet, and CUDA compiler version without committing local paths.
 - Conservative CUDA batch-size selection helpers are available under `src/hashapi/` and miner integration uses them when no explicit `--batchSize` limit is provided.
 - The next default phase is Phase 2 and Phase 3: remove structural overhead, then optimize the hot path with repeatable evidence.

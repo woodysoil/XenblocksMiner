@@ -1102,6 +1102,17 @@ def add_recommendation_quality(recommendations: dict[str, Any], environment: dic
     stable_run_count = int(annotated.get("stable_run_count", run_count) or 0)
     warm_evidence_ok = run_count == 0 or warm_evidence_run_count == run_count
     stable_runs_ok = run_count == 0 or stable_run_count == run_count
+    failure_reasons: list[str] = []
+    if not bool(annotated.get("report_ok", True)):
+        failure_reasons.append("invalid_runs")
+    if benchmark_trust == "low":
+        failure_reasons.append("low_benchmark_trust")
+    if high_cpu_load:
+        failure_reasons.append("high_cpu_load")
+    if not warm_evidence_ok:
+        failure_reasons.append("missing_warm_evidence")
+    if not stable_runs_ok:
+        failure_reasons.append("unstable_runs")
     annotated["report_quality_ok"] = (
         bool(annotated.get("report_ok", True))
         and benchmark_trust != "low"
@@ -1109,6 +1120,7 @@ def add_recommendation_quality(recommendations: dict[str, Any], environment: dic
         and warm_evidence_ok
         and stable_runs_ok
     )
+    annotated["report_quality_failure_reasons"] = failure_reasons
     return annotated
 
 

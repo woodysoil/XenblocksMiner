@@ -1407,6 +1407,10 @@ def test_add_recommendation_quality_marks_low_trust_environment():
     assert annotated["environment_available"] is True
     assert annotated["environment_sample_count"] == 8
     assert annotated["report_quality_ok"] is False
+    assert annotated["report_quality_failure_reasons"] == [
+        "low_benchmark_trust",
+        "high_cpu_load",
+    ]
 
 
 def test_add_recommendation_quality_rejects_cold_report():
@@ -1429,6 +1433,7 @@ def test_add_recommendation_quality_rejects_cold_report():
     annotated = benchmark.add_recommendation_quality(recommendations, environment)
 
     assert annotated["report_quality_ok"] is False
+    assert annotated["report_quality_failure_reasons"] == ["missing_warm_evidence"]
 
 
 def test_add_recommendation_quality_rejects_unstable_report():
@@ -1451,6 +1456,37 @@ def test_add_recommendation_quality_rejects_unstable_report():
     annotated = benchmark.add_recommendation_quality(recommendations, environment)
 
     assert annotated["report_quality_ok"] is False
+    assert annotated["report_quality_failure_reasons"] == ["unstable_runs"]
+
+
+def test_add_recommendation_quality_reports_multiple_failure_reasons():
+    recommendations = {
+        "report_ok": False,
+        "run_count": 2,
+        "valid_run_count": 1,
+        "warm_evidence_run_count": 1,
+        "stable_run_count": 1,
+        "invalid_run_count": 1,
+        "cold_scenarios": [],
+        "unstable_scenarios": ["unstable-control"],
+    }
+    environment = {
+        "available": True,
+        "benchmark_trust": "low",
+        "high_cpu_load": True,
+        "sample_count": 3,
+    }
+
+    annotated = benchmark.add_recommendation_quality(recommendations, environment)
+
+    assert annotated["report_quality_ok"] is False
+    assert annotated["report_quality_failure_reasons"] == [
+        "invalid_runs",
+        "low_benchmark_trust",
+        "high_cpu_load",
+        "missing_warm_evidence",
+        "unstable_runs",
+    ]
 
 
 def test_build_recommendations_records_cold_scenarios():
@@ -2382,6 +2418,7 @@ def test_main_can_print_recommendations_only(monkeypatch, tmp_path, capsys):
         "invalid_run_count",
         "invalid_scenarios",
         "report_ok",
+        "report_quality_failure_reasons",
         "report_quality_ok",
         "run_count",
         "stable_run_count",
