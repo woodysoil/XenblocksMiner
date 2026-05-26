@@ -17,7 +17,19 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "XENBLOCKS_BUILD_MINER": "ON",
+                "CUDAToolkit_ROOT": "$env{CUDA_PATH_V12_8}",
+                "CMAKE_CUDA_COMPILER": "$env{CUDA_PATH_V12_8}/bin/nvcc.exe",
                 "CMAKE_CUDA_ARCHITECTURES": "75;80;86;89;90"
+            }
+        },
+        {
+            "name": "cuda-release-vcpkg-sm75",
+            "displayName": "CUDA Release for sm_75",
+            "description": "Release full-miner build for Turing-class CUDA GPUs.",
+            "inherits": "cuda-release-vcpkg-modern",
+            "binaryDir": "${sourceDir}/build-cuda-sm75",
+            "cacheVariables": {
+                "CMAKE_CUDA_ARCHITECTURES": "75"
             }
         },
         {
@@ -84,6 +96,10 @@
         {
             "name": "cuda-release-vcpkg-modern",
             "configurePreset": "cuda-release-vcpkg-modern"
+        },
+        {
+            "name": "cuda-release-vcpkg-sm75",
+            "configurePreset": "cuda-release-vcpkg-sm75"
         },
         {
             "name": "cuda-release-vcpkg-sm86",
