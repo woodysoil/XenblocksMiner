@@ -98,6 +98,13 @@ Latest public-safe performance checkpoint:
   does not support launch-geometry as the dominant bottleneck. The recent
   one-parameter `threadsPerBlock` test was a useful measurement slice, but it
   did not improve the high-d baseline and was reverted.
+- The latest attempted main-kernel `__launch_bounds__(THREADS_PER_LANE, 4)`
+  shape preserved focused tests, the Release CUDA build, and CUDA golden hashes,
+  but a d4096 GPU-first smoke measured only about `5.86k H/s` median versus the
+  established d4096 high-difficulty baseline region around `10.74k H/s`. Treat
+  this as a severe high-difficulty regression. The uncommitted source experiment
+  was reverted, and focused tests plus CUDA golden hashes passed again after the
+  revert.
 
 Current rejected experiment checkpoint:
 
@@ -147,6 +154,14 @@ Current rejected experiment checkpoint:
   improve the baseline and the source experiment was reverted. Do not retry
   this exact launch-geometry shape without a new hypothesis and a better
   high-difficulty target signal.
+- The main Argon2 kernel launch-bounds experiment
+  (`__launch_bounds__(THREADS_PER_LANE, 4)`) is rejected. It preserved focused
+  Hash API tests, the Release CUDA build, and CUDA golden hashes, but the short
+  d4096 GPU-first smoke regressed to about `5.86k H/s` median versus the
+  established high-difficulty baseline region around `10.74k H/s`. The source
+  experiment was reverted, and focused tests plus CUDA golden hashes passed
+  after the revert. Do not retry this exact launch-bounds shape without profiler
+  evidence that changes the occupancy/register-pressure hypothesis.
 
 Next cycle:
 
@@ -164,11 +179,12 @@ Next cycle:
    for example d4096,d8192,d16384, and add d32768 only when auto batch sizing
    and run time remain practical.
 9. Use detailed timing to pick exactly one bottleneck.
-10. If continuing from the latest dirty checkpoint, do not accept the current
-   first-block launch-geometry experiment from d8 evidence alone; validate it on
-   the high-d baseline or revert it.
-11. Otherwise prefer finalization isolation, setup/lifecycle cleanup for variable
-   `m=diff`, or a measured CUDA backend bottleneck over another keygen-only,
+10. Do not retry the rejected `threadsPerBlock=256` first-block launch shape or
+   the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape
+   unless profiler data produces a materially different hypothesis.
+11. Prefer CUDA kernel efficiency, memory-access behavior, realistic
+   high-difficulty batch selection, setup/lifecycle cleanup for variable
+   `m=diff`, or other measured CUDA backend bottlenecks over another keygen-only,
    one-shot prefix, host-owned parallel finalization snapshot, or
    allocation-only base64/matching micro-optimization.
 12. Validate, benchmark, document, privacy-check, commit, and continue.
@@ -791,12 +807,16 @@ Start the next cycle from the latest clean commit and this decision tree:
 7. Refresh or load the realistic variable-`m` GPU-first sequence baseline, for example `difficulty_sequence=4096,8192,16384`.
 8. Use detailed timing to decide whether CUDA compute/kernel efficiency, batch sizing, setup/lifecycle, transfers, or matching is the current bottleneck.
 9. If continuing directly from the latest checkpoint, do not revisit the rejected `threadsPerBlock=256` first-block launch-geometry shape unless a new high-difficulty hypothesis appears.
-10. If compute dominates, prefer CUDA kernel-side or memory-layout work over another rejected finalization parallelism snapshot.
-11. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+10. Do not revisit the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape unless profiling supports a materially different occupancy/register-pressure hypothesis.
+11. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
+12. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
 - Tune CUDA first-block launch geometry one parameter at a time only when the current high-difficulty baseline shows launch overhead is material.
+- Profile or instrument the main Argon2 CUDA kernel only with public-safe output,
+  then test one kernel-side hypothesis at a time against d4096 and the
+  d4096,d8192,d16384 sequence.
 - Inspect finalization ownership and materialization before attempting any new parallel or device-side final hash path.
 - Reduce setup/lifecycle overhead for variable `m=diff` sequences if detailed timings show repeated difficulty changes are costing wall time.
 - Reduce generated input preparation overhead only if newer timing shows host input work has become dominant again.

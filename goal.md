@@ -83,6 +83,15 @@ short state below is only the resume snapshot.
   benchmark scripts, comparison tooling, timing metadata, and CUDA tuning knobs.
 - The miner-generated CUDA path now opts into the validated GPU first-block path
   and automatic first-block chunk selection where supported.
+- Real mining work is memory-hard and should be optimized around `m=diff` in the
+  thousands to tens of thousands. Current high-difficulty evidence includes
+  d4096 generated-key CUDA GPU-first auto-batch at about `10.74k H/s` median and
+  the d4096,d8192,d16384 variable-`m` GPU-first sequence at about `4.42k H/s`
+  median, both with zero invalid subprocesses.
+- On the current d4096 baseline, CUDA compute/kernel time dominates at about
+  `92%` of wall time. Treat kernel efficiency, memory behavior, realistic
+  high-difficulty batch selection, and variable-`m` lifecycle cost as the
+  default next search space unless newer detailed timing contradicts it.
 - Current local d8 generated CUDA GPU-first evidence favors automatic batch size
   `4096`, with sanitized confirmation around `196.86k H/s` median, normal
   benchmark trust, and zero invalid subprocesses. This is low-difficulty
@@ -103,9 +112,12 @@ short state below is only the resume snapshot.
   access-violation subprocess exits. Do not reintroduce device-side final hash
   output unless output lifetime, synchronization, and repeated wrapper stability
   are materially redesigned.
-- The current dominant post-GPU-first bottleneck is CPU finalization and remaining
-  host-side overhead, especially `argon2_finalize_ms`, unless newer detailed
-  timings show otherwise.
+- The recent `__launch_bounds__(THREADS_PER_LANE, 4)` main Argon2 kernel
+  experiment preserved focused tests and CUDA golden hashes, but a d4096
+  GPU-first smoke regressed badly versus the high-difficulty baseline region.
+  The source experiment was reverted. Do not retry that exact launch-bounds
+  shape unless profiling identifies a materially different occupancy/register
+  hypothesis.
 - Local commits ahead of the remote are retained progress. An `ahead N` status
   does not mean earlier local commits disappeared.
 
@@ -457,8 +469,9 @@ Start here unless `docs/HASH_OPTIMIZATION_GOAL.md` contains newer evidence:
 5. Run a short low-difficulty auto-batch GPU-first smoke.
 6. Run or load a stable realistic high-difficulty auto-batch GPU-first baseline.
 7. Run or load a realistic variable-`m` GPU-first sequence baseline.
-8. Use detailed timing to confirm whether finalization, input/first-block work,
-   setup, or CUDA compute dominates now.
+8. Use detailed timing to confirm whether CUDA compute/kernel efficiency,
+   memory behavior, realistic high-difficulty batch selection, variable-`m`
+   setup/lifecycle, finalization, or input/first-block work dominates now.
 9. Pick one bottleneck and one implementation shape.
 10. Validate, benchmark, document, privacy-check, commit, and continue.
 
