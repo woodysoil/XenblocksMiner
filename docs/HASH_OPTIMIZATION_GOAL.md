@@ -664,6 +664,9 @@ Serious comparison:
 - run serious benchmark reports with `--preflight-report-quality` and
   `--fail-on-report-quality` so high CPU load or low benchmark trust returns a
   non-zero exit code, while still writing a diagnostic report when possible
+- use `--preflight-only` for a low-cost environment gate before expensive
+  high-difficulty runs; it writes an empty quality report and never launches
+  benchmark subprocesses
 - when `--preflight-wait-seconds` is set, the benchmark runner waits before the
   report and before each warm-up or measured subprocess; if the wait expires,
   that subprocess is skipped instead of starting a known low-trust high-difficulty

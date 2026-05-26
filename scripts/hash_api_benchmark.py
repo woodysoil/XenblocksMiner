@@ -1452,6 +1452,7 @@ def build_report(
     runs: list[dict[str, Any]],
     environment: dict[str, Any],
     recommendations: dict[str, Any],
+    include_hardware: bool = True,
 ) -> dict[str, Any]:
     return {
         "schema": "xenblocks.hashapi.benchmark.v1",
@@ -1463,7 +1464,7 @@ def build_report(
             "python": platform.python_version(),
         },
         "build": collect_build_metadata(args.build_cache),
-        "hardware": collect_hardware_metadata(),
+        "hardware": collect_hardware_metadata() if include_hardware else {},
         "environment": environment,
         "binary": str(args.binary),
         "salt": args.salt,
@@ -1524,6 +1525,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--preflight-report-quality",
         action="store_true",
         help="Check report quality before running scenarios and skip benchmarks when the environment is already low-trust.",
+    )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Only run benchmark report quality preflight, emit an empty report, and never launch benchmark subprocesses.",
     )
     parser.add_argument(
         "--preflight-wait-seconds",
@@ -1744,6 +1750,19 @@ def main(argv: list[str]) -> int:
         args.preflight_wait_seconds,
         args.preflight_stable_samples,
     )
+    if args.preflight_only:
+        environment, recommendations = preflight_environment_quality(
+            args.preflight_wait_seconds,
+            args.preflight_wait_interval,
+            preflight_stable_samples,
+        )
+        report = build_report(args, [], environment, recommendations, include_hardware=False)
+        emit_report(args, report)
+        if not bool(recommendations.get("report_quality_ok", False)):
+            print("benchmark report quality preflight failed", file=sys.stderr)
+            return 2
+        return 0
+
     if args.preflight_report_quality:
         environment, recommendations = preflight_environment_quality(
             args.preflight_wait_seconds,
