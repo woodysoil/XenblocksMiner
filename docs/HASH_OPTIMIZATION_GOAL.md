@@ -112,6 +112,13 @@ Latest public-safe performance checkpoint:
   this as a severe high-difficulty regression. The uncommitted source experiment
   was reverted, and focused tests plus CUDA golden hashes passed again after the
   revert.
+- A later source-lane-only address-block selection experiment preserved focused
+  tests, the Release CUDA build, and CUDA golden hashes, but did not beat the
+  d4096 high-difficulty baseline. The short d4096 GPU-first smoke reached about
+  `10.16k H/s` median with `2.85%` spread versus the established baseline around
+  `10.74k H/s`, and the sm75 main-kernel register count increased from `52` to
+  `56`. The source experiment was reverted and the Release CUDA binary was
+  rebuilt back to the baseline resource shape.
 
 Current rejected experiment checkpoint:
 
@@ -169,6 +176,14 @@ Current rejected experiment checkpoint:
   experiment was reverted, and focused tests plus CUDA golden hashes passed
   after the revert. Do not retry this exact launch-bounds shape without profiler
   evidence that changes the occupancy/register-pressure hypothesis.
+- The source-lane-only address-block selection experiment is rejected. It changed
+  address-block field selection so only the warp source lane selected the field
+  before `shuffle`, preserving correctness but failing the high-difficulty
+  acceptance gate. The d4096 GPU-first smoke was stable at about `10.16k H/s`
+  median, below the established d4096 baseline around `10.74k H/s`, and it
+  increased sm75 main-kernel registers from `52` to `56`. The source experiment
+  was reverted; do not retry this shape unless a profiler shows the branch and
+  register tradeoff changes on a different architecture.
 
 Next cycle:
 
@@ -186,9 +201,10 @@ Next cycle:
    for example d4096,d8192,d16384, and add d32768 only when auto batch sizing
    and run time remain practical.
 9. Use detailed timing to pick exactly one bottleneck.
-10. Do not retry the rejected `threadsPerBlock=256` first-block launch shape or
-   the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape
-   unless profiler data produces a materially different hypothesis.
+10. Do not retry the rejected `threadsPerBlock=256` first-block launch shape,
+   the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape, or
+   the rejected source-lane-only address-block selection shape unless profiler
+   data produces a materially different hypothesis.
 11. Prefer CUDA kernel efficiency, memory-access behavior, realistic
    high-difficulty batch selection, setup/lifecycle cleanup for variable
    `m=diff`, or other measured CUDA backend bottlenecks over another keygen-only,
@@ -818,9 +834,9 @@ Start the next cycle from the latest clean commit and this decision tree:
 7. Refresh or load the realistic variable-`m` GPU-first sequence baseline, for example `difficulty_sequence=4096,8192,16384`.
 8. Use detailed timing to decide whether CUDA compute/kernel efficiency, batch sizing, setup/lifecycle, transfers, or matching is the current bottleneck.
 9. If continuing directly from the latest checkpoint, do not revisit the rejected `threadsPerBlock=256` first-block launch-geometry shape unless a new high-difficulty hypothesis appears.
-10. Do not revisit the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape unless profiling supports a materially different occupancy/register-pressure hypothesis.
+10. Do not revisit the rejected `__launch_bounds__(THREADS_PER_LANE, 4)` main-kernel shape or the rejected source-lane-only address-block selection shape unless profiling supports a materially different occupancy/register-pressure hypothesis.
 11. If compute dominates, prefer CUDA kernel-side, memory-layout, or measurement/tooling work over another rejected finalization parallelism snapshot.
-12. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
+12. Do not repeat rejected salt caching, decoded salt caching, activation caching, pinned host staging, runner caching, first-block lane fast paths, digestLong specializations, `_rotr64` rotate changes, source-lane address selection, fixed-64-byte base64, final-prefix cache, direct final-digest helper, `gpu_final_hashes`, or host-owned parallel finalization snapshots without a materially different implementation shape.
 
 Good next experiment shapes:
 
