@@ -198,6 +198,16 @@ Latest public-safe performance checkpoint:
   the accepted d8192 best around `5.62k H/s`, while b398 was unstable. Do not
   change high-difficulty batch defaults from these artifacts; treat smaller
   fixed batches as stability diagnostics, not throughput wins.
+- Measurement-only high-difficulty batch-window retry: a broad d4096/d8192
+  matrix over auto and adjacent fixed batches timed out before writing a
+  report, so it produced no tuning evidence. Smaller normal-trust retries were
+  stable and had zero invalid subprocesses, but still did not beat the accepted
+  auto-batch rows. For d4096, auto/b797 with GPU first blocks reached about
+  `10.39k H/s` and b640 reached about `9.79k H/s`, both below the accepted
+  d4096 best around `10.77k H/s`. For d8192, auto/b398 with GPU first blocks
+  reached about `5.42k H/s`, below the accepted d8192 best around `5.62k H/s`.
+  Keep the current high-difficulty memory-limited auto-batch behavior and do
+  not add fixed high-difficulty tuning caps from these scans.
 
 Current rejected experiment checkpoint:
 
