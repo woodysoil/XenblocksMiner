@@ -180,6 +180,13 @@ Latest public-safe performance checkpoint:
   Future high-difficulty batch tuning should run smaller targeted matrices under
   normal benchmark trust and compare against the accepted auto-batch rows before
   changing `HashApiTuning`.
+- Measurement-only d8192 batch-window refresh: a narrow GPU-first b160/b192/b256/
+  b320/b398 run completed with zero invalid subprocesses, but benchmark trust
+  was low because CPU load was high and `report_quality_ok=false`. The best
+  stable median in that run was b192 at about `4.94k H/s`, below the accepted
+  d8192 GPU-first confirmation region around `5.62k H/s`, while b398 was
+  unstable. Do not change d8192 tuning from this artifact; rerun under normal
+  benchmark trust before accepting any high-difficulty batch default.
 
 Current rejected experiment checkpoint:
 
